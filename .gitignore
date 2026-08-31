@@ -25,3 +25,6 @@ tools/reports/
 
 # Configuração local do Claude Code (por máquina)
 .claude/settings.local.json
+# Configuração local de servidores MCP: aponta para um Qdrant em localhost e
+# varia por máquina. O formato esperado está documentado no CLAUDE.md.
+.mcp.json

@@ -22,6 +22,10 @@ justamente por isso.
   existe nos dois idiomas com o **mesmo campo `key`**; `make verify` reprova se
   faltar um par.
 - **Comentários de código e ADRs**: português. São notas internas.
+- **README.md**: **inglês, inteiro.** É a vitrine pública do repositório no
+  GitHub; o alcance importa mais ali do que a consistência com o resto. Ele
+  declara logo no topo que os ADRs e os comentários são em português, para o
+  leitor anglófono não tropeçar nisso depois.
 - **Identificadores, nomes de arquivo, slugs de URL**: inglês, sempre.
 
 ## Armadilhas já encontradas (não repita)
@@ -78,7 +82,27 @@ justamente por isso.
 
 ## Qdrant
 
-O `.mcp.json` aponta para a coleção `infra-knowlogy` em `localhost:6333`. O
+O `.mcp.json` **não é versionado** (aponta para um Qdrant em `localhost` e varia
+por máquina). Num clone novo, recrie-o na raiz:
+
+```json
+{
+  "mcpServers": {
+    "qdrant-memory": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": ["mcp-server-qdrant"],
+      "env": {
+        "QDRANT_URL": "http://localhost:6333",
+        "COLLECTION_NAME": "infra-knowlogy",
+        "EMBEDDING_MODEL": "sentence-transformers/all-MiniLM-L6-v2"
+      }
+    }
+  }
+}
+```
+
+O
 `make index` indexa **todo o conhecimento do repositório**, não só as lições:
 
 | `kind` | Origem | Para quê |
