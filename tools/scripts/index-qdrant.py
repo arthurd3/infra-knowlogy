@@ -166,10 +166,14 @@ def collect() -> list[models.PointStruct]:
         kind = "adr-index" if f.name == "README.md" else "adr"
         points += list(chunk_markdown(f, kind, {"lang": "pt"}))
 
-    for name, kind in (("CLAUDE.md", "convention"), ("README.md", "overview")):
+    # O README é o único documento de raiz em inglês (ver CLAUDE.md); o
+    # CLAUDE.md e os ADRs são notas internas em português. O rótulo de idioma
+    # precisa refletir isso, senão a busca em inglês perde o overview.
+    for name, kind, lang in (("CLAUDE.md", "convention", "pt"),
+                             ("README.md", "overview", "en")):
         f = ROOT / name
         if f.is_file():
-            points += list(chunk_markdown(f, kind, {"lang": "pt"}))
+            points += list(chunk_markdown(f, kind, {"lang": lang}))
 
     points += list(measurement_points())
     return points
