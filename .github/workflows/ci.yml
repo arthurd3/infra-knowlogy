@@ -1,0 +1,167 @@
+# CI da stack: lint -> build -> scan -> assinar.
+#
+# A ordem não é acidental. O lint é barato e pega erro de sintaxe em segundos;
+# o build é caro; o scan só faz sentido sobre uma imagem que buildou; e assinar
+# só faz sentido sobre uma imagem que passou no scan.
+
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Semanal, com --pull: pega base image atualizada e reescaneia. Sem isto,
+    # o pin por digest congela as CVEs junto com a reprodutibilidade.
+    - cron: "0 6 * * 1"
+
+permissions:
+  contents: read
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: hadolint em todos os Dockerfiles
+        run: |
+          fail=0
+          while IFS= read -r f; do
+            echo "── $f"
+            docker run --rm -i hadolint/hadolint:latest hadolint --no-color - < "$f" || fail=1
+          done < <(find stack site -name Dockerfile -not -path '*/node_modules/*')
+          exit $fail
+
+      - name: validar os compose files
+        run: |
+          # Os secrets não existem no runner; criamos placeholders só para o
+          # `config` conseguir resolver as referências.
+          mkdir -p stack/secrets
+          printf 'ci-placeholder' | tee stack/secrets/postgres_password > stack/secrets/grafana_password
+          cp stack/.env.example stack/.env
+          docker compose -f stack/compose.yaml -f stack/compose.prod.yaml config -q
+          docker compose -f stack/compose.yaml -f stack/compose.dev.yaml  config -q
+          docker compose -f stack/compose.yaml -f stack/compose.prod.yaml \
+                         -f stack/compose.obs.yaml --profile obs config -q
+
+  build:
+    needs: lint
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write        # exigido pela assinatura keyless do cosign
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: api-go
+            context: stack/services/api-go
+          - service: worker-py
+            context: stack/services/worker-py
+          - service: web
+            context: site
+    steps:
+      - uses: actions/checkout@v5
+
+      # QEMU só é necessário para a build arm64 num runner amd64.
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/metadata-action@v6
+        id: meta
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}/${{ matrix.service }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,format=long
+
+      - uses: docker/login-action@v4
+        if: github.event_name != 'pull_request'
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: build e push
+        id: push
+        uses: docker/build-push-action@v7
+        with:
+          context: ${{ matrix.context }}
+          target: dist
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          load: ${{ github.event_name == 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # O runner é descartado a cada job: sem um backend externo, TODO build
+          # no CI é frio. mode=max preserva também as stages intermediárias —
+          # com o padrão `min`, as camadas caras de build são justamente as
+          # descartadas num Dockerfile multi-stage.
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,scope=${{ matrix.service }},mode=max
+          # Atestações geradas pelo buildx: SBOM (o que existe na imagem) e
+          # provenance SLSA (de qual commit e de qual workflow ela saiu).
+          sbom: true
+          provenance: mode=max
+          pull: ${{ github.event_name == 'schedule' }}
+
+      - name: trivy (falha em HIGH/CRITICAL)
+        uses: aquasecurity/trivy-action@0.34.0
+        with:
+          image-ref: ${{ github.event_name == 'pull_request' && format('{0}/{1}/{2}:pr-{3}', env.REGISTRY, github.repository, matrix.service, github.event.number) || format('{0}@{1}', format('{0}/{1}/{2}', env.REGISTRY, github.repository, matrix.service), steps.push.outputs.digest) }}
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          severity: HIGH,CRITICAL
+
+      - uses: sigstore/cosign-installer@v4
+        if: github.event_name != 'pull_request'
+
+      - name: assinar a imagem (keyless, via OIDC do GitHub)
+        if: github.event_name != 'pull_request'
+        # Keyless: nenhuma chave privada para guardar ou vazar. A identidade é o
+        # token OIDC do próprio workflow, e a assinatura vai para o log público
+        # de transparência (Rekor). Quem consome verifica com:
+        #   cosign verify --certificate-identity-regexp '…' --certificate-oidc-issuer '…'
+        run: |
+          cosign sign --yes \
+            "${REGISTRY}/${{ github.repository }}/${{ matrix.service }}@${{ steps.push.outputs.digest }}"
+
+  site:
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+
+      # `npm ci` e não `npm install`: ci falha se package.json e o lockfile
+      # divergirem, em vez de atualizar o lockfile silenciosamente.
+      - run: npm ci
+        working-directory: site
+      - run: npm run build
+        working-directory: site
+
+      - name: paridade PT/EN das lições
+        run: |
+          python3 - <<'PY'
+          import pathlib, re, collections, sys
+          langs = collections.defaultdict(set)
+          for f in pathlib.Path("site/src/content/lessons").rglob("*.mdx"):
+              fm = f.read_text().split("---")[1]
+              key = re.search(r"^key: (.+)$", fm, re.M).group(1).strip()
+              langs[key].add(re.search(r"^lang: (.+)$", fm, re.M).group(1).strip())
+          missing = {k: sorted(v) for k, v in langs.items() if v != {"pt", "en"}}
+          if missing:
+              print("lições sem par:", missing); sys.exit(1)
+          print(f"{len(langs)} lições, todas em pt e en")
+          PY
