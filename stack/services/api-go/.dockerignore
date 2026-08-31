@@ -1,0 +1,8 @@
+# Escopo do build context desta imagem. Quanto menor, mais rápido o build
+# e menor a chance de invalidar cache por um arquivo irrelevante.
+Dockerfile
+.dockerignore
+README.md
+bin/
+*_test.go
+testdata/
