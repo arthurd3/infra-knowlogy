@@ -1,0 +1,23 @@
+[project]
+name = "worker-py"
+version = "0.1.0"
+description = "Worker de enriquecimento de links da stack infra-knowlogy"
+requires-python = ">=3.13"
+
+# Poucas dependências de propósito. Cada pacote aqui vira código na imagem
+# final, e código na imagem final é superfície que o scanner de CVE vai avaliar.
+# O parsing de HTML usa html.parser da biblioteca padrão em vez de puxar
+# beautifulsoup4 + soupsieve — a lição de imagem mínima começa no pyproject.
+dependencies = [
+    "httpx>=0.28,<0.29",
+    "prometheus-client>=0.24,<0.25",
+    "psycopg[binary]>=3.2,<4",
+    "redis>=6.4,<7",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["worker"]
