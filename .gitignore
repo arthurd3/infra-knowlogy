@@ -1,0 +1,27 @@
+# Secrets — never commit real ones. Only *.example is versioned.
+stack/secrets/*
+!stack/secrets/*.example
+!stack/secrets/.gitkeep
+.env
+stack/.env
+
+# Build output
+site/dist/
+site/.astro/
+site/node_modules/
+node_modules/
+stack/services/api-go/bin/
+
+# Generated reports
+tools/reports/
+*.sbom.json
+*.trivy.json
+
+# Editors / OS
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# Configuração local do Claude Code (por máquina)
+.claude/settings.local.json
