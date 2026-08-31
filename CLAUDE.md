@@ -79,11 +79,26 @@ justamente por isso.
 ## Qdrant
 
 O `.mcp.json` aponta para a coleção `infra-knowlogy` em `localhost:6333`. O
-`make index` fatia as lições por seção e as indexa no formato do
-mcp-server-qdrant (vetor nomeado `fast-all-minilm-l6-v2`, payload
-`{document, metadata}`), com ids uuid5 determinísticos — reindexar atualiza em vez
-de duplicar. Use `qdrant-find` para recuperar o que o repositório já diz sobre um
-assunto antes de reescrevê-lo.
+`make index` indexa **todo o conhecimento do repositório**, não só as lições:
+
+| `kind` | Origem | Para quê |
+|---|---|---|
+| `lesson` | `site/src/content/lessons/**/*.mdx` | o material didático, nos dois idiomas |
+| `adr` | `docs/adr/*.md` | decisões **e alternativas recusadas** |
+| `convention` | `CLAUDE.md` | as armadilhas já encontradas |
+| `overview` | `README.md` | arquitetura e o que o `verify` prova |
+| `measurement` | `site/src/data/measured.json` | tamanhos medidos, virados em prosa |
+
+O formato do ponto imita o do mcp-server-qdrant (vetor `fast-all-minilm-l6-v2`,
+payload `{document, metadata}`) para que o MCP leia o que o script escreve.
+
+Antes de gravar, o script apaga os pontos com `metadata.source == infra-knowlogy`
+e regrava tudo. Assim, seção renomeada ou arquivo removido não deixa órfão — e
+nada guardado na coleção por outra via é tocado.
+
+**Use `qdrant-find` antes de reescrever qualquer coisa.** Perguntas como "por que
+não usaram Traefik?" ou "qual o tamanho da imagem do worker?" já têm resposta
+indexada, com o caminho do arquivo de origem no metadata.
 
 ## O que ainda não existe
 
