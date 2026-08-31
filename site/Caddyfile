@@ -1,0 +1,18 @@
+# Servidor de arquivos estáticos do site de lições. Roda DENTRO do container
+# `web`; quem fala com a internet é o container `edge`, na frente deste.
+:8080 {
+	root * /srv
+	encode zstd gzip
+
+	# Cache longo para os assets com hash no nome (o Astro gera /_astro/*.HASH.js).
+	# Como o hash muda quando o conteúdo muda, o cache nunca fica velho.
+	@immutable path /_astro/*
+	header @immutable Cache-Control "public, max-age=31536000, immutable"
+
+	# HTML nunca é cacheado por muito tempo: é o arquivo que aponta para os
+	# assets novos depois de um deploy.
+	header /*.html Cache-Control "public, max-age=0, must-revalidate"
+
+	file_server
+	try_files {path} {path}/ {path}.html /404.html
+}

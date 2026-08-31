@@ -1,0 +1,17 @@
+---
+/**
+ * Bloco "Rode você mesmo".
+ *
+ * Todo comando aqui roda contra a stack DESTE repositório. É a diferença entre
+ * ler sobre `--read-only` e ver o próprio `docker exec` falhar ao tentar
+ * escrever no rootfs.
+ */
+interface Props {
+  title?: string;
+}
+const { title = "Rode você mesmo" } = Astro.props;
+---
+<section class="runit">
+  <header class="runit__head">{title}</header>
+  <div class="runit__body"><slot /></div>
+</section>

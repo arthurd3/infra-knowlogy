@@ -1,0 +1,19 @@
+---
+/**
+ * Caixa de destaque para as lições.
+ *
+ *   why    — por que a prática existe (o raciocínio, não a regra)
+ *   trap   — a pegadinha que morde quem só leu a regra
+ *   danger — o erro que causa incidente de segurança
+ */
+interface Props {
+  type?: "why" | "trap" | "danger";
+  label?: string;
+}
+const { type = "why", label } = Astro.props;
+const defaults = { why: "Por quê", trap: "Pegadinha", danger: "Perigo" } as const;
+---
+<aside class={`callout callout--${type}`}>
+  <strong class="callout__label">{label ?? defaults[type]}</strong>
+  <slot />
+</aside>

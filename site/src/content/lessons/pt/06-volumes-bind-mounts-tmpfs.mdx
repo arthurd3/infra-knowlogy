@@ -1,0 +1,172 @@
+---
+key: storage-volumes-and-mounts
+lang: pt
+track: fundamentos
+order: 6
+title: Volumes, bind mounts e tmpfs
+summary: Três formas de dar disco a um container, com propriedades bem diferentes — e a razão pela qual um bind mount no SELinux te devolve "permission denied".
+minutes: 14
+tags: [volumes, bind-mounts, tmpfs, selinux, backup]
+sources:
+  - label: "Docker Docs — Storage overview"
+    url: "https://docs.docker.com/engine/storage/"
+  - label: "Docker Docs — Volumes"
+    url: "https://docs.docker.com/engine/storage/volumes/"
+  - label: "Docker Docs — Bind mounts"
+    url: "https://docs.docker.com/engine/storage/bind-mounts/"
+---
+
+A camada gravável do container some quando ele é removido. Para qualquer dado que
+precise sobreviver a isso, existem três mecanismos — e eles não são
+intercambiáveis.
+
+| | Volume nomeado | Bind mount | tmpfs |
+|---|---|---|---|
+| Onde vive | gerenciado pelo Docker | caminho do host que você escolhe | RAM |
+| Sobrevive ao `rm` do container | sim | sim | **não** |
+| Sobrevive a reboot | sim | sim | não |
+| O host consegue editar | com esforço | trivialmente | não |
+| Bom para | dados de produção | código-fonte em dev | segredos, `/tmp` |
+
+## Volume nomeado — o padrão para dados
+
+```yaml
+volumes:
+  - pgdata:/var/lib/postgresql/data
+```
+
+O Docker cria e gerencia o diretório. Três vantagens que importam:
+
+1. **Portável.** Nenhum caminho absoluto do seu laptop no arquivo de configuração.
+2. **Rápido.** Em Docker Desktop (macOS/Windows), bind mounts atravessam uma
+   fronteira de VM e ficam lentos; volumes ficam dentro da VM.
+3. **Sobrevive.** `docker compose down` **não** apaga volumes nomeados. Só
+   `down --volumes` apaga — que é o `make nuke` desta stack.
+
+<Callout type="trap" label="Popular o volume só acontece uma vez">
+Se o diretório de destino tem conteúdo na imagem e o volume está **vazio**, o
+Docker copia o conteúdo para o volume na primeira montagem. Se o volume já tem
+dados, ele não copia nada. É por isso que editar `db/init/01-schema.sql` não
+muda um banco já inicializado: o script só roda com o volume vazio.
+</Callout>
+
+## Bind mount — o caminho do host
+
+```yaml
+volumes:
+  - ./services/edge/Caddyfile:/etc/caddy/Caddyfile:ro,z
+```
+
+Você escolhe o caminho exato. Insubstituível em desenvolvimento (editar no host,
+ver no container) e para injetar arquivos de configuração. Perigoso em produção,
+porque o container passa a depender do layout do sistema de arquivos do host.
+
+### O `:ro` e o `:z` do exemplo acima
+
+- **`:ro`** — read-only. Um arquivo de configuração não tem por que ser gravável
+  pelo processo que o lê.
+- **`:z`** — rótulo do **SELinux**. Este é o que faz gente perder uma tarde.
+
+<Callout type="danger" label="permission denied no Fedora, RHEL, CentOS">
+Em distribuições com SELinux ativo, o container roda com um contexto que **não
+tem acesso** aos arquivos do host. O sintoma é `permission denied` num arquivo
+com permissão 644, que o `ls -l` diz estar perfeitamente legível.
+
+O sufixo resolve:
+- `:z` (minúsculo) — rótulo **compartilhado**: vários containers podem ler.
+- `:Z` (maiúsculo) — rótulo **privado**: só este container.
+
+Cuidado com `:Z` em diretório compartilhado — ele reetiqueta o diretório do host,
+e já derrubou serviço do host por reetiquetar `/var/lib` inteiro. Este próprio
+repositório foi escrito num Fedora, e o primeiro `docker run -v $PWD:/src` falhou
+exatamente assim.
+</Callout>
+
+## tmpfs — memória, não disco
+
+```yaml
+tmpfs:
+  - /tmp:rw,noexec,nosuid,size=32m
+```
+
+Vive na RAM e desaparece quando o container para. Três usos:
+
+1. **Dar de volta um `/tmp` gravável** quando o rootfs está `read_only: true` —
+   é exatamente o que esta stack faz.
+2. **Dados sensíveis** que nunca devem tocar o disco. (É como o Docker monta
+   `/run/secrets`.)
+3. **Arquivos temporários pesados**, onde a RAM é mais rápida que o disco.
+
+As opções não são decorativas: `noexec` impede executar o que for escrito ali, e
+`nosuid` desliga bits setuid. Se um invasor conseguir escrever no `/tmp`, ele não
+consegue rodar o que escreveu.
+
+## O `--read-only` e o que ele quebra
+
+```yaml
+read_only: true
+tmpfs:
+  - /tmp:rw,noexec,nosuid,size=16m
+```
+
+Com o rootfs imutável, um invasor que consiga execução de código não deposita
+binário, webshell nem cron. Mas quase toda aplicação escreve em **algum** lugar, e
+descobrir onde é o trabalho:
+
+- `/tmp` — quase sempre.
+- `/run` ou `/var/run` — sockets unix. O Postgres desta stack precisa de
+  `/run/postgresql`.
+- Caches de linguagem — `__pycache__`, por exemplo. É por isso que o
+  `worker-py` gera os `.pyc` no build (`UV_COMPILE_BYTECODE=1`) e define
+  `PYTHONDONTWRITEBYTECODE=1` em runtime.
+
+Volumes e tmpfs declarados continuam graváveis: `read_only` afeta só o rootfs.
+
+## Backup: o volume não está no seu `git`
+
+Volumes nomeados vivem em `/var/lib/docker/volumes/`. Não estão no repositório, não
+estão no seu backup de `$HOME`, e `docker compose down --volumes` os apaga sem
+confirmação.
+
+Backup de um banco não se faz copiando o volume com o serviço rodando — isso
+captura um estado inconsistente. Use a ferramenta do próprio banco:
+
+```bash
+docker compose exec -T db pg_dump -U links links | gzip > backup.sql.gz
+```
+
+## O que fica
+
+- Volume nomeado para dados; bind mount para código em dev e configuração; tmpfs
+  para efêmero e sensível.
+- O volume só é populado a partir da imagem quando está **vazio**.
+- SELinux: sem `:z`/`:Z` o bind mount dá `permission denied`.
+- `read_only: true` + `tmpfs` para os caminhos que a aplicação realmente escreve.
+- Backup de banco é `pg_dump`, não cópia de volume.
+
+<RunIt title="Volume, bind mount e tmpfs lado a lado">
+
+```bash
+# 1. VOLUME: sobrevive ao container.
+docker volume create demo-vol >/dev/null
+docker run --rm -v demo-vol:/dados alpine sh -c 'echo "sobrevivi" > /dados/nota.txt'
+docker run --rm -v demo-vol:/dados alpine cat /dados/nota.txt
+
+# 2. tmpfs: NÃO sobrevive.
+docker run --rm --tmpfs /efemero alpine sh -c 'echo x > /efemero/nota.txt; ls /efemero'
+docker run --rm --tmpfs /efemero alpine ls /efemero
+echo "  ↑ vazio: o tmpfs anterior morreu junto com o container"
+
+# 3. read_only: a escrita no rootfs falha, mas o tmpfs funciona.
+docker run --rm --read-only --tmpfs /tmp alpine sh -c '
+  echo teste > /raiz.txt 2>&1 || echo "  ✅ rootfs bloqueado (esperado)"
+  echo teste > /tmp/ok.txt && echo "  ✅ tmpfs gravável (esperado)"'
+
+# 4. O volume NÃO é populado se já tiver dados.
+docker run --rm -v demo-vol:/etc alpine ls /etc | head -3
+echo "  ↑ o /etc da imagem foi escondido: o volume já tinha conteúdo"
+
+docker volume rm demo-vol >/dev/null
+```
+
+</RunIt>

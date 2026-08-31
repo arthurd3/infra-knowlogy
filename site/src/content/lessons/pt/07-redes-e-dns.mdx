@@ -1,0 +1,173 @@
+---
+key: networking-and-dns
+lang: pt
+track: fundamentos
+order: 7
+title: Redes, DNS interno e a porta que fura o firewall
+summary: Por que a bridge padrão não resolve nomes, como segmentar para que o banco não alcance a internet, e a regra de publicação de portas que contorna o seu UFW.
+minutes: 15
+tags: [networking, bridge, dns, ports, firewall, iptables]
+sources:
+  - label: "Docker Docs — Network drivers"
+    url: "https://docs.docker.com/engine/network/"
+  - label: "Docker Docs — Bridge network driver"
+    url: "https://docs.docker.com/engine/network/drivers/bridge/"
+  - label: "OWASP — Docker Security Cheat Sheet"
+    url: "https://cheatsheetseries.owasp.org/cheatsheets/Docker_Security_Cheat_Sheet.html"
+---
+
+## A bridge padrão versus a que você cria
+
+Todo container sem `--network` cai na bridge padrão (`docker0`). Nunca use isso
+para uma aplicação de verdade, por dois motivos:
+
+1. **Não há resolução de nomes.** Na bridge padrão os containers só se enxergam
+   por IP — e IP de container muda a cada `docker compose up`.
+2. **Todo container do host está no mesmo segmento.** Inclusive o de outro projeto
+   que você esqueceu rodando.
+
+Numa rede bridge **definida por você**, o Docker roda um servidor DNS embutido em
+`127.0.0.11` que resolve **nomes de serviço**. É por isso que o `api-go` conecta
+em `host=db` e simplesmente funciona:
+
+```go
+POSTGRES_HOST: db     // resolvido pelo DNS embutido, não por /etc/hosts
+```
+
+<Callout type="why" label="O DNS embutido é dinâmico">
+O `db` reiniciou e ganhou outro IP? O DNS já sabe. É isso que torna
+`depends_on` + healthcheck suficientes: o nome nunca muda, mesmo que o endereço
+mude. Nenhuma aplicação desta stack conhece um IP.
+</Callout>
+
+## Os drivers
+
+| Driver | Para quê |
+|---|---|
+| `bridge` (definida por você) | o padrão para aplicações num host só |
+| `host` | remove o isolamento de rede; usa a pilha do host direto |
+| `none` | sem rede nenhuma; isolamento máximo |
+| `overlay` | vários daemons Docker (Swarm) |
+| `macvlan` / `ipvlan` | o container aparece como dispositivo físico na LAN |
+
+`host` elimina a tradução de porta e ganha alguma latência — mas o container passa
+a enxergar **todas** as interfaces e portas do host, inclusive serviços ligados a
+`127.0.0.1` que você achava privados.
+
+## Segmentação: o desenho desta stack
+
+Redes separadas não são cosmética, são contenção. O `compose.yaml` define três:
+
+```yaml
+networks:
+  edge:                    # caddy ↔ api ↔ web
+    driver: bridge
+  data:                    # api/worker ↔ db/cache
+    driver: bridge
+    internal: true         # ← sem gateway: NENHUMA rota para fora
+  egress:                  # só o worker, que precisa baixar URLs
+    driver: bridge
+```
+
+E a distribuição:
+
+| Serviço | edge | data | egress |
+|---|:---:|:---:|:---:|
+| `edge` (Caddy) | ✅ | | |
+| `web` | ✅ | | |
+| `api` | ✅ | ✅ | |
+| `worker` | | ✅ | ✅ |
+| `db` | | ✅ | |
+| `cache` | | ✅ | |
+
+Duas propriedades caem de graça disso:
+
+1. **O proxy não consegue falar com o banco.** Não é regra de firewall, é ausência
+   de rota — `edge` e `data` não se tocam.
+2. **O banco não tem saída para a internet.** `internal: true` remove o gateway.
+   Mesmo comprometido, o Postgres não exfiltra nada sozinho.
+
+O `worker` é a exceção estudada: ele *precisa* de saída, porque busca URLs
+enviadas por usuários. Por isso ele está na `egress` — e por isso o código dele
+tem a checagem de SSRF em `enrich.py`. Segmentação de rede e validação na
+aplicação resolvem partes diferentes do mesmo problema.
+
+## A porta publicada que fura o seu firewall
+
+Esta é a armadilha de segurança mais subestimada do Docker inteiro.
+
+```yaml
+ports:
+  - "8080:8080"              # ❌ escuta em 0.0.0.0 — a internet inteira
+  - "127.0.0.1:8080:8080"    # ✅ só o host local
+```
+
+<Callout type="danger" label="Regra 5a da OWASP">
+Quando você publica uma porta, o Docker escreve regras de DNAT na cadeia
+`DOCKER` da tabela `nat` do iptables. Essas regras são avaliadas **antes** das
+regras do UFW ou do firewalld.
+
+O resultado: `ufw status` diz "deny incoming", e a sua porta 8080 está aberta
+para a internet mesmo assim. O firewall não está quebrado — ele nunca chega a ser
+consultado.
+
+O conserto é o prefixo `127.0.0.1:`, que é o padrão em todo `ports:` desta stack.
+Para expor de verdade, ponha um proxy reverso na frente e publique só ele.
+</Callout>
+
+Confirme no seu host com:
+
+```bash
+sudo iptables -t nat -L DOCKER -n | head
+```
+
+## Portas: as três coisas diferentes
+
+Confusão comum, três conceitos distintos:
+
+- **`EXPOSE 8080`** no Dockerfile — documentação. Não faz nada.
+- **A porta que a aplicação escuta** — o `LISTEN_ADDR` do `api-go`.
+- **`ports:`** no Compose — mapeia porta do host para porta do container.
+
+Containers na mesma rede falam pela porta **do container**, sem publicação
+nenhuma. O `api` desta stack não tem `ports:` em produção, e o Caddy fala com ele
+em `api:8080` normalmente. Publicar porta é só para tráfego vindo de **fora** do
+Docker.
+
+## O que fica
+
+- Sempre rede bridge definida por você: só nela existe DNS de serviço em `127.0.0.11`.
+- Segmente. `internal: true` tira a rota de saída dos serviços de dados.
+- Container fala com container pela porta do container; `ports:` é só para o mundo externo.
+- **Publique sempre em `127.0.0.1:`** — o Docker contorna o UFW/firewalld.
+- `EXPOSE` é documentação, não configuração.
+
+<RunIt title="DNS, isolamento e a rota que não existe">
+
+```bash
+docker network create demo-net >/dev/null
+docker network create --internal demo-interna >/dev/null
+
+# 1. DNS por nome de serviço, só em rede definida por você.
+docker run -d --name servidor --network demo-net alpine sleep 300 >/dev/null
+docker run --rm --network demo-net alpine ping -c1 -W2 servidor \
+  | head -2 && echo "  ✅ resolveu pelo nome"
+
+# 2. Na bridge PADRÃO o mesmo nome não resolve.
+docker run --rm alpine ping -c1 -W2 servidor 2>&1 | head -1
+echo "  ↑ bad address: a bridge padrão não tem DNS de serviço"
+
+# 3. Rede internal: sem rota para a internet.
+echo "── rede normal:"   && docker run --rm --network demo-net      alpine ping -c1 -W2 1.1.1.1 | tail -2
+echo "── rede internal:" && docker run --rm --network demo-interna  alpine ping -c1 -W2 1.1.1.1 2>&1 | tail -1
+
+# 4. A regra de DNAT que ignora o seu firewall.
+docker run -d --name pub -p 127.0.0.1:18080:80 nginx:alpine >/dev/null
+sudo iptables -t nat -L DOCKER -n 2>/dev/null | grep 18080 \
+  || echo "(rode com sudo para ver a regra)"
+
+docker rm -f servidor pub >/dev/null
+docker network rm demo-net demo-interna >/dev/null
+```
+
+</RunIt>

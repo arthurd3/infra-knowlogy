@@ -1,0 +1,68 @@
+---
+import { getCollection } from "astro:content";
+import Base from "../../layouts/Base.astro";
+import { useTranslations, otherLang, type Lang } from "../../i18n/ui";
+
+export async function getStaticPaths() {
+  return [{ params: { lang: "pt" } }, { params: { lang: "en" } }];
+}
+
+const lang = Astro.params.lang as Lang;
+const t = useTranslations(lang);
+
+const all = await getCollection("lessons", (e) => e.data.lang === lang);
+const byTrack = (track: "fundamentos" | "producao") =>
+  all.filter((e) => e.data.track === track).sort((a, b) => a.data.order - b.data.order);
+
+const tracks = [
+  { id: "fundamentos" as const, badge: "badge--fund", lessons: byTrack("fundamentos") },
+  { id: "producao" as const, badge: "badge--prod", lessons: byTrack("producao") },
+];
+const first = tracks[0].lessons[0];
+---
+
+<Base
+  lang={lang}
+  title={`${t("site.title")} — ${t("site.tagline")}`}
+  altPath={`/${otherLang(lang)}/`}
+>
+  <section style="padding: 3.5rem 0 2rem; max-width: 46rem;">
+    <h1>{t("site.tagline")}</h1>
+    <p style="font-size: 1.0625rem; color: var(--text-muted);">{t("home.intro")}</p>
+    {first && (
+      <p style="margin-top: 1.5rem;">
+        <a class="btn-ghost" style="padding: 0.55rem 1.1rem; font-size: 0.9375rem;"
+           href={`/${lang}/lessons/${first.data.key}/`}>
+          {t("home.start")} →
+        </a>
+      </p>
+    )}
+  </section>
+
+  {tracks.map((track) => track.lessons.length > 0 && (
+    <section style="margin-bottom: 3rem;">
+      <h2 style="margin-bottom: 0.25rem;">
+        <span class={`badge ${track.badge}`}>{t(`track.${track.id}`)}</span>
+        <span style="margin-left: 0.6rem; font-size: 0.8125rem; color: var(--text-faint); font-weight: 400;">
+          {track.lessons.length} {t("home.lessons")}
+        </span>
+      </h2>
+      <p style="color: var(--text-muted); margin: 0 0 1.25rem; max-width: 46rem;">
+        {t(`track.${track.id}.desc`)}
+      </p>
+      <div class="grid grid--2">
+        {track.lessons.map((lesson) => (
+          <a class="card" href={`/${lang}/lessons/${lesson.data.key}/`}>
+            <div class="card__meta">
+              <span>{t("lesson.lesson")} {lesson.data.order}</span>
+              <span>·</span>
+              <span>{lesson.data.minutes} {t("lesson.minutes")}</span>
+            </div>
+            <h3 class="card__title">{lesson.data.title}</h3>
+            <p class="card__summary">{lesson.data.summary}</p>
+          </a>
+        ))}
+      </div>
+    </section>
+  ))}
+</Base>

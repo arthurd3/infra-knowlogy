@@ -1,0 +1,105 @@
+---
+import "../styles/global.css";
+import { useTranslations, otherLang, languages, type Lang } from "../i18n/ui";
+
+interface Props {
+  lang: Lang;
+  title: string;
+  description?: string;
+  /** Caminho equivalente no outro idioma, para o seletor. */
+  altPath?: string;
+}
+
+const { lang, title, description, altPath } = Astro.props;
+const t = useTranslations(lang);
+const other = otherLang(lang);
+const alt = altPath ?? `/${other}/`;
+const currentPath = Astro.url.pathname;
+---
+
+<!doctype html>
+<html lang={lang === "pt" ? "pt-BR" : "en"}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description ?? t("site.description")} />
+    <link rel="canonical" href={new URL(currentPath, Astro.site)} />
+    <!-- Diz aos buscadores que estas duas URLs são a mesma página em idiomas
+         diferentes, em vez de conteúdo duplicado. -->
+    <link rel="alternate" hreflang={other === "pt" ? "pt-BR" : "en"} href={new URL(alt, Astro.site)} />
+    <link rel="alternate" hreflang={lang === "pt" ? "pt-BR" : "en"} href={new URL(currentPath, Astro.site)} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description ?? t("site.description")} />
+    <meta property="og:type" content="website" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230b6b5e'/%3E%3Cpath d='M8 20h16M8 15h16M8 10h16' stroke='white' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E"
+    />
+    <script is:inline>
+      // Roda ANTES da primeira pintura: sem isto, a página aparece clara por um
+      // frame antes do JS trocar para o tema escuro salvo. É o mesmo motivo pelo
+      // qual um container deve estar pronto ANTES de entrar no balanceador.
+      (() => {
+        try {
+          const saved = localStorage.getItem("theme");
+          if (saved === "dark" || saved === "light") {
+            document.documentElement.dataset.theme = saved;
+          }
+        } catch { /* localStorage bloqueado: fica no padrão do sistema */ }
+      })();
+    </script>
+  </head>
+
+  <body>
+    <a href="#main" class="visually-hidden">Pular para o conteúdo</a>
+
+    <header class="nav">
+      <div class="shell nav__inner">
+        <a class="nav__brand" href={`/${lang}/`}>
+          <svg width="20" height="20" viewBox="0 0 32 32" aria-hidden="true">
+            <rect width="32" height="32" rx="7" fill="var(--accent)"></rect>
+            <path d="M8 20h16M8 15h16M8 10h16" stroke="var(--bg)" stroke-width="2.4" stroke-linecap="round"></path>
+          </svg>
+          {t("site.title")}
+        </a>
+
+        <nav class="nav__links" aria-label={t("nav.tracks")}>
+          <a class="nav__link" href={`/${lang}/`} aria-current={currentPath === `/${lang}/` ? "page" : undefined}>
+            {t("nav.home")}
+          </a>
+        </nav>
+
+        <span class="nav__spacer"></span>
+
+        <a class="btn-ghost" href={alt} hreflang={other} title={t("lang.switch")}>
+          {languages[other]}
+        </a>
+        <button class="btn-ghost" id="theme-toggle" type="button" aria-label="Alternar tema claro/escuro">
+          <span aria-hidden="true">◐</span>
+        </button>
+      </div>
+    </header>
+
+    <main id="main" class="shell">
+      <slot />
+    </main>
+
+    <footer class="footer">
+      <div class="shell">
+        <p>{t("footer.built")}</p>
+      </div>
+    </footer>
+
+    <script is:inline>
+      document.getElementById("theme-toggle")?.addEventListener("click", () => {
+        const root = document.documentElement;
+        const systemDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+        const current = root.dataset.theme ?? (systemDark ? "dark" : "light");
+        const next = current === "dark" ? "light" : "dark";
+        root.dataset.theme = next;
+        try { localStorage.setItem("theme", next); } catch { /* ignorado */ }
+      });
+    </script>
+  </body>
+</html>

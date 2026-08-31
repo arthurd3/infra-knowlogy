@@ -1,0 +1,97 @@
+---
+import { getCollection, render } from "astro:content";
+import Base from "../../../layouts/Base.astro";
+import Callout from "../../../components/Callout.astro";
+import RunIt from "../../../components/RunIt.astro";
+import { useTranslations, otherLang, type Lang } from "../../../i18n/ui";
+
+export async function getStaticPaths() {
+  const lessons = await getCollection("lessons");
+  return lessons.map((entry) => ({
+    params: { lang: entry.data.lang, slug: entry.data.key },
+    props: { entry },
+  }));
+}
+
+const { entry } = Astro.props;
+const lang = entry.data.lang as Lang;
+const t = useTranslations(lang);
+
+const { Content, headings } = await render(entry);
+
+// Vizinhas na MESMA trilha e no MESMO idioma, para a navegação anterior/próxima.
+const siblings = (await getCollection("lessons", (e) =>
+  e.data.lang === lang && e.data.track === entry.data.track,
+)).sort((a, b) => a.data.order - b.data.order);
+
+const index = siblings.findIndex((e) => e.data.key === entry.data.key);
+const prev = index > 0 ? siblings[index - 1] : undefined;
+const next = index >= 0 && index < siblings.length - 1 ? siblings[index + 1] : undefined;
+
+// O slug é compartilhado entre os idiomas, então o link do outro idioma é
+// determinístico — sem tabela de tradução de URL.
+const altPath = `/${otherLang(lang)}/lessons/${entry.data.key}/`;
+const toc = headings.filter((h) => h.depth === 2 || h.depth === 3);
+const badgeClass = entry.data.track === "fundamentos" ? "badge--fund" : "badge--prod";
+---
+
+<Base lang={lang} title={`${entry.data.title} — ${t("site.title")}`}
+      description={entry.data.summary} altPath={altPath}>
+  <article class="lesson">
+    <div class="prose">
+      <div class="card__meta" style="margin-bottom: 0.75rem;">
+        <span class={`badge ${badgeClass}`}>{t(`track.${entry.data.track}`)}</span>
+        <span>{t("lesson.lesson")} {entry.data.order}</span>
+        <span>·</span>
+        <span>{entry.data.minutes} {t("lesson.minutes")}</span>
+      </div>
+
+      <h1>{entry.data.title}</h1>
+      <p style="font-size: 1.0625rem; color: var(--text-muted); margin-top: 0;">
+        {entry.data.summary}
+      </p>
+      <hr />
+
+      <!-- Callout e RunIt são passados como componentes para o MDX poder usá-los
+           sem cada arquivo precisar importá-los. -->
+      <Content components={{ Callout, RunIt }} />
+
+      {entry.data.sources.length > 0 && (
+        <section class="sources">
+          <h2>{t("lesson.sources")}</h2>
+          <ul>
+            {entry.data.sources.map((s) => (
+              <li><a href={s.url} rel="noopener noreferrer" target="_blank">{s.label}</a></li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      <nav class="pager" aria-label={t("nav.tracks")}>
+        {prev ? (
+          <a class="pager__link" href={`/${lang}/lessons/${prev.data.key}/`}>
+            <div class="pager__dir">← {t("lesson.prev")}</div>
+            <div class="pager__title">{prev.data.title}</div>
+          </a>
+        ) : <span></span>}
+        {next && (
+          <a class="pager__link pager__link--next" href={`/${lang}/lessons/${next.data.key}/`}>
+            <div class="pager__dir">{t("lesson.next")} →</div>
+            <div class="pager__title">{next.data.title}</div>
+          </a>
+        )}
+      </nav>
+    </div>
+
+    {toc.length > 0 && (
+      <aside class="toc">
+        <div class="toc__title">{t("lesson.onThisPage")}</div>
+        <ol>
+          {toc.map((h) => (
+            <li data-depth={h.depth}><a href={`#${h.slug}`}>{h.text}</a></li>
+          ))}
+        </ol>
+      </aside>
+    )}
+  </article>
+</Base>

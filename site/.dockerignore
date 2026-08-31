@@ -1,0 +1,9 @@
+# node_modules NUNCA entra no contexto: são dezenas de milhares de arquivos que
+# o build reinstala de qualquer forma a partir do package-lock.json. Sem esta
+# linha, o `docker build` gasta segundos só transferindo o contexto.
+node_modules
+dist
+.astro
+Dockerfile
+.dockerignore
+README.md

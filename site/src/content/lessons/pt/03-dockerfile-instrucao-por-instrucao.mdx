@@ -1,0 +1,314 @@
+---
+key: dockerfile-instruction-by-instruction
+lang: pt
+track: fundamentos
+order: 3
+title: O Dockerfile, instrução por instrução
+summary: Cada instrução tem uma armadilha específica. ENTRYPOINT versus CMD, exec form versus shell form, ENV que vaza segredo e EXPOSE que não expõe nada.
+minutes: 18
+tags: [dockerfile, entrypoint, cmd, copy, add, env, arg, healthcheck]
+sources:
+  - label: "Docker Docs — Dockerfile best practices"
+    url: "https://docs.docker.com/build/building/best-practices/"
+  - label: "Docker Docs — Dockerfile reference"
+    url: "https://docs.docker.com/reference/dockerfile/"
+  - label: "Docker Docs — Build secrets"
+    url: "https://docs.docker.com/build/building/secrets/"
+---
+
+Um Dockerfile parece um script shell e não é. Ele é uma **receita declarativa**
+onde cada instrução produz uma camada ou um metadado, avaliada por um builder que
+faz cache agressivo. As armadilhas abaixo vêm dessa diferença.
+
+## A distinção que causa mais dano: exec form × shell form
+
+Quase toda instrução que executa algo aceita duas sintaxes:
+
+```dockerfile
+CMD ["nginx", "-g", "daemon off;"]     # exec form  — array JSON
+CMD nginx -g "daemon off;"             # shell form — string solta
+```
+
+Elas **não** são equivalentes. A shell form é reescrita pelo builder para:
+
+```dockerfile
+CMD ["/bin/sh", "-c", "nginx -g \"daemon off;\""]
+```
+
+A explicação que circula na internet para por que isso é ruim está **incompleta**,
+e vale medir em vez de repetir. Estes são os números desta máquina:
+
+| Caso | Quem é o PID 1 | `docker stop` levou |
+|---|---|---|
+| `CMD ["sleep","300"]` | `sleep 300` | **10,3 s** |
+| `CMD sleep 300 && true` | `/bin/sh -c …` | **10,2 s** |
+| entrypoint com `trap … TERM` | o próprio script | **0,012 s** |
+| `CMD ["sleep","300"]` + `--init` | `docker-init` (tini) | **0,20 s** |
+
+Duas surpresas aí:
+
+1. **A exec form sozinha não resolveu nada.** O `sleep` era o PID 1 e mesmo assim
+   levou os 10 segundos inteiros.
+2. **`CMD sleep 300` — shell form — também tem `sleep` como PID 1.** O BusyBox
+   `sh` (e o `dash`) otimizam `sh -c "um comando simples"` fazendo `exec`, e o
+   shell desaparece. Só com um comando composto (`&& true`) o shell sobrevive
+   como PID 1.
+
+<Callout type="why" label="A regra de verdade: PID 1 é especial">
+O kernel **não aplica as ações padrão de sinal ao PID 1**. Para todo outro
+processo, SIGTERM sem handler significa "termine"; para o PID 1, significa
+*nada* — o sinal é descartado. É uma proteção para o init do sistema não ser
+morto por acidente.
+
+Logo: qualquer processo que vire PID 1 sem ter **instalado explicitamente** um
+handler de SIGTERM vai ignorar o `docker stop`, esperar o grace period inteiro e
+morrer de SIGKILL. Foi o que aconteceu nas duas primeiras linhas da tabela.
+</Callout>
+
+Existem exatamente dois consertos, e a tabela mostra os dois funcionando:
+
+- **Trate o sinal na aplicação.** É o que o `api-go` faz com
+  `signal.NotifyContext` e o que o `worker-py` faz com `signal.signal(SIGTERM, …)`.
+  Esse é o conserto correto, porque só a aplicação sabe o que é "terminar direito".
+- **Use um init.** `init: true` no Compose (ou `--init` no `docker run`) coloca o
+  tini como PID 1: ele trata os sinais, repassa aos filhos e ainda recolhe
+  processos zumbis. É a rede de segurança para imagens cujo processo você não
+  controla.
+
+E a exec form continua obrigatória — não porque ela resolva sozinha o problema do
+sinal, mas porque a shell form **acrescenta um intermediário que não repassa
+nada** sempre que o shell não consegue fazer `exec`. Você não quer que o
+comportamento do seu desligamento dependa de o BusyBox ter otimizado ou não a sua
+linha de comando. Por isso todo Dockerfile desta stack termina com um array JSON.
+
+## FROM — a base e as stages
+
+```dockerfile
+FROM golang:1.25-alpine@sha256:1ae0735f… AS build
+```
+
+Três coisas numa linha: a imagem base, o pin por digest (ver a
+[lição sobre digests](/pt/lessons/images-layers-and-digests/)) e o **nome da
+stage**. Um Dockerfile pode ter vários `FROM`; cada um começa uma stage nova, e
+só a última — ou a escolhida por `--target` — vira a imagem final.
+
+## WORKDIR — sempre absoluto
+
+```dockerfile
+WORKDIR /app          # ✅ cria o diretório se não existir, e persiste
+RUN cd /app && make   # ❌ o cd morre no fim do RUN; a próxima instrução volta para /
+```
+
+Cada `RUN` roda num processo novo. `cd` não sobrevive entre instruções — `WORKDIR`
+sim, porque é metadado da imagem.
+
+## COPY × ADD
+
+Use `COPY`. Ponto de partida sempre.
+
+```dockerfile
+COPY --from=build /out/api-go /api-go       # copia de outra stage
+COPY --chown=65532:65532 /app /app          # já define o dono, sem chown depois
+```
+
+`ADD` faz duas coisas a mais, e ambas surpreendem: **descompacta tarballs
+automaticamente** e **baixa URLs**. A descompactação automática é a que morde —
+`ADD app.tar.gz /app/` extrai em vez de copiar, o que raramente é o que se
+esperava. `ADD` só se justifica com checksum explícito:
+
+```dockerfile
+ADD --checksum=sha256:270d731b… https://exemplo.com/runtime.tar.gz /runtime.tar.gz
+```
+
+<Callout type="trap" label="--chown não é opcional">
+Fazer `COPY` e depois `RUN chown -R` duplica a árvore inteira numa camada nova —
+a versão com o dono antigo continua na camada anterior, ocupando o mesmo espaço.
+Em um `node_modules` isso são centenas de megabytes desperdiçados. Use
+`COPY --chown`.
+</Callout>
+
+## RUN — encadeie, e cuidado com o pipe
+
+```dockerfile
+# Uma camada, e o cache do apt some antes de a camada ser selada.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+```
+
+Três detalhes não óbvios:
+
+- **`update` e `install` no MESMO `RUN`.** Separados, o `update` fica em cache e o
+  `install` de amanhã usa uma lista de pacotes de meses atrás — instalando versões
+  que já não existem no espelho, ou pior, que existem e estão vulneráveis.
+- **Ordene alfabeticamente** a lista de pacotes. Evita duplicata e torna o diff do
+  pull request legível.
+- **`set -o pipefail` antes de pipes.** Sem isso, `RUN curl … | tar x` tem sucesso
+  mesmo se o `curl` falhar, porque o shell só olha o último comando do pipe.
+
+Com BuildKit você também pode usar heredoc, que dispensa a barra invertida:
+
+```dockerfile
+RUN <<EOF
+set -eux -o pipefail
+apt-get update
+apt-get install -y --no-install-recommends ca-certificates curl
+rm -rf /var/lib/apt/lists/*
+EOF
+```
+
+## ENV × ARG — e o vazamento de segredo
+
+| | Existe durante o build | Existe em runtime | Fica na imagem |
+|---|---|---|---|
+| `ARG` | sim | **não** | **sim, no histórico** |
+| `ENV` | sim | sim | **sim, no config** |
+
+Ambos ficam na imagem. Por isso **nenhum dos dois serve para segredo**:
+
+```dockerfile
+ARG NPM_TOKEN                    # ❌ visível em `docker history`
+ENV DB_PASSWORD=hunter2          # ❌ visível em `docker inspect`
+RUN npm ci
+```
+
+O jeito certo é um **secret mount**: o arquivo existe só durante aquele `RUN` e
+não vira camada nenhuma.
+
+```dockerfile
+RUN --mount=type=secret,id=npmrc,target=/root/.npmrc \
+    npm ci
+```
+
+```bash
+docker build --secret id=npmrc,src=$HOME/.npmrc .
+```
+
+<Callout type="danger">
+Um segredo que passou por `ARG` ou `ENV` **já vazou**, mesmo que você o remova num
+`RUN` seguinte — pela mesma razão que uma camada nunca encolhe. Quem tiver a
+imagem tem o segredo. O único caminho é rotacionar a credencial.
+</Callout>
+
+## EXPOSE não expõe nada
+
+```dockerfile
+EXPOSE 8080
+```
+
+Isto é **documentação**. Não abre porta, não publica nada, não altera o
+comportamento da rede. Quem publica é `-p` no `docker run` ou `ports:` no Compose.
+O único efeito real é habilitar `docker run -P` (que publica as portas declaradas
+em portas aleatórias do host) e dizer ao leitor onde a aplicação escuta.
+
+## USER — com número, sempre
+
+```dockerfile
+RUN groupadd --gid 65532 app \
+    && useradd --uid 65532 --gid 65532 --no-log-init --create-home app
+USER 65532:65532
+```
+
+Sem UID explícito, o número depende de quantos usuários a imagem base já tinha — e
+muda quando a base muda, quebrando a permissão de qualquer volume existente.
+`--no-log-init` evita um bug do `useradd` que cria um arquivo esparso gigante com
+UIDs altos.
+
+## HEALTHCHECK — e o problema da imagem distroless
+
+```dockerfile
+HEALTHCHECK --interval=10s --timeout=3s --start-period=5s --retries=3 \
+    CMD ["/api-go", "healthcheck"]
+```
+
+`start-period` é o parâmetro esquecido: falhas dentro dessa janela **não contam**
+para o `retries`. Sem ele, uma aplicação que leva 20s para subir é marcada como
+unhealthy antes de terminar de iniciar.
+
+Repare no comando: ele chama o **próprio binário**. Numa imagem distroless não
+existe `curl`, nem `wget`, nem shell. Instalar curl só para o health check
+anexaria um gerenciador de pacotes à imagem de produção. A saída é dar ao seu
+binário um segundo modo de operação — é o que
+[`healthcheck.go`](https://github.com/infra-knowlogy) desta stack faz, e o que o
+worker Python faz chamando `python -c`.
+
+## ENTRYPOINT × CMD
+
+A regra em uma frase: **`ENTRYPOINT` é o programa; `CMD` são os argumentos
+padrão.**
+
+```dockerfile
+ENTRYPOINT ["/api-go"]
+CMD ["serve"]
+```
+
+- `docker run img` → executa `/api-go serve`
+- `docker run img healthcheck` → executa `/api-go healthcheck` (o CMD foi trocado)
+- `docker run --entrypoint sh img` → só assim se troca o ENTRYPOINT
+
+Se você define **só `CMD`**, tudo é substituível — bom para uma imagem de
+ferramenta. Se define **só `ENTRYPOINT`**, o container sempre roda aquele programa
+— bom para um serviço.
+
+<Callout type="trap" label="VOLUME no Dockerfile quase sempre é erro">
+`VOLUME /data` força um volume anônimo em todo container criado a partir da
+imagem. Volumes anônimos não são removidos por `docker compose down`, acumulam
+silenciosamente e ainda impedem que camadas posteriores escrevam naquele caminho.
+Declare volumes no Compose, onde quem os declara é quem opera.
+</Callout>
+
+## .dockerignore — o arquivo que quase ninguém escreve
+
+O build context inteiro é enviado ao daemon **antes** de a primeira instrução
+rodar. Sem `.dockerignore`, isso inclui `.git/`, `node_modules/` e o seu `.env`.
+
+Dois problemas: o build fica lento, e um `COPY . .` distraído pode copiar
+credenciais para dentro da imagem. Cada serviço desta stack tem o seu, com escopo
+próprio.
+
+## O que fica
+
+- Exec form (array JSON) em `ENTRYPOINT`/`CMD`, sempre.
+- `COPY` por padrão; `ADD` só com checksum; `--chown` em vez de `chown` depois.
+- `apt-get update` e `install` no mesmo `RUN`; `set -o pipefail` antes de pipes.
+- `ARG` e `ENV` **não** guardam segredo — use `--mount=type=secret`.
+- `EXPOSE` é documentação; quem publica porta é o runtime.
+- `USER` com UID numérico; `HEALTHCHECK` com `start-period`.
+- `VOLUME` no Dockerfile: quase sempre errado.
+
+<RunIt title="Veja o segredo vazado e os sinais perdidos">
+
+```bash
+# 1. O VAZAMENTO. Constrói com ARG e procura o segredo no histórico.
+printf 'FROM alpine:3.22\nARG TOKEN\nRUN echo "usando $TOKEN" > /dev/null\n' \
+  | docker build -t demo/vazou --build-arg TOKEN=super-secreto-123 -f - .
+echo "── procurando o segredo na imagem:"
+docker history --no-trunc demo/vazou | grep -o 'super-secreto-123' && echo "  ⚠️  VAZOU"
+
+# 2. Compare com o jeito certo: o segredo não aparece em lugar nenhum.
+printf 'FROM alpine:3.22\nRUN --mount=type=secret,id=tok cat /run/secrets/tok > /dev/null\n' \
+  | TOK=super-secreto-123 docker build -t demo/seguro --secret id=tok,env=TOK -f - .
+echo "── procurando o segredo na imagem:"
+docker history --no-trunc demo/seguro | grep -o 'super-secreto-123' || echo "  ✅ nada encontrado"
+
+# 3. O PID 1 QUE IGNORA SIGTERM. Sem handler, o stop leva 10 segundos.
+printf 'FROM alpine:3.22\nCMD ["sleep","300"]\n' | docker build -q -t demo/sem-handler -f - .
+docker run -d --name t1 demo/sem-handler >/dev/null && sleep 1
+echo "── PID 1 é: $(docker exec t1 cat /proc/1/cmdline | tr '\0' ' ')"
+echo "── sem handler:" && time docker stop t1
+
+# 4. O MESMO container, com --init. O tini vira PID 1 e repassa o sinal.
+docker run -d --init --name t2 demo/sem-handler >/dev/null && sleep 1
+echo "── PID 1 é: $(docker exec t2 cat /proc/1/cmdline | tr '\0' ' ')"
+echo "── com --init:" && time docker stop t2
+
+# 5. E a nossa API, que trata o sinal ela mesma — o conserto correto.
+docker build -q --target dist -t demo/api stack/services/api-go >/dev/null
+echo "(a api precisa de banco para subir; o ponto aqui é o código em main.go)"
+grep -A2 'signal.NotifyContext' stack/services/api-go/main.go
+
+docker rm t1 t2 >/dev/null && docker rmi demo/vazou demo/seguro demo/sem-handler demo/api
+```
+
+</RunIt>

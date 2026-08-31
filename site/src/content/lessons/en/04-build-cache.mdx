@@ -1,0 +1,223 @@
+---
+key: build-cache
+lang: en
+track: fundamentos
+order: 4
+title: The build cache, and why order matters
+summary: One rule explains nearly everything — invalidate a layer and every layer below it goes too. From that follow instruction ordering, cache mounts, and the 40-second build that becomes 2.
+minutes: 15
+tags: [cache, buildkit, layers, ci]
+sources:
+  - label: "Docker Docs — Build cache"
+    url: "https://docs.docker.com/build/cache/"
+  - label: "Docker Docs — Cache invalidation"
+    url: "https://docs.docker.com/build/cache/invalidation/"
+  - label: "Docker Docs — Dockerfile best practices"
+    url: "https://docs.docker.com/build/building/best-practices/"
+---
+
+import BuildCacheSimulator from "../../../components/islands/BuildCacheSimulator.tsx";
+
+The build cache has two rules. The first is intuitive; the second is what turns a
+2-second build into a 50-second one.
+
+1. A layer is reused when **its instruction and its inputs** have not changed.
+2. Invalidate one layer and **every layer after it** is invalidated too — even the
+   ones with nothing to do with what you changed.
+
+The second rule is the cascade, and it is unavoidable: each layer is built *on top
+of* the previous one. If the base changed, what sat on it is no longer the same
+thing.
+
+## How the cache key is computed
+
+It depends on the instruction:
+
+- **`RUN`** — the cache looks at the **command text**, not the result.
+  `RUN apt-get update` with unchanged text hits the cache today, tomorrow, and a
+  year from now, even if the repositories changed entirely. That is why `update`
+  and `install` must live in the same `RUN`.
+- **`COPY` / `ADD`** — the cache computes a **checksum of the file contents**.
+  Metadata like mtime does not count; a file touched but unchanged invalidates
+  nothing.
+- **`ENV`, `LABEL`, `USER`, `WORKDIR`** — text only, and cheap.
+
+## Feel the rule instead of memorising it
+
+Reorder the instructions, tick what you changed, and watch which layers rebuild:
+
+<BuildCacheSimulator client:visible lang="en" />
+
+Compare the two presets with **"the source code"** ticked. That is the everyday
+scenario — you edited a file and you are rebuilding:
+
+- **Good order**: `COPY . .` comes after `npm ci`. `npm ci` sits above the
+  invalidated layer, so it comes from cache. Rebuild ≈ 12 s.
+- **Bad order**: `COPY . .` comes first. It invalidates, and the cascade drags
+  `npm ci` down with it. Rebuild ≈ 54 s.
+
+Same image, same dependencies, same final result. **Four times slower**, on every
+commit, forever.
+
+<Callout type="why" label="The practical rule">
+Order instructions from what changes **least** to what changes **most**. Dependency
+manifests before source code, always — because `package.json` changes once a week
+and `src/` changes ten times an hour.
+</Callout>
+
+That is exactly what this stack's Dockerfiles do. From `worker-py`:
+
+```dockerfile
+# Install ONLY the dependencies, mounting just the lockfile.
+RUN --mount=type=bind,source=uv.lock,target=uv.lock \
+    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    uv sync --locked --no-install-project --no-dev
+
+# Only now does the code arrive.
+COPY . /app
+RUN uv sync --locked --no-dev
+```
+
+## The BuildKit mounts
+
+Here is the part many people do not know exists. `RUN --mount` solves two problems
+layers alone cannot.
+
+### `type=cache` — persists BETWEEN builds
+
+A layer stores the result of a build. A cache mount stores a directory that
+**survives layer invalidation**:
+
+```dockerfile
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    go build -o /out/api-go .
+```
+
+Even when the layer invalidates and `go build` runs again, Go's compilation cache
+is still there. The rebuild recompiles only what changed instead of the whole
+module. The directory does **not** go into the final image — it lives in the
+builder.
+
+The same applies to every package manager: `/root/.npm`, `/root/.cache/uv`,
+`/var/cache/apt`, `~/.m2`.
+
+### `type=bind` — use a file without copying it
+
+```dockerfile
+RUN --mount=type=bind,source=go.mod,target=go.mod \
+    --mount=type=bind,source=go.sum,target=go.sum \
+    go mod download
+```
+
+The file is visible during the `RUN` and **becomes no layer**. Without it you
+would need `COPY go.mod go.sum ./`, creating a layer only to discard it later.
+
+### `type=secret` — covered in the previous lesson
+
+It exists for the same reason: give a `RUN` access to a file without that file
+persisting anywhere.
+
+## Multi-stage builds in parallel
+
+BuildKit builds a dependency graph, not a list. Stages that do not depend on each
+other run **at the same time**:
+
+```dockerfile
+FROM golang:1.25-alpine AS build-api      # ─┐
+RUN go build …                            #  │ these two run
+FROM node:22-alpine AS build-web          #  │ concurrently
+RUN npm run build                         # ─┘
+
+FROM alpine AS final                      # waits for both
+COPY --from=build-api /out/api /api
+COPY --from=build-web /app/dist /srv
+```
+
+And stages not reached by the chosen target **are never built at all**. When
+`sizes.sh` runs `--target minimal`, the `debug` stage is skipped entirely.
+
+## When the cache works against you
+
+The cache is optimistic by design, and that has a cost:
+
+```bash
+docker build --pull        # refresh the base: re-resolve the tag from the registry
+docker build --no-cache    # ignore EVERYTHING: re-run every instruction
+```
+
+`--pull` is what you want in a nightly CI job: it picks up the updated base with
+its security patches. `--no-cache` is the hammer — use it to debug a build that
+"only works on my machine".
+
+<Callout type="trap" label="Cache hit, CVE intact">
+`RUN apt-get upgrade` on a cached layer applies **no updates at all**: the command
+text did not change, so the six-month-old layer is reused whole. Your image looks
+patched and is not. This is why production builds run `--pull` periodically and CI
+scans the result.
+</Callout>
+
+## Cache in CI, where there is no local disk
+
+On your laptop the cache lives in `/var/lib/docker`. On a CI runner, born and
+destroyed with every job, none of that exists — by default **every CI build is a
+cold build**.
+
+The fix is exporting the cache to an external backend:
+
+```yaml
+- uses: docker/build-push-action@v7
+  with:
+    cache-from: type=gha
+    cache-to: type=gha,mode=max
+```
+
+`mode=max` is the detail that matters: the default (`min`) stores only the final
+image's layers. In a multi-stage Dockerfile that means **discarding precisely the
+expensive build layers**. With `mode=max`, every stage is preserved.
+
+## What to take away
+
+- Invalidate a layer and everything below it goes too. That is the whole rule.
+- Order from least-changing to most-changing; dependencies before source.
+- `RUN` caches on the command TEXT, not the result — beware `update`.
+- `--mount=type=cache` survives invalidation; `type=bind` avoids useless layers.
+- Independent stages build in parallel; unused stages never build.
+- In CI, `cache-to: type=gha,mode=max` or your build is always cold.
+
+<RunIt title="Measure what the wrong order costs">
+
+```bash
+cd $(mktemp -d) && npm init -y >/dev/null && npm i --package-lock-only express >/dev/null
+echo "console.log('hi')" > index.js
+
+# BAD order: source code before install.
+cat > Dockerfile.bad <<'EOF'
+FROM node:22-alpine
+WORKDIR /app
+COPY . .
+RUN npm ci --omit=dev
+EOF
+
+# GOOD order: manifest first, source afterwards.
+cat > Dockerfile.good <<'EOF'
+FROM node:22-alpine
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
+COPY . .
+EOF
+
+# Warm the cache for both.
+docker build -q -f Dockerfile.bad -t t/bad . && docker build -q -f Dockerfile.good -t t/good .
+
+# Now edit ONLY the source — the everyday scenario.
+echo "console.log('changed')" > index.js
+
+echo "── bad order:"  && time docker build -q -f Dockerfile.bad  -t t/bad  .
+echo "── good order:" && time docker build -q -f Dockerfile.good -t t/good .
+
+docker rmi t/bad t/good
+```
+
+</RunIt>

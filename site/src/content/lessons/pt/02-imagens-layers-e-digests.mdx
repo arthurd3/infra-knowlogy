@@ -1,0 +1,190 @@
+---
+key: images-layers-and-digests
+lang: pt
+track: fundamentos
+order: 2
+title: Imagens, camadas e digests
+summary: Uma imagem não é um arquivo. É um manifesto que aponta para camadas endereçadas por conteúdo — e entender isso explica o cache, o tamanho e a reprodutibilidade de uma vez só.
+minutes: 14
+tags: [layers, oci, digest, overlayfs, tags]
+sources:
+  - label: "OCI — Image Format Specification"
+    url: "https://github.com/opencontainers/image-spec/blob/main/spec.md"
+  - label: "Docker Docs — Image layers"
+    url: "https://docs.docker.com/build/cache/"
+  - label: "Docker Docs — Dockerfile best practices"
+    url: "https://docs.docker.com/build/building/best-practices/"
+---
+
+import LayerExplorer from "../../../components/islands/LayerExplorer.tsx";
+import ImageSizeComparator from "../../../components/islands/ImageSizeComparator.tsx";
+
+Quando alguém diz "me manda a imagem", a intuição é de um arquivo — um `.iso`, um
+`.zip`. Não é isso. Uma imagem OCI é um **manifesto**: um JSON pequeno que lista
+digests de outras coisas.
+
+```json
+{
+  "mediaType": "application/vnd.oci.image.manifest.v1+json",
+  "config": { "digest": "sha256:a1b2c3…", "size": 1472 },
+  "layers": [
+    { "digest": "sha256:d4e5f6…", "size": 3401827 },
+    { "digest": "sha256:7890ab…", "size": 4913 }
+  ]
+}
+```
+
+O manifesto não *contém* as camadas — ele as **endereça**. E é aí que quase toda
+propriedade interessante do Docker aparece.
+
+## Endereçamento por conteúdo
+
+`sha256:d4e5f6…` não é um nome que alguém escolheu. É o **hash do conteúdo** da
+camada. Disso decorre, sem esforço:
+
+- **Deduplicação automática.** Duas imagens que usam `python:3.13-slim` referenciam
+  o mesmo digest. O registry guarda uma cópia; o seu disco guarda uma cópia.
+- **Verificação de integridade de graça.** Se um byte da camada mudar em trânsito,
+  o hash não bate e o pull falha. Não é preciso confiar no transporte.
+- **Imutabilidade real.** Alterar a camada muda o digest, o que a torna outra
+  camada. Não existe "editar uma camada".
+
+<Callout type="why" label="Por que isso importa na prática">
+É por isso que o segundo `docker pull` de uma imagem parecida é quase instantâneo:
+o daemon compara digests e baixa só as camadas que ainda não tem. E é por isso que
+`docker build` num Dockerfile inalterado não faz nada — os digests batem.
+</Callout>
+
+## Tag é um ponteiro; digest é o endereço
+
+Esta é a distinção que mais causa incidente em produção.
+
+```bash
+python:3.13-slim                      # ponteiro MUTÁVEL — muda sob seus pés
+python:3.13-slim@sha256:c45a22ea…     # endereço IMUTÁVEL — sempre o mesmo byte
+```
+
+Uma tag é um rótulo que o publicador pode reapontar quando quiser — e reaponta,
+toda vez que sai um patch de segurança. Duas coisas decorrem disso:
+
+1. `docker build` hoje e amanhã, com o mesmo Dockerfile, podem produzir imagens
+   diferentes. Seu build **não é reprodutível**.
+2. "Funciona na minha máquina" volta a existir, agora entre a sua máquina e o CI.
+
+Por isso todo `FROM` desta stack carrega o digest:
+
+```dockerfile
+FROM python:3.13-slim-bookworm@sha256:c45a22ea000adfd9cda29364bbe7edd23001ce5cc2ad15857cfbf7766943b9ca AS dist
+```
+
+<Callout type="trap">
+Pinar por digest congela também as **correções de segurança**. Um digest de seis
+meses atrás é reprodutível e vulnerável ao mesmo tempo. Pinar sem um processo de
+atualização é trocar um problema por outro — por isso existe `make pins`, e por
+isso o CI roda o scanner: o pin dá controle sobre *quando* atualizar, não licença
+para nunca atualizar.
+</Callout>
+
+## A pilha, e a camada gravável
+
+Cada instrução que modifica o sistema de arquivos (`RUN`, `COPY`, `ADD`) cria uma
+camada. Instruções de metadado (`ENV`, `LABEL`, `USER`, `WORKDIR`, `CMD`) criam
+uma entrada no manifesto e **zero byte** de disco.
+
+Ao subir o container, o runtime empilha as camadas somente-leitura e coloca uma
+camada **gravável** por cima. Explore a pilha real do `worker-py` desta stack:
+
+<LayerExplorer client:visible lang="pt" />
+
+Aumente o número de containers no controle acima. A parte compartilhada não
+cresce — é exatamente por isso que rodar dez réplicas de um serviço custa dez
+camadas graváveis, e não dez imagens.
+
+### Copy-on-write, e a conta que ele esconde
+
+Ler um arquivo que está numa camada de baixo é grátis. **Escrever** nele não: o
+OverlayFS copia o arquivo inteiro para a camada gravável antes de aplicar a
+mudança. É o *copy-on-write*.
+
+<Callout type="trap" label="A pegadinha do arquivo grande">
+Alterar um byte de um arquivo de 2 GB que veio da imagem copia **os 2 GB** para a
+camada gravável do container. Um banco de dados escrevendo no rootfs em vez de num
+volume enche o disco do host devagar e sem avisar. É uma das razões pelas quais
+`db` e `cache` desta stack montam volumes nomeados — e pelas quais os outros
+serviços rodam com `read_only: true`.
+</Callout>
+
+## Uma camada nunca encolhe
+
+Este é o erro mais caro e mais comum:
+
+```dockerfile
+RUN apt-get update && apt-get install -y build-essential   # camada A: +400 MB
+RUN apt-get remove -y build-essential                      # camada B: +2 KB
+```
+
+A imagem final tem **os 400 MB**. A camada B apenas registra "estes arquivos
+estão ocultos"; a camada A continua na pilha, é baixada no pull e continua sendo
+lida pelo scanner de vulnerabilidade. Você pagou o tamanho *e* o risco.
+
+A correção não é remover depois — é **nunca criar na mesma camada**:
+
+```dockerfile
+# Uma instrução só: o apt-get remove roda ANTES de a camada ser selada.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends build-essential \
+    && make install \
+    && apt-get purge -y build-essential \
+    && rm -rf /var/lib/apt/lists/*
+```
+
+Ou, melhor ainda, use **multi-stage** e deixe a camada inteira para trás — que é o
+que os Dockerfiles desta stack fazem.
+
+## O tamanho, medido de verdade
+
+Quase toda comparação "alpine vs distroless" na internet mede a imagem base
+**vazia**. Isso responde a pergunta errada: o que importa é o tamanho da sua
+aplicação dentro dela. Aqui estão os números desta stack, medidos por
+`tools/scripts/sizes.sh` nesta máquina:
+
+<ImageSizeComparator client:visible lang="pt" />
+
+Repare que a diferença entre `scratch` e `distroless` no `api-go` é de meio
+megabyte — enquanto a diferença entre `dist` e `fat` no `worker-py` é de mais de
+20 MB. **A escolha da base importa muito menos que a escolha de usar multi-stage.**
+
+## O que fica
+
+- Imagem = manifesto + camadas endereçadas por conteúdo (`sha256:…`).
+- Tag é ponteiro mutável; digest é endereço imutável. Pine por digest e mantenha
+  um processo para atualizar o pin.
+- Só `RUN`/`COPY`/`ADD` criam bytes; metadado é grátis.
+- Camada não encolhe: apagar numa camada seguinte não devolve espaço nenhum.
+- Copy-on-write torna escrita em arquivo grande da imagem cara — use volumes.
+
+<RunIt title="Veja o manifesto, os digests e a camada que não encolhe">
+
+```bash
+# 1. O MANIFESTO de verdade, direto do registry — sem baixar a imagem.
+docker buildx imagetools inspect python:3.13-slim-bookworm --raw | head -30
+
+# 2. O digest da tag AGORA. Guarde e rode de novo daqui a um mês.
+docker buildx imagetools inspect python:3.13-slim-bookworm \
+  --format '{{.Manifest.Digest}}'
+
+# 3. As camadas da nossa API, com a instrução que criou cada uma.
+docker build --target dist -t demo/api stack/services/api-go
+docker history demo/api --no-trunc --format 'table {{.Size}}\t{{.CreatedBy}}'
+
+# 4. A camada que não encolhe, provada em 20 segundos.
+printf 'FROM alpine:3.22\nRUN dd if=/dev/urandom of=/big bs=1M count=100\nRUN rm /big\n' \
+  | docker build -t demo/nao-encolhe -f - .
+echo "a base alpine tem 3.6 MB; o real:"
+docker image inspect demo/nao-encolhe --format '{{.Size}}' \
+  | awk '{printf "%.0f MB\n", $1/1048576}'
+
+docker rmi demo/api demo/nao-encolhe
+```
+
+</RunIt>

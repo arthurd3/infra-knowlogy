@@ -1,0 +1,179 @@
+---
+key: container-lifecycle
+lang: en
+track: fundamentos
+order: 5
+title: Lifecycle, flags and exit codes
+summary: Why your container exits on its own, what each restart policy really does across a reboot, and how to read exit codes instead of guessing.
+minutes: 13
+tags: [lifecycle, restart, exit-codes, logs, exec]
+sources:
+  - label: "Docker Docs — docker run reference"
+    url: "https://docs.docker.com/reference/cli/docker/container/run/"
+  - label: "Docker Docs — Start containers automatically"
+    url: "https://docs.docker.com/engine/containers/start-containers-automatically/"
+  - label: "Docker Docs — Container logs"
+    url: "https://docs.docker.com/engine/logging/"
+---
+
+## The container dies when PID 1 dies
+
+This is the only lifecycle rule, and it explains the most common beginner
+question:
+
+```bash
+docker run ubuntu           # exits immediately. Why?
+```
+
+Because `ubuntu`'s default `CMD` is `bash`, and `bash` with no attached terminal
+reads EOF straight away and exits — and when PID 1 exits, the container is over.
+There is no "container up but idle": **the container is the process**.
+
+<Callout type="trap" label="The background-process mistake">
+An `ENTRYPOINT` that starts the service in the background and returns makes the
+container exit immediately, successfully, with no logs at all. The foreground
+process must be the service: `nginx -g "daemon off;"`, `postgres` without `-D`,
+`celery worker` without `--detach`.
+</Callout>
+
+## The states
+
+```
+          docker create            docker start
+ (nothing) ──────────────► created ──────────────► running
+                                                     │ │
+                               docker pause ◄────────┘ │
+                                    │ paused           │
+                                    └──────────────────┤ docker unpause
+                                                       │
+                              docker stop / process exits
+                                                       ▼
+                                                    exited
+                                                       │ docker rm
+                                                       ▼
+                                                   (removed)
+```
+
+`docker run` is just `create` + `start` in one go. And `exited` is **not**
+`removed`: a stopped container still occupies disk with its writable layer. That
+is what `docker ps -a` shows and what `docker container prune` reclaims.
+
+## What `docker stop` actually does
+
+1. Sends **SIGTERM** to PID 1.
+2. Waits out the `stop_grace_period` (default: 10 s).
+3. If still alive, sends **SIGKILL** — which cannot be handled or ignored.
+
+Which is why this stack's services declare their own grace period:
+
+```yaml
+api:
+  stop_grace_period: 15s
+worker:
+  stop_grace_period: 30s   # it may be mid-enrichment
+```
+
+The application's shutdown timeout must be **smaller** than that value. If
+`api-go` waited 20 s to drain under a 15 s grace period, SIGKILL would land
+mid-drain — the worst of both worlds.
+
+## Reading the exit code
+
+| Code | Meaning |
+|---|---|
+| `0` | exited normally |
+| `1`–`124` | the application chose to fail (meaning is its own) |
+| `125` | the daemon itself failed — an invalid flag, for example |
+| `126` | the command exists but is not executable (missing `chmod +x`) |
+| `127` | command not found — usually a missing library in a minimal image |
+| `137` | `128 + 9` → SIGKILL. **OOM kill** or grace period exceeded |
+| `143` | `128 + 15` → SIGTERM. Clean exit after `docker stop` |
+
+<Callout type="why" label="127 in a scratch image">
+`exec format error` or `no such file or directory` for a binary that plainly
+exists almost always means a **dynamically linked binary in an image with no
+libc**. That is the reason for `CGO_ENABLED=0` in `api-go`'s Dockerfile: without
+it Go links against Alpine's musl and the binary will not run on `scratch`.
+</Callout>
+
+## Restart policies — and what changes at reboot
+
+| Policy | After a crash | After manual `docker stop` | After a host reboot |
+|---|---|---|---|
+| `no` (default) | no | no | no |
+| `on-failure[:N]` | only if exit ≠ 0 | no | no |
+| `always` | yes | no | **yes** |
+| `unless-stopped` | yes | no | **no, if you stopped it** |
+
+The difference between the last two only shows up at reboot: `always` resurrects a
+container you deliberately stopped; `unless-stopped` remembers your decision.
+Which is why this stack uses `unless-stopped`.
+
+<Callout type="trap">
+Docker does **not** restart a container that went `unhealthy`. The healthcheck only
+marks the state — acting on it is the job of an orchestrator (Swarm, Kubernetes) or
+your `depends_on`. On a Compose-only host, a container can sit unhealthy for hours,
+running and not serving.
+</Callout>
+
+## `exec`, `attach`, and the difference that bites
+
+```bash
+docker exec -it api sh      # a NEW process inside the container
+docker attach api           # attaches to the PID 1 already running
+```
+
+`attach` is almost always what you do **not** want: `Ctrl-C` there sends SIGINT to
+PID 1 and takes the service down. Use `exec`. And on a distroless image neither
+works — there is no shell. That is what `api-go`'s `debug` target is for.
+
+## Logs — the disk that fills without warning
+
+The application writes to stdout/stderr; the **log driver** decides the rest. The
+default, `json-file`, grows **without limit**:
+
+```yaml
+logging:
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+```
+
+Without those four lines, a chatty service fills the host disk in weeks and takes
+down everything running on it. It is the number-one cause of "the server just
+stopped" in Docker stacks — which is why this stack's `compose.yaml` applies that
+block to every service through a YAML anchor.
+
+## What to take away
+
+- The container lives as long as PID 1 lives. Backgrounded service = dead container.
+- `exited` ≠ `removed`: stopped containers still take disk.
+- `stop` = SIGTERM → wait → SIGKILL. The app timeout must be under the grace period.
+- 137 = SIGKILL (usually OOM); 143 = clean SIGTERM; 127 = a missing library.
+- `unless-stopped` respects your decision at reboot; `always` does not.
+- Without `max-size` on the log driver, the disk fills.
+
+<RunIt title="Trigger each state and read the exit code">
+
+```bash
+# 1. Exits at once: no foreground process.
+docker run --name a1 ubuntu; echo "exit=$(docker inspect a1 --format '{{.State.ExitCode}}')"
+
+# 2. Clean SIGTERM exit -> 143.
+docker run -d --name a2 alpine sh -c 'trap "exit 143" TERM; while :; do sleep 1; done'
+sleep 1 && docker stop a2 >/dev/null
+echo "SIGTERM handled -> exit=$(docker inspect a2 --format '{{.State.ExitCode}}')"
+
+# 3. OOM kill -> 137. Asks for 200 MB under a 32 MB limit.
+docker run --name a3 --memory 32m python:3.13-slim \
+  python -c "x = bytearray(200 * 1024 * 1024)" 2>/dev/null
+echo "OOM -> exit=$(docker inspect a3 --format '{{.State.ExitCode}}')  oom_killed=$(docker inspect a3 --format '{{.State.OOMKilled}}')"
+
+# 4. exited still occupies disk.
+docker ps -a --filter name=a --format 'table {{.Names}}\t{{.Status}}\t{{.Size}}'
+
+docker rm a1 a2 a3 >/dev/null
+```
+
+</RunIt>

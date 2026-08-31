@@ -1,0 +1,257 @@
+---
+key: compose-and-healthchecks
+lang: en
+track: fundamentos
+order: 8
+title: Compose, healthchecks and startup order
+summary: depends_on on its own waits for nothing useful. What brings a stack up in the right order is the healthcheck — and the liveness/readiness distinction decides whether a database outage takes your API down with it.
+minutes: 16
+tags: [compose, healthcheck, depends-on, profiles, secrets, overlays]
+sources:
+  - label: "Docker Docs — Compose file reference"
+    url: "https://docs.docker.com/reference/compose-file/"
+  - label: "Docker Docs — Startup order"
+    url: "https://docs.docker.com/compose/how-tos/startup-order/"
+  - label: "Docker Docs — Compose secrets"
+    url: "https://docs.docker.com/compose/how-tos/use-secrets/"
+---
+
+## `depends_on` alone does almost nothing
+
+```yaml
+depends_on:
+  - db          # ❌ waits for the CONTAINER to start, not the database to be ready
+```
+
+That `depends_on` guarantees only that the `db` container was **started** — which
+happens in milliseconds, long before Postgres finishes `initdb`, runs the init
+scripts and opens its socket. The API comes up, tries to connect, fails and dies.
+With `restart: unless-stopped` it restarts until it works, which masks the problem
+and fills the log with errors on every deploy.
+
+The useful form waits for **health**:
+
+```yaml
+depends_on:
+  db:
+    condition: service_healthy      # wait for the healthcheck to PASS
+  cache:
+    condition: service_healthy
+```
+
+Three conditions exist:
+
+| Condition | Waits for |
+|---|---|
+| `service_started` | the container to start (the default; almost always insufficient) |
+| `service_healthy` | the healthcheck to pass |
+| `service_completed_successfully` | the container to exit 0 — for migrations |
+
+<Callout type="why" label="The third one is what fixes migrations">
+A migration container that runs once and exits is modelled with
+`service_completed_successfully`: the API only starts after the schema is applied.
+It is the missing piece in nearly every stack that runs migrations "in the API
+entrypoint" and then discovers three replicas migrating at once.
+</Callout>
+
+## The anatomy of a healthcheck
+
+```yaml
+healthcheck:
+  test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB} -q"]
+  interval: 5s        # how often to test
+  timeout: 5s         # how long to wait for ONE run
+  retries: 10         # consecutive failures before marking unhealthy
+  start_period: 30s   # initial window where failures do NOT count
+```
+
+Two details that are almost always wrong in the wild:
+
+- **`start_period` is the forgotten parameter.** Without it, a Postgres that takes
+  20 s to initialise its volume is marked unhealthy before it finishes starting,
+  and `depends_on` gives up. With it, failures in that window are ignored.
+- **`$$` escapes the `$`.** Compose interpolates `$VAR` first; `$$` hands a
+  literal `$` to the container's shell. Without it, `$POSTGRES_USER` would be
+  substituted by Compose (with nothing) instead of by the shell.
+
+`CMD` executes directly; `CMD-SHELL` goes through `/bin/sh -c` (needed for pipes,
+`||`, and variable expansion).
+
+### The healthcheck that comes from the image
+
+Notice that this stack's `api` service declares **no** healthcheck in Compose. It
+is already in the image:
+
+```dockerfile
+HEALTHCHECK --interval=10s --timeout=3s --start-period=5s --retries=3 \
+    CMD ["/api-go", "healthcheck"]
+```
+
+Compose inherits it. Defining health next to the artifact beats scattering it
+across each orchestrator's config: whoever consumes the image under Kubernetes,
+under Swarm, or in a bare `docker run` inherits the same behaviour.
+
+## Liveness vs readiness — the distinction that prevents an outage
+
+This is the most important architectural decision in this lesson, and `api-go`
+implements both halves deliberately:
+
+```go
+// /healthz — LIVENESS: "is the process alive?"
+// NEVER touches an external dependency.
+func (a *app) handleHealthz(w http.ResponseWriter, _ *http.Request) { … }
+
+// /readyz — READINESS: "can I take traffic right now?"
+// This one does check Postgres and Redis.
+func (a *app) handleReadyz(w http.ResponseWriter, r *http.Request) { … }
+```
+
+<Callout type="danger" label="Why liveness must not check the database">
+Picture `/healthz` checking Postgres, and Postgres going down for 30 seconds.
+
+Every API replica is marked unhealthy at the same moment. The orchestrator does as
+it was told: **kills and restarts them all**. Now, on top of a database outage, you
+have no API at all — and the fresh replicas cannot connect either, so they get
+killed too. A 30-second incident became a total outage with a restart loop.
+
+Restarting the API **does not fix** a database that is down. The right answer to
+"my dependency failed" is to leave the load balancer (readiness), not to die
+(liveness).
+</Callout>
+
+## `up --wait`: the healthcheck working for your script
+
+```bash
+docker compose up -d --wait
+```
+
+`--wait` returns only once every service is `healthy` (or `running`, for those
+without a healthcheck) — and returns a **non-zero exit code** if any never gets
+there. One flag, and your deploy fails loudly instead of proceeding to a smoke test
+against a half-up stack. It is what this stack's `make up` and `verify.sh` use.
+
+## Overlays: one base file, several environments
+
+There is no `if production` in Compose — and there should not be. What exists is
+file composition, applied in order:
+
+```bash
+docker compose -f compose.yaml -f compose.prod.yaml up -d --wait
+```
+
+Scalar keys are replaced; lists are replaced wholesale (not concatenated — this
+catches many people). This stack uses four files:
+
+| File | Role |
+|---|---|
+| `compose.yaml` | the base: services, networks, volumes, dependencies |
+| `compose.dev.yaml` | exposed database ports, an image with a shell, `develop.watch` |
+| `compose.prod.yaml` | `read_only`, `cap_drop`, `no-new-privileges`, limits |
+| `compose.obs.yaml` | Prometheus, Grafana, Loki — behind the `obs` profile |
+
+The advantage over an `if`: you **read** the difference between dev and production
+as a diff, instead of tracing it through scattered conditionals.
+
+## Profiles: what does not start by default
+
+```yaml
+grafana:
+  profiles: [obs]
+```
+
+Without `--profile obs`, Compose ignores the service entirely. That is how
+`make up` brings up six containers in seconds while `make obs` brings up fifteen —
+with no duplicated files.
+
+## Secrets: a file, not an environment variable
+
+```yaml
+secrets:
+  postgres_password:
+    file: ./secrets/postgres_password
+
+services:
+  api:
+    secrets: [postgres_password]
+    environment:
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+```
+
+The file is mounted read-only at `/run/secrets/<name>`, inside a tmpfs. The
+difference from `environment: POSTGRES_PASSWORD: …` is concrete:
+
+- It does not show up in `docker inspect`.
+- It is not inherited by every child process.
+- It does not leak in a stack trace or a crash dump that dumps the environment.
+
+The `<VAR>_FILE` convention is the same one the official `postgres`, `mysql` and
+`redis` images use — and this stack's `config.go` and `config.py` implement it
+identically, on purpose.
+
+## YAML anchors: stop repeating yourself
+
+```yaml
+x-logging: &default-logging
+  driver: json-file
+  options: { max-size: "10m", max-file: "3" }
+
+x-service-defaults: &service-defaults
+  restart: unless-stopped
+  logging: *default-logging
+
+services:
+  api:
+    <<: *service-defaults
+```
+
+Keys prefixed with `x-` are ignored by Compose and serve as anchors. It is how this
+stack's log limit applies to all six services without being written six times — and
+without the risk of forgetting it on precisely the chattiest one.
+
+## The honest limits of Compose
+
+Compose is excellent for **one host**. It does not, and should not, do:
+
+- **Restart an unhealthy container.** It marks the state; acting is the
+  orchestrator's job.
+- **Zero-downtime deploys.** `up` stops and starts. There is no rolling update.
+- **Scale across machines.** `--scale` replicates on the same host, and that is all.
+- **Reschedule on node failure.** If the host dies, everything dies.
+
+If you need those four things, you need an orchestrator. If you do not — and most
+projects genuinely do not — Compose on a well-configured host is simpler to
+operate, cheaper, and easier to debug than a Kubernetes cluster.
+
+## What to take away
+
+- Plain `depends_on` waits for the container, not the service. Use `condition: service_healthy`.
+- `start_period` is the parameter missing from most healthchecks.
+- Liveness must not check dependencies; readiness must. Confusing them causes outages.
+- `up --wait` turns healthchecks into a deploy gate.
+- Overlays instead of conditionals; profiles for what is optional.
+- A secret is a mounted file, never an environment variable.
+
+<RunIt title="Watch the startup ordering happen">
+
+```bash
+# Bring the stack up and wait for EVERYTHING to be healthy. --wait fails if not.
+make up
+
+# The health state of each service.
+docker compose -f stack/compose.yaml -f stack/compose.prod.yaml ps
+
+# Prove the ordering: the database is healthy BEFORE the api starts.
+docker inspect infra-knowlogy-db-1  --format '{{.State.Health.Status}} · ready at {{.State.StartedAt}}'
+docker inspect infra-knowlogy-api-1 --format '{{.State.Health.Status}} · started at {{.State.StartedAt}}'
+
+# Liveness vs readiness: take the database down and watch the answers diverge.
+docker compose -f stack/compose.yaml -f stack/compose.prod.yaml stop db
+docker compose -f stack/compose.yaml -f stack/compose.prod.yaml exec -T api /api-go healthcheck \
+  && echo "readyz OK" || echo "  ✅ readyz failed (expected: dependency down)"
+curl -fsS localhost:8080/api/links >/dev/null 2>&1 || echo "  ✅ the api no longer serves data"
+echo "  …but the process is still ALIVE — it was not restarted."
+
+docker compose -f stack/compose.yaml -f stack/compose.prod.yaml start db
+```
+
+</RunIt>

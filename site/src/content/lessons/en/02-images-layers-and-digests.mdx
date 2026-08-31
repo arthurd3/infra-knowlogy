@@ -1,0 +1,190 @@
+---
+key: images-layers-and-digests
+lang: en
+track: fundamentos
+order: 2
+title: Images, layers and digests
+summary: An image is not a file. It is a manifest pointing at content-addressed layers — and grasping that explains caching, size and reproducibility all at once.
+minutes: 14
+tags: [layers, oci, digest, overlayfs, tags]
+sources:
+  - label: "OCI — Image Format Specification"
+    url: "https://github.com/opencontainers/image-spec/blob/main/spec.md"
+  - label: "Docker Docs — Image layers"
+    url: "https://docs.docker.com/build/cache/"
+  - label: "Docker Docs — Dockerfile best practices"
+    url: "https://docs.docker.com/build/building/best-practices/"
+---
+
+import LayerExplorer from "../../../components/islands/LayerExplorer.tsx";
+import ImageSizeComparator from "../../../components/islands/ImageSizeComparator.tsx";
+
+When someone says "send me the image", the intuition is a file — an `.iso`, a
+`.zip`. It is not. An OCI image is a **manifest**: a small JSON listing digests of
+other things.
+
+```json
+{
+  "mediaType": "application/vnd.oci.image.manifest.v1+json",
+  "config": { "digest": "sha256:a1b2c3…", "size": 1472 },
+  "layers": [
+    { "digest": "sha256:d4e5f6…", "size": 3401827 },
+    { "digest": "sha256:7890ab…", "size": 4913 }
+  ]
+}
+```
+
+The manifest does not *contain* the layers — it **addresses** them. And that is
+where nearly every interesting property of Docker comes from.
+
+## Content addressing
+
+`sha256:d4e5f6…` is not a name someone picked. It is the **hash of the layer's
+content**. From that, with no extra machinery:
+
+- **Automatic deduplication.** Two images using `python:3.13-slim` reference the
+  same digest. The registry stores one copy; your disk stores one copy.
+- **Integrity checking for free.** If one byte of the layer changes in transit,
+  the hash does not match and the pull fails. You need not trust the transport.
+- **Real immutability.** Changing the layer changes its digest, which makes it a
+  different layer. There is no such thing as "editing a layer".
+
+<Callout type="why" label="Why this matters in practice">
+It is why the second `docker pull` of a similar image is nearly instant: the
+daemon compares digests and downloads only the layers it lacks. And why
+`docker build` on an unchanged Dockerfile does nothing — the digests match.
+</Callout>
+
+## A tag is a pointer; a digest is an address
+
+This is the distinction that causes the most production incidents.
+
+```bash
+python:3.13-slim                      # MUTABLE pointer — moves under your feet
+python:3.13-slim@sha256:c45a22ea…     # IMMUTABLE address — always the same bytes
+```
+
+A tag is a label the publisher can repoint whenever they like — and they do,
+every time a security patch ships. Two things follow:
+
+1. `docker build` today and tomorrow, from the same Dockerfile, can produce
+   different images. Your build is **not reproducible**.
+2. "Works on my machine" comes back, now between your machine and CI.
+
+That is why every `FROM` in this stack carries a digest:
+
+```dockerfile
+FROM python:3.13-slim-bookworm@sha256:c45a22ea000adfd9cda29364bbe7edd23001ce5cc2ad15857cfbf7766943b9ca AS dist
+```
+
+<Callout type="trap">
+Pinning by digest also freezes **security fixes**. A digest from six months ago is
+reproducible and vulnerable at the same time. Pinning without an update process
+trades one problem for another — which is why `make pins` exists, and why CI runs
+the scanner: a pin gives you control over *when* you update, not permission to
+never update.
+</Callout>
+
+## The stack, and the writable layer
+
+Every instruction that modifies the filesystem (`RUN`, `COPY`, `ADD`) creates a
+layer. Metadata instructions (`ENV`, `LABEL`, `USER`, `WORKDIR`, `CMD`) create a
+manifest entry and **zero bytes** on disk.
+
+When a container starts, the runtime stacks the read-only layers and puts a
+**writable** layer on top. Explore this stack's real `worker-py` layer stack:
+
+<LayerExplorer client:visible lang="en" />
+
+Raise the container count in the control above. The shared part does not grow —
+which is exactly why running ten replicas of a service costs ten writable layers,
+not ten images.
+
+### Copy-on-write, and the bill it hides
+
+Reading a file that lives in a lower layer is free. **Writing** to it is not:
+OverlayFS copies the entire file up into the writable layer before applying the
+change. That is *copy-on-write*.
+
+<Callout type="trap" label="The large-file trap">
+Changing one byte of a 2 GB file that came from the image copies **all 2 GB** into
+the container's writable layer. A database writing to the rootfs instead of a
+volume fills the host disk slowly and silently. It is one reason this stack's `db`
+and `cache` mount named volumes — and why the other services run with
+`read_only: true`.
+</Callout>
+
+## A layer never shrinks
+
+This is the most expensive and most common mistake:
+
+```dockerfile
+RUN apt-get update && apt-get install -y build-essential   # layer A: +400 MB
+RUN apt-get remove -y build-essential                      # layer B: +2 KB
+```
+
+The final image still carries **the 400 MB**. Layer B merely records "these files
+are hidden"; layer A is still in the stack, still downloaded on pull, still read by
+your vulnerability scanner. You paid the size *and* kept the risk.
+
+The fix is not to remove afterwards — it is to **never create it in that layer**:
+
+```dockerfile
+# One instruction: apt-get purge runs BEFORE the layer is sealed.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends build-essential \
+    && make install \
+    && apt-get purge -y build-essential \
+    && rm -rf /var/lib/apt/lists/*
+```
+
+Or better still, use **multi-stage** and leave the whole layer behind — which is
+what this stack's Dockerfiles do.
+
+## Size, actually measured
+
+Almost every "alpine vs distroless" comparison online measures the **empty** base
+image. That answers the wrong question: what matters is the size of your
+application inside it. Here are this stack's numbers, measured by
+`tools/scripts/sizes.sh` on this machine:
+
+<ImageSizeComparator client:visible lang="en" />
+
+Notice that the gap between `scratch` and `distroless` for `api-go` is half a
+megabyte — while the gap between `dist` and `fat` for `worker-py` is over 20 MB.
+**Choosing the base matters far less than choosing to go multi-stage.**
+
+## What to take away
+
+- Image = manifest + content-addressed layers (`sha256:…`).
+- A tag is a mutable pointer; a digest is an immutable address. Pin by digest and
+  keep a process for moving the pin.
+- Only `RUN`/`COPY`/`ADD` create bytes; metadata is free.
+- Layers never shrink: deleting in a later layer returns no space at all.
+- Copy-on-write makes writing to a large image file expensive — use volumes.
+
+<RunIt title="See the manifest, the digests, and the layer that never shrinks">
+
+```bash
+# 1. The real MANIFEST, straight from the registry — without pulling the image.
+docker buildx imagetools inspect python:3.13-slim-bookworm --raw | head -30
+
+# 2. The tag's digest RIGHT NOW. Save it and run this again in a month.
+docker buildx imagetools inspect python:3.13-slim-bookworm \
+  --format '{{.Manifest.Digest}}'
+
+# 3. Our API's layers, with the instruction that created each one.
+docker build --target dist -t demo/api stack/services/api-go
+docker history demo/api --no-trunc --format 'table {{.Size}}\t{{.CreatedBy}}'
+
+# 4. The layer that never shrinks, proven in 20 seconds.
+printf 'FROM alpine:3.22\nRUN dd if=/dev/urandom of=/big bs=1M count=100\nRUN rm /big\n' \
+  | docker build -t demo/never-shrinks -f - .
+echo "the alpine base is 3.6 MB; actual:"
+docker image inspect demo/never-shrinks --format '{{.Size}}' \
+  | awk '{printf "%.0f MB\n", $1/1048576}'
+
+docker rmi demo/api demo/never-shrinks
+```
+
+</RunIt>

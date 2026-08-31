@@ -1,0 +1,213 @@
+---
+key: what-is-a-container
+lang: pt
+track: fundamentos
+order: 1
+title: O que um container realmente é
+summary: Não é uma máquina virtual pequena. É um processo comum do Linux com a visão do mundo recortada por três mecanismos do kernel.
+minutes: 12
+tags: [namespaces, cgroups, overlayfs, runc, containerd]
+sources:
+  - label: "OCI — Runtime Specification"
+    url: "https://github.com/opencontainers/runtime-spec/blob/main/spec.md"
+  - label: "Docker Docs — Docker Engine architecture"
+    url: "https://docs.docker.com/engine/"
+  - label: "Linux man page — namespaces(7)"
+    url: "https://man7.org/linux/man-pages/man7/namespaces.7.html"
+  - label: "Linux man page — cgroups(7)"
+    url: "https://man7.org/linux/man-pages/man7/cgroups.7.html"
+---
+
+A explicação mais comum é também a mais enganosa: *"container é tipo uma máquina
+virtual, só que mais leve"*. Essa frase leva você a decisões erradas sobre
+segurança, sobre desempenho e sobre o que pode dar errado.
+
+A definição correta é bem menos glamourosa:
+
+> Um container é um **processo comum do Linux**, rodando direto no kernel do host,
+> com a visão do sistema recortada por *namespaces*, o consumo limitado por
+> *cgroups* e o sistema de arquivos montado por *união de camadas*.
+
+Não há kernel convidado. Não há emulação de hardware. Não há hipervisor. Se você
+rodar `ps aux` no **host** enquanto um container está de pé, você vê o processo
+dele ali, na lista, junto com todos os outros.
+
+## Prove agora, em dez segundos
+
+<RunIt title="Um container é um processo do host">
+
+```bash
+# Sobe um container que só dorme
+docker run -d --name prova alpine sleep 600
+
+# Descobre o PID DELE no host
+pid=$(docker inspect --format '{{.State.Pid}}' prova)
+echo "PID no host: $pid"
+
+# E aqui está ele, na tabela de processos do SEU sistema
+ps -o pid,ppid,cmd -p "$pid"
+
+docker rm -f prova
+```
+
+</RunIt>
+
+Se fosse uma máquina virtual, esse `sleep` estaria preso dentro de um kernel
+convidado e o host enxergaria apenas um processo `qemu` gigante. Ele não está.
+Ele é seu vizinho.
+
+<Callout type="why" label="Por que isso importa">
+Um container compartilha o kernel com o host. Uma falha de escalada de
+privilégio **no kernel** atravessa a fronteira do container — enquanto a mesma
+falha, numa VM, ainda esbarraria no hipervisor. É por isso que "rode como
+não-root" e "derrube as capabilities" não são preciosismo: em container, o
+kernel é a única fronteira que resta.
+</Callout>
+
+## Os três mecanismos
+
+### 1. Namespaces — recortam o que o processo *enxerga*
+
+Um namespace é uma cópia isolada de um recurso global do kernel. O processo
+dentro dele vê apenas a sua fatia e não sabe que existe algo além.
+
+| Namespace | Isola | Efeito prático |
+|---|---|---|
+| `pid` | tabela de processos | seu processo vira o PID 1 e não enxerga os do host |
+| `net` | interfaces, rotas, portas | o container tem sua própria `eth0` e sua própria porta 80 |
+| `mnt` | pontos de montagem | o `/` dele não é o `/` do host |
+| `uts` | hostname e domínio | `hostname` devolve o ID do container |
+| `ipc` | memória compartilhada, filas | não fala por IPC com processos de fora |
+| `user` | mapeamento de UID/GID | root *dentro* pode ser um usuário sem poder *fora* |
+| `cgroup` | visão da hierarquia de cgroups | não enxerga os limites dos vizinhos |
+
+O `pid` é o mais fácil de sentir: dentro do container, `ps` lista dois ou três
+processos; no host, centenas. **É o mesmo kernel, com duas tabelas diferentes.**
+
+<Callout type="trap">
+O namespace `user` é o único que **não** vem ligado por padrão no Docker. Sem
+ele, o `root` de dentro do container é o `root` de verdade do host — com UID 0
+real. Se ele escapar do namespace `mnt`, escapou como root. É por isso que
+`USER` no Dockerfile importa mesmo quando "o container é isolado".
+</Callout>
+
+### 2. Cgroups — limitam o que o processo *consome*
+
+Namespace responde "o que eu vejo?". Cgroup responde "quanto eu posso gastar?".
+CPU, memória, I/O de disco, número de processos: tudo é contabilizado e
+limitado por *control groups*, escritos pelo kernel em `/sys/fs/cgroup`.
+
+Quando você escreve isto no Compose:
+
+```yaml
+deploy:
+  resources:
+    limits: { cpus: "1.00", memory: 256M, pids: 200 }
+```
+
+o runtime traduz para arquivos em `/sys/fs/cgroup/…`, e o kernel passa a
+recusar alocações além do teto. Estourou o limite de memória? O OOM killer mata
+o processo — o container morre com exit code 137, que é `128 + 9` (SIGKILL).
+
+<Callout type="trap" label="O 137 misterioso">
+Um container que morre sozinho com **exit 137** e sem nada nos logs quase sempre
+levou OOM kill. O log da aplicação está vazio porque o SIGKILL não pode ser
+tratado: não existe "última mensagem antes de morrer". Confirme no host com
+`dmesg -T | grep -i oom` ou olhando `container_memory_working_set_bytes` no
+Grafana desta stack.
+</Callout>
+
+### 3. Sistema de arquivos em união — monta o que o processo *lê*
+
+A imagem é uma pilha de camadas somente-leitura. Ao subir um container, o
+runtime adiciona por cima uma camada **gravável** e apresenta ao processo a
+união de tudo — normalmente via OverlayFS.
+
+Isso explica dois comportamentos que confundem quem está começando:
+
+1. **Dez containers da mesma imagem não ocupam dez vezes o espaço.** Eles
+   compartilham as camadas somente-leitura; cada um só paga pela própria camada
+   gravável.
+2. **O que você escreve dentro do container some quando ele é removido.** Essa
+   camada gravável pertence ao container, não à imagem. É exatamente para isso
+   que existem os volumes.
+
+Quando o Compose desta stack diz `read_only: true`, ele monta a raiz sem essa
+camada gravável — e escrever em `/` passa a falhar. É por isso que o `/tmp`
+precisa vir como `tmpfs` separado.
+
+## Quem faz o quê: a cadeia até o processo
+
+Rodar `docker run` aciona quatro peças, e saber qual é qual economiza horas de
+depuração:
+
+```
+docker (CLI)         você digita aqui; é só um cliente HTTP
+   │  API REST sobre /var/run/docker.sock
+dockerd              daemon: rede, volumes, build, imagens
+   │  gRPC
+containerd           ciclo de vida do container, pull, snapshots das camadas
+   │  fork/exec
+runc                 cria namespaces, escreve cgroups, monta, e faz execve()
+   │
+seu processo         PID 1 dentro do container
+```
+
+`runc` é a peça que faz o trabalho de verdade — e ele é minúsculo. Ele lê um
+`config.json` (o **OCI Runtime Spec**), chama `clone()` com as flags de
+namespace, escreve os arquivos de cgroup, aplica o filtro seccomp, derruba as
+capabilities e por fim `execve()` no seu binário. Feito isso, `runc` **sai**. Não
+sobra nenhum supervisor entre o kernel e a sua aplicação.
+
+<Callout type="why" label="Por que a padronização OCI importa">
+Essas três especificações — *runtime-spec*, *image-spec* e *distribution-spec* —
+são o motivo de uma imagem construída com `docker build` rodar no Podman,
+no containerd do Kubernetes ou no CRI-O sem alteração nenhuma. Você não está
+preso ao Docker; está usando um formato aberto que o Docker também implementa.
+</Callout>
+
+## Por que sobe em milissegundos
+
+Agora a resposta é óbvia. Uma máquina virtual precisa inicializar um kernel,
+sondar hardware virtual, subir um init e uma árvore de serviços — dezenas de
+segundos. Um container precisa de: algumas chamadas `clone()`, alguns arquivos
+escritos em `/sys/fs/cgroup`, uma montagem OverlayFS e um `execve()`.
+
+Não há boot. **Já existe um kernel rodando** — o do host. Por isso o custo de
+subir um container é o custo de subir um processo, e por isso o overhead de
+memória é medido em megabytes, não em gigabytes.
+
+## O que fica
+
+- Container **não** é VM: é processo + namespaces + cgroups + camadas.
+- O kernel é compartilhado, então ele é a fronteira de segurança — trate-a com
+  cuidado (`USER`, `cap_drop`, `no-new-privileges`, `read_only`).
+- Namespace = o que vejo. Cgroup = quanto gasto. Camadas = o que leio e escrevo.
+- `runc` monta tudo isso e sai de cena; sua aplicação fica sozinha como PID 1 —
+  o que tem consequências que a lição sobre sinais vai explorar.
+
+<RunIt title="Veja os três mecanismos com seus próprios olhos">
+
+```bash
+docker run -d --name prova --memory 64m alpine sleep 600
+pid=$(docker inspect --format '{{.State.Pid}}' prova)
+
+# 1. NAMESPACES — compare os inodes do host e do container.
+#    Números diferentes = namespaces diferentes.
+echo "── host:"      && sudo ls -l /proc/1/ns/
+echo "── container:" && sudo ls -l "/proc/$pid/ns/"
+
+# 2. CGROUPS — o limite de 64m que pedimos, como o kernel o registrou.
+sudo cat "/sys/fs/cgroup/$(cut -d: -f3 < /proc/$pid/cgroup | head -1)/memory.max" 2>/dev/null \
+  || docker inspect --format '{{.HostConfig.Memory}}' prova
+
+# 3. CAMADAS — as camadas somente-leitura empilhadas para formar o rootfs.
+docker inspect --format '{{json .GraphDriver.Data}}' prova | tr ',' '\n'
+
+# E a prova final: mesmo kernel dos dois lados.
+uname -r && docker exec prova uname -r
+
+docker rm -f prova
+```
+
+</RunIt>
