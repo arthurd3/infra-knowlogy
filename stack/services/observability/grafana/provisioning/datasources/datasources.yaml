@@ -1,0 +1,29 @@
+# Provisionamento como código. Sem isto, alguém precisa clicar em "Add data
+# source" na UI toda vez que o volume do Grafana é recriado — e essa
+# configuração feita no clique não existe em lugar nenhum do repositório.
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    uid: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    jsonData:
+      timeInterval: 15s
+      httpMethod: POST
+
+  - name: Loki
+    type: loki
+    uid: loki
+    access: proxy
+    url: http://loki:3100
+    jsonData:
+      maxLines: 1000
+      # Liga métricas e logs: clicar num pico do gráfico leva aos logs daquele
+      # serviço, naquele instante. É o que "um único painel de vidro" significa.
+      derivedFields:
+        - name: TraceID
+          matcherRegex: "trace_id=(\\w+)"
+          url: "$${__value.raw}"

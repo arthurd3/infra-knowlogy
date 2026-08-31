@@ -1,0 +1,65 @@
+// Grafana Alloy — o coletor de logs. Substituiu o Promtail, que foi
+// descontinuado.
+//
+// O fluxo: descobrir containers -> filtrar -> ler os logs pelo daemon ->
+// rotular -> enviar ao Loki. As aplicações continuam só escrevendo em stdout;
+// nenhuma delas sabe que isto existe. É o Fator XI do 12-Factor na prática.
+
+// Descoberta via socket do Docker. Note o endereço: NÃO é o socket direto, é o
+// docker-socket-proxy, que expõe somente os endpoints de leitura /containers.
+// Ver o comentário em compose.obs.yaml sobre a Regra #1 da OWASP.
+discovery.docker "containers" {
+  host             = "tcp://docker-socket-proxy:2375"
+  refresh_interval = "10s"
+}
+
+// Transforma os metadados do Docker em rótulos do Loki. Poucos rótulos e de
+// baixa cardinalidade — cada combinação distinta cria um stream novo no Loki.
+discovery.relabel "containers" {
+  targets = discovery.docker.containers.targets
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    target_label  = "service"
+  }
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_project"]
+    target_label  = "stack"
+  }
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container"
+  }
+  // Só coleta o que pertence a esta stack.
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_project"]
+    regex         = "infra-knowlogy"
+    action        = "keep"
+  }
+}
+
+loki.source.docker "containers" {
+  host       = "tcp://docker-socket-proxy:2375"
+  targets    = discovery.relabel.containers.output
+  labels     = {platform = "docker"}
+  forward_to = [loki.process.parse.receiver]
+}
+
+// A API Go e o worker Python emitem JSON; o Caddy também. Extrair o nível do
+// log vira um rótulo pesquisável em vez de texto solto.
+loki.process "parse" {
+  stage.json {
+    expressions = {level = "level"}
+  }
+  stage.labels {
+    values = {level = ""}
+  }
+  forward_to = [loki.write.default.receiver]
+}
+
+loki.write "default" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}

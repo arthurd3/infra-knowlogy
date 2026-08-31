@@ -1,0 +1,53 @@
+# Prometheus faz PULL: ele vai até cada alvo e raspa /metrics. Nenhuma
+# aplicação da stack sabe que o Prometheus existe — é isso que permite trocar,
+# duplicar ou remover o monitoramento sem tocar em uma linha da aplicação.
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    stack: infra-knowlogy
+
+scrape_configs:
+  # A própria API Go, instrumentada com prometheus/client_golang.
+  - job_name: api
+    static_configs:
+      - targets: ["api:8080"]
+        labels: {service: api, language: go}
+
+  # O worker Python, via prometheus_client.start_http_server.
+  - job_name: worker
+    static_configs:
+      - targets: ["worker:9100"]
+        labels: {service: worker, language: python}
+
+  # cAdvisor: CPU, memória, rede e I/O POR CONTAINER, lidos dos cgroups.
+  # É o que responde "qual container está estourando o limite de memória".
+  - job_name: cadvisor
+    static_configs:
+      - targets: ["cadvisor:8080"]
+    metric_relabel_configs:
+      # cAdvisor emite MUITA série por container. Sem esta filtragem, uma stack
+      # pequena gera dezenas de milhares de séries e o Prometheus come GB de RAM.
+      - source_labels: [__name__]
+        regex: "container_(cpu_usage_seconds_total|memory_working_set_bytes|memory_usage_bytes|network_(receive|transmit)_bytes_total|fs_(reads|writes)_bytes_total|last_seen|spec_memory_limit_bytes)"
+        action: keep
+
+  # node-exporter: métricas do HOST (não dos containers). CPU, disco, load.
+  - job_name: node
+    static_configs:
+      - targets: ["node-exporter:9100"]
+
+  - job_name: postgres
+    static_configs:
+      - targets: ["postgres-exporter:9187"]
+        labels: {service: db}
+
+  - job_name: redis
+    static_configs:
+      - targets: ["redis-exporter:9121"]
+        labels: {service: cache}
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
