@@ -1,0 +1,90 @@
+# Exceções de scanner — cada uma com motivo e DATA DE VALIDADE.
+#
+# Este arquivo existe porque a alternativa é pior. Quando um scanner acusa algo
+# que você não pode corrigir hoje, há três reações possíveis:
+#
+#   1. baixar o limiar de severidade  → o portão para de ver TUDO que é HIGH;
+#   2. desligar o scanner             → o portão vira enfeite;
+#   3. registrar a exceção, com motivo e prazo  → é o que fazemos aqui.
+#
+# `expired_at` é a parte que importa. Passada a data, o Trivy volta a reportar
+# a CVE e o build fica vermelho de novo — a exceção não vira permanente por
+# esquecimento. Uma exceção sem prazo é só uma supressão com boa reputação.
+#
+# Revisar em 2026-11-30: se a imagem oficial do Caddy tiver sido republicada
+# com um Go mais novo, basta apagar este bloco inteiro e re-pinar o digest.
+
+vulnerabilities:
+  # ── CVEs dentro do BINÁRIO do Caddy (usr/bin/caddy) ────────────────────────
+  #
+  # Contexto: a imagem oficial `caddy:2-alpine` mais recente (verificada em
+  # 2026-08-31 — as tags 2-alpine e 2.11-alpine apontam para o mesmo digest)
+  # é compilada com Go 1.26.3. Todas as CVEs abaixo estão na stdlib do Go ou em
+  # dependências linkadas estaticamente no binário.
+  #
+  # Por que não conseguimos corrigir: um binário Go é estático. Não há pacote
+  # para atualizar — o conserto é o mantenedor do Caddy recompilar e republicar.
+  # `apk upgrade` (que já aplicamos no site/Dockerfile) corrige os pacotes do
+  # Alpine, mas não toca no binário.
+  #
+  # Por que o risco é aceitável AQUI: este binário serve o site estático de
+  # lições, sem entrada de usuário, atrás do proxy `edge`, numa rede sem saída
+  # e com o rootfs read-only. As CVEs são majoritariamente negação de serviço
+  # por entrada malformada; o pior caso é o site cair — não há dado para vazar.
+  #
+  # A alternativa avaliada e recusada: compilar o Caddy nós mesmos a partir de
+  # um Go atual. Resolveria, e acrescentaria uma toolchain inteira de build para
+  # manter — trabalho desproporcional para servir HTML estático.
+
+  - id: CVE-2026-27145
+    paths: ["usr/bin/caddy"]
+    statement: "stdlib do Go no binário upstream do Caddy; sem correção disponível a montante."
+    expired_at: 2026-11-30
+  - id: CVE-2026-33818
+    paths: ["usr/bin/caddy"]
+    statement: "stdlib do Go no binário upstream do Caddy; sem correção disponível a montante."
+    expired_at: 2026-11-30
+  - id: CVE-2026-39821
+    paths: ["usr/bin/caddy"]
+    statement: "stdlib do Go no binário upstream do Caddy; sem correção disponível a montante."
+    expired_at: 2026-11-30
+  - id: CVE-2026-39822
+    paths: ["usr/bin/caddy"]
+    statement: "stdlib do Go no binário upstream do Caddy; sem correção disponível a montante."
+    expired_at: 2026-11-30
+  - id: CVE-2026-42504
+    paths: ["usr/bin/caddy"]
+    statement: "stdlib do Go no binário upstream do Caddy; sem correção disponível a montante."
+    expired_at: 2026-11-30
+  - id: CVE-2026-46600
+    paths: ["usr/bin/caddy"]
+    statement: "stdlib e golang.org/x/net no binário upstream do Caddy; DoS via parsing de registro DNS."
+    expired_at: 2026-11-30
+  - id: CVE-2026-56852
+    paths: ["usr/bin/caddy"]
+    statement: "golang.org/x/text linkado no binário upstream do Caddy."
+    expired_at: 2026-11-30
+  - id: CVE-2026-56853
+    paths: ["usr/bin/caddy"]
+    statement: "stdlib do Go no binário upstream do Caddy; DoS em HTTP/2 sem TLS — não exposto aqui."
+    expired_at: 2026-11-30
+  - id: CVE-2026-56858
+    paths: ["usr/bin/caddy"]
+    statement: "html/template do Go; o Caddy serve arquivos estáticos, sem renderizar template."
+    expired_at: 2026-11-30
+  - id: CVE-2026-56859
+    paths: ["usr/bin/caddy"]
+    statement: "encoding/xml do Go; este servidor não decodifica XML."
+    expired_at: 2026-11-30
+  - id: CVE-2026-56860
+    paths: ["usr/bin/caddy"]
+    statement: "net/url do Go; DoS por complexidade quadrática — mitigado pelos limites de recurso do container."
+    expired_at: 2026-11-30
+  - id: CVE-2026-56862
+    paths: ["usr/bin/caddy"]
+    statement: "crypto/tls do Go; o TLS termina no `edge`, não neste container."
+    expired_at: 2026-11-30
+  - id: GHSA-hrxh-6v49-42gf
+    paths: ["usr/bin/caddy"]
+    statement: "google.golang.org/grpc linkado no binário upstream; o gRPC não é usado nesta configuração."
+    expired_at: 2026-11-30
