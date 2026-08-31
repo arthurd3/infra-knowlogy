@@ -1,0 +1,71 @@
+# Caddy — o proxy reverso da stack.
+#
+# Por que Caddy e não Traefik: o Traefik descobre serviços lendo o socket do
+# Docker, e montar /var/run/docker.sock num container é exatamente o que a
+# Regra #1 da OWASP proíbe — quem tem o socket tem root no host. O Caddy usa
+# configuração estática e não precisa enxergar o Docker de jeito nenhum.
+# O trade-off é real: aqui você edita este arquivo ao adicionar um serviço.
+# Ver docs/adr/0002-caddy-em-vez-de-traefik.md.
+
+{
+	# Sem telemetria de saída e sem tentar emitir certificado quando o endereço
+	# é local. Em produção, troque SITE_ADDRESS por um domínio real e o Caddy
+	# resolve ACME/Let's Encrypt sozinho, incluindo a renovação.
+	admin off
+	auto_https {$AUTO_HTTPS:off}
+	servers {
+		# Confia no cabeçalho X-Forwarded-* somente se vier de redes privadas.
+		# Sem esta restrição, qualquer cliente forja o próprio IP nos logs.
+		trusted_proxies static private_ranges
+	}
+}
+
+{$SITE_ADDRESS::8080} {
+	log {
+		# Log em JSON no stdout — o Alloy coleta pelo log driver do Docker.
+		output stdout
+		format json
+	}
+
+	encode zstd gzip
+
+	header {
+		# Cabeçalhos de segurança aplicados a tudo que sai daqui.
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
+
+	# Endpoint de saúde do PRÓPRIO proxy. Responde mesmo com a API fora do ar,
+	# porque a pergunta que ele responde é "o proxy está de pé?".
+	#
+	# Precisa ser um bloco `handle`, e não um `respond` solto: os blocos
+	# `handle` formam um grupo mutuamente exclusivo avaliado por
+	# especificidade de matcher, e um `respond` fora do grupo perde para o
+	# `handle` catch-all lá embaixo — o health check acabava sendo
+	# encaminhado para o site e voltava 404.
+	handle /edge-health {
+		respond 204
+	}
+
+	# A API. handle (e não handle_path) preserva o prefixo /api, que é o que a
+	# API espera receber.
+	handle /api/* {
+		reverse_proxy api:8080 {
+			health_uri /healthz
+			health_interval 10s
+		}
+	}
+
+	# Os redirects curtos. handle_path REMOVE o prefixo /r antes de repassar,
+	# então a API recebe /{code} — que é a rota que ela declara.
+	handle_path /r/* {
+		reverse_proxy api:8080
+	}
+
+	# Tudo o mais é o site estático de lições.
+	handle {
+		reverse_proxy web:8080
+	}
+}

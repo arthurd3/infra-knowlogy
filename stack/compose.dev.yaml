@@ -1,0 +1,79 @@
+# compose.dev.yaml — overlay de DESENVOLVIMENTO.
+#
+# Uso: docker compose -f compose.yaml -f compose.dev.yaml up --build --watch
+#      (ou simplesmente `make dev`)
+#
+# Aqui trocamos segurança por velocidade de iteração, DE PROPÓSITO e de forma
+# visível: portas de banco expostas, imagem com shell, logs em debug. Nada
+# disto vaza para produção, porque produção usa o outro overlay.
+
+services:
+
+  api:
+    build:
+      # Alvo `debug`: mesma aplicação, mas sobre Alpine — tem shell, então
+      # `docker compose exec api sh` funciona. Na imagem distroless de produção
+      # esse comando falha, e é assim que tem que ser.
+      target: debug
+    environment:
+      LOG_LEVEL: debug
+    ports:
+      - "127.0.0.1:${API_PORT:-8081}:8080"
+    develop:
+      # `watch` é o que substitui o ciclo manual de rebuild. O Compose observa
+      # o host e age conforme o arquivo que mudou.
+      watch:
+        # Código-fonte Go é compilado: não adianta sincronizar o .go para dentro
+        # do container, é preciso reconstruir a imagem.
+        - path: ./services/api-go
+          action: rebuild
+
+  worker:
+    environment:
+      LOG_LEVEL: DEBUG
+    ports:
+      - "127.0.0.1:${WORKER_METRICS_PORT:-9100}:9100"
+    develop:
+      watch:
+        # Python é interpretado: sincronizar o arquivo e reiniciar o processo é
+        # muito mais rápido que reconstruir a imagem inteira.
+        - path: ./services/worker-py/worker
+          target: /app/worker
+          action: sync+restart
+        # Mas mexer nas DEPENDÊNCIAS exige rebuild — o lockfile mudou, a venv
+        # da imagem está velha. Distinguir os dois casos é o ponto do watch.
+        - path: ./services/worker-py/pyproject.toml
+          action: rebuild
+        - path: ./services/worker-py/uv.lock
+          action: rebuild
+
+  web:
+    build:
+      target: dev
+    command: ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "8080"]
+    environment:
+      NODE_ENV: development
+    develop:
+      watch:
+        - path: ../site/src
+          target: /app/src
+          action: sync
+        - path: ../site/package.json
+          action: rebuild
+
+  # Portas de banco publicadas SÓ em dev e SÓ em 127.0.0.1, para você conseguir
+  # apontar um psql/DBeaver/redis-cli do host. Em produção estes serviços não
+  # têm porta publicada nenhuma.
+  db:
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    command:
+      # Loga toda query que passe de 200ms — inestimável em dev, caro demais
+      # para deixar ligado em produção.
+      - postgres
+      - -c
+      - log_min_duration_statement=200
+
+  cache:
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"

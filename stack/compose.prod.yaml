@@ -1,0 +1,124 @@
+# compose.prod.yaml — overlay de ENDURECIMENTO.
+#
+# Uso: docker compose -f compose.yaml -f compose.prod.yaml up -d --wait
+#      (ou `make up`)
+#
+# Cada bloco aqui corresponde a uma regra do OWASP Docker Security Cheat Sheet.
+# O padrão é sempre o mesmo: negar tudo, devolver só o estritamente necessário —
+# e o "estritamente necessário" varia por serviço, o que é justamente o motivo
+# de este arquivo não ser um único bloco copiado seis vezes.
+
+x-hardened: &hardened
+  # Regra #4 — impede que um binário setuid dentro do container escale
+  # privilégio. Zero custo, sem efeito colateral: deveria estar em toda stack.
+  security_opt:
+    - no-new-privileges:true
+  # Regra #8 — sistema de arquivos raiz imutável. Um invasor que consiga
+  # execução de código não consegue depositar um binário, um webshell ou um
+  # cron. Volumes e tmpfs declarados continuam graváveis; o resto, não.
+  read_only: true
+  # Regra #7 — limitar recursos é controle de segurança, não só de capacidade:
+  # sem teto, um único container consome a RAM do host e derruba os vizinhos.
+  # O teto de PIDs vai em deploy.resources.limits.pids de cada serviço abaixo:
+  # `pids_limit` é o alias legado e o Compose recusa os dois no mesmo serviço.
+
+services:
+
+  edge:
+    <<: *hardened
+    cap_drop: [ALL]
+    cap_add:
+      # NET_BIND_SERVICE é obrigatória mesmo publicando em 8080, e o motivo não
+      # é o bind: o binário do Caddy tem a CAPABILITY DE ARQUIVO
+      # `cap_net_bind_service=+ep` gravada nele. O kernel se recusa a fazer
+      # exec() de um binário cujas file capabilities não estão no bounding set
+      # do processo — o container morre com "exec /usr/bin/caddy: operation not
+      # permitted", uma mensagem que não menciona capabilities em momento algum.
+      - NET_BIND_SERVICE
+      # O Caddy escreve o arquivo de certificado com dono próprio. Sem CHOWN
+      # ele falha no primeiro start com uma emissão ACME real.
+      - CHOWN
+      - DAC_OVERRIDE
+      - SETGID
+      - SETUID
+    tmpfs:
+      # O rootfs é read-only, mas o Caddy precisa de um /tmp gravável.
+      # noexec+nosuid: mesmo escrevendo aqui, não dá para executar o que escreveu.
+      - /tmp:rw,noexec,nosuid,size=32m
+    deploy:
+      resources:
+        limits: {cpus: "0.50", memory: 128M, pids: 200}
+        reservations: {memory: 32M}
+
+  api:
+    <<: *hardened
+    # A imagem já é distroless e não-root (USER 65532). Mesmo assim derrubamos
+    # todas as capabilities: o binário é estático, não faz bind em porta
+    # privilegiada e não muda de usuário — ele não precisa de nenhuma.
+    cap_drop: [ALL]
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    deploy:
+      resources:
+        limits: {cpus: "1.00", memory: 256M, pids: 200}
+        reservations: {memory: 64M}
+    ulimits:
+      nofile: {soft: 8192, hard: 8192}
+
+  worker:
+    <<: *hardened
+    cap_drop: [ALL]
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    deploy:
+      resources:
+        # O worker baixa páginas de terceiros: o teto de memória é a última
+        # linha de defesa se o limite de bytes da aplicação for contornado.
+        limits: {cpus: "1.00", memory: 384M, pids: 200}
+        reservations: {memory: 64M}
+
+  web:
+    <<: *hardened
+    cap_drop: [ALL]
+    # Mesma imagem Caddy do `edge`, mesma exigência de NET_BIND_SERVICE para
+    # o exec() sequer acontecer.
+    cap_add: [NET_BIND_SERVICE, CHOWN, DAC_OVERRIDE, SETGID, SETUID]
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m
+    deploy:
+      resources:
+        limits: {cpus: "0.50", memory: 128M, pids: 200}
+        reservations: {memory: 32M}
+
+  db:
+    <<: *hardened
+    # O entrypoint do Postgres inicia como root, ajusta o dono do diretório de
+    # dados e SÓ ENTÃO faz setuid para `postgres`. Tirar estas quatro
+    # capabilities impede o próprio boot — é o exemplo perfeito de por que
+    # `cap_drop: [ALL]` cego quebra imagens oficiais.
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+      # O socket unix do Postgres vive aqui e o rootfs está read-only.
+      - /run/postgresql:rw,noexec,nosuid,size=8m
+    deploy:
+      resources:
+        limits: {cpus: "1.00", memory: 512M, pids: 200}
+        reservations: {memory: 128M}
+    ulimits:
+      nofile: {soft: 4096, hard: 4096}
+
+  cache:
+    <<: *hardened
+    cap_drop: [ALL]
+    cap_add: [SETGID, SETUID]
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    deploy:
+      resources:
+        # O maxmemory do Redis (128mb) é o limite lógico; este é o físico, com
+        # folga para overhead de alocador. Se o cgroup fosse igual ao maxmemory,
+        # o OOM killer chegaria antes da política de evicção do Redis agir.
+        limits: {cpus: "0.50", memory: 192M, pids: 200}
+        reservations: {memory: 64M}

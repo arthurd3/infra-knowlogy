@@ -1,0 +1,228 @@
+# compose.yaml — a definição BASE da stack.
+#
+# Não existe campo `version:` aqui. Ele foi deprecado na Compose Specification e
+# hoje só gera um aviso; se você vir um `version: "3.8"` num tutorial, o
+# tutorial é antigo.
+#
+# Este arquivo sozinho não roda em produção — ele é combinado com um overlay:
+#   dev  : docker compose -f compose.yaml -f compose.dev.yaml  up --watch
+#   prod : docker compose -f compose.yaml -f compose.prod.yaml up -d --wait
+#   obs  : + compose.obs.yaml --profile obs
+# (o Makefile na raiz já faz essas combinações)
+
+name: infra-knowlogy
+
+# ─── Blocos reutilizáveis ────────────────────────────────────────────────────
+# Chaves com prefixo `x-` são ignoradas pelo Compose e servem de âncora YAML.
+# É assim que se evita repetir o mesmo bloco em seis serviços.
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    # Sem isto o log driver json-file cresce SEM LIMITE até encher o disco do
+    # host. É a causa nº 1 de "o servidor parou do nada" em stacks Docker.
+    max-size: "10m"
+    max-file: "3"
+    # Tag legível no lugar do ID de container truncado, que não diz nada.
+    tag: "{{.Name}}"
+
+x-service-defaults: &service-defaults
+  restart: unless-stopped
+  logging: *default-logging
+  # unless-stopped se auto-cura após um crash ou um reboot da máquina, mas
+  # respeita um `docker compose stop` deliberado — ao contrário de `always`,
+  # que ressuscita o container no próximo boot mesmo que você o tenha parado.
+
+# ─── Serviços ────────────────────────────────────────────────────────────────
+
+services:
+
+  # O único serviço com porta publicada. Todo o resto fala apenas por rede interna.
+  edge:
+    <<: *service-defaults
+    image: caddy:2-alpine@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648
+    ports:
+      # Prefixo 127.0.0.1 obrigatório. Com `"8080:8080"` o Docker escreve uma
+      # regra de DNAT na tabela nat do iptables que é avaliada ANTES das regras
+      # do UFW/firewalld — a porta fica aberta para a internet inteira mesmo com
+      # o firewall "ativo e bloqueando". É a Regra 5a da OWASP.
+      - "127.0.0.1:${EDGE_PORT:-8080}:8080"
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-:8080}
+      AUTO_HTTPS: ${AUTO_HTTPS:-off}
+    volumes:
+      - ./services/edge/Caddyfile:/etc/caddy/Caddyfile:ro,z
+      - caddy_data:/data
+      - caddy_config:/config
+    networks: [edge]
+    depends_on:
+      api:
+        condition: service_healthy
+      web:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1:8080/edge-health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+  api:
+    <<: *service-defaults
+    build:
+      context: ./services/api-go
+      target: dist
+    image: infra-knowlogy/api-go:dev
+    environment:
+      LISTEN_ADDR: ":8080"
+      BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:8080}/r
+      POSTGRES_HOST: db
+      POSTGRES_DB: ${POSTGRES_DB:-links}
+      POSTGRES_USER: ${POSTGRES_USER:-links}
+      # A senha NÃO vem por variável de ambiente. Ela chega como arquivo montado
+      # em /run/secrets/, e passamos só o CAMINHO. Compare:
+      #   docker inspect <container> | grep -i password   -> não acha nada
+      # Com POSTGRES_PASSWORD=... no environment, acharia.
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      REDIS_HOST: cache
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    secrets: [postgres_password]
+    networks: [edge, data]
+    depends_on:
+      db:
+        # service_healthy espera o healthcheck PASSAR, não o container "subir".
+        # Com o `service_started` padrão, a API tentaria conectar num Postgres
+        # que ainda está rodando os scripts de init e morreria no boot.
+        condition: service_healthy
+      cache:
+        condition: service_healthy
+    # Sem healthcheck aqui de propósito: a instrução HEALTHCHECK já está na
+    # imagem (ver services/api-go/Dockerfile) e o Compose a herda. Definir a
+    # saúde junto do artefato é melhor do que espalhá-la pelos orquestradores.
+    stop_grace_period: 15s
+
+  worker:
+    <<: *service-defaults
+    build:
+      context: ./services/worker-py
+      target: dist
+    image: infra-knowlogy/worker-py:dev
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_DB: ${POSTGRES_DB:-links}
+      POSTGRES_USER: ${POSTGRES_USER:-links}
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      REDIS_HOST: cache
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    secrets: [postgres_password]
+    # Duas redes: `data` para falar com Postgres/Redis e `egress` para conseguir
+    # baixar as URLs. O `db` e o `cache` NÃO estão na `egress` — se este worker
+    # for comprometido, ele tem saída para a internet, mas o banco não tem.
+    networks: [data, egress]
+    depends_on:
+      db:
+        condition: service_healthy
+      cache:
+        condition: service_healthy
+    stop_grace_period: 30s
+
+  web:
+    <<: *service-defaults
+    build:
+      context: ../site
+      # `target` explícito é obrigatório. Sem ele o BuildKit constrói a ÚLTIMA
+      # stage do Dockerfile — que ali é a `dev`, com Node e `astro dev`. O
+      # container sobe, serve o site, e você só descobre em produção que está
+      # rodando o servidor de desenvolvimento.
+      target: dist
+    image: infra-knowlogy/web:dev
+    networks: [edge]
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1:8080/"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+  db:
+    <<: *service-defaults
+    image: postgres:17-alpine@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-links}
+      POSTGRES_USER: ${POSTGRES_USER:-links}
+      # A imagem oficial do Postgres implementa a mesma convenção `_FILE`.
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      # Sem isto, o initdb usa `trust` para conexões locais — qualquer processo
+      # dentro do container entra no banco sem senha.
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256 --auth-local=scram-sha-256"
+    secrets: [postgres_password]
+    volumes:
+      # Volume NOMEADO, não bind mount. O Docker é dono do ciclo de vida, o
+      # desempenho de I/O é nativo e o volume sobrevive a `docker compose down`.
+      - pgdata:/var/lib/postgresql/data
+      # Só é lido na PRIMEIRA inicialização, com o volume vazio.
+      - ./services/db/init:/docker-entrypoint-initdb.d:ro,z
+    # Somente a rede interna. Este serviço não tem rota para a internet nem é
+    # alcançável a partir da rede `edge` — o proxy literalmente não consegue vê-lo.
+    networks: [data]
+    healthcheck:
+      # $$ vira um único $ dentro do container: o Compose interpola $ primeiro.
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-links} -d $${POSTGRES_DB:-links} -q"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      # start_period cobre a inicialização: falhas nesta janela não contam para
+      # o `retries`. O initdb do Postgres leva alguns segundos na primeira vez.
+      start_period: 30s
+    stop_grace_period: 30s
+
+  cache:
+    <<: *service-defaults
+    image: redis:7-alpine@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf
+    command: >
+      redis-server
+      --save 60 1
+      --appendonly no
+      --maxmemory ${REDIS_MAXMEMORY:-128mb}
+      --maxmemory-policy allkeys-lru
+    volumes:
+      - redisdata:/data
+    networks: [data]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+# ─── Redes ───────────────────────────────────────────────────────────────────
+# Redes bridge definidas pelo usuário, e não a bridge padrão. Duas diferenças
+# que importam: (1) só elas têm o DNS embutido em 127.0.0.11 que resolve nomes
+# de serviço, e (2) a bridge padrão coloca TODO container do host no mesmo
+# segmento — inclusive os de outros projetos.
+
+networks:
+  edge:
+    driver: bridge
+  data:
+    driver: bridge
+    # internal: true remove o gateway da rede. Postgres e Redis, que só estão
+    # aqui, ficam sem NENHUMA rota para fora — nem para a internet, nem para a
+    # rede do host. Exfiltrar dados a partir deles exige antes comprometer um
+    # serviço que esteja nas duas redes.
+    internal: true
+  egress:
+    driver: bridge
+
+volumes:
+  pgdata:
+  redisdata:
+  caddy_data:
+  caddy_config:
+
+secrets:
+  postgres_password:
+    # Montado como arquivo read-only em /run/secrets/postgres_password, dentro
+    # de um tmpfs. Nunca aparece em `docker inspect`, nunca vira variável de
+    # ambiente, nunca é herdado por processos filhos.
+    file: ./secrets/postgres_password
