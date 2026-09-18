@@ -16,7 +16,8 @@ O que é indexado:
   lesson       site/src/content/lessons/**/*.mdx   (bilíngue, por seção)
   adr          docs/adr/*.md                        (decisões e alternativas recusadas)
   convention   CLAUDE.md                            (armadilhas e convenções)
-  overview     README.md                            (arquitetura e verificação)
+  overview     README.md + k8s/README.md            (arquitetura e verificação)
+  roadmap      docs/ROADMAP.md                      (os módulos e as regras deles)
   measurement  site/src/data/measured.json          (números medidos, virados em prosa)
 
 O formato do ponto imita o do mcp-server-qdrant de propósito — vetor nomeado
@@ -170,7 +171,13 @@ def collect() -> list[models.PointStruct]:
     # CLAUDE.md e os ADRs são notas internas em português. O rótulo de idioma
     # precisa refletir isso, senão a busca em inglês perde o overview.
     for name, kind, lang in (("CLAUDE.md", "convention", "pt"),
-                             ("README.md", "overview", "en")):
+                             ("README.md", "overview", "en"),
+                             # O roadmap dos módulos e o mapa do módulo k8s.
+                             # Os manifests YAML de k8s/base NÃO são indexados:
+                             # pouca prosa — o raciocínio deles vive no ADR
+                             # 0007 e nas lições, que já entram aqui.
+                             ("docs/ROADMAP.md", "roadmap", "pt"),
+                             ("k8s/README.md", "overview", "pt")):
         f = ROOT / name
         if f.is_file():
             points += list(chunk_markdown(f, kind, {"lang": lang}))

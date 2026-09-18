@@ -1,7 +1,8 @@
-# infra-knowlogy — Module 1: Docker
+# infra-knowlogy
 
-> **A production Docker stack that actually runs — and the lessons that explain
-> every decision in it.**
+> **A production stack that actually runs — and the lessons that explain every
+> decision in it.** Module 1 is Docker; module 2 ports the same stack to
+> Kubernetes. The [roadmap](docs/ROADMAP.md) carries the rest.
 
 The principle tying the whole repository together: **the lessons teach exactly
 the code that is here, with numbers measured on this machine.** No generic blog
@@ -24,6 +25,9 @@ make            # list everything you can do
 make up         # bring up the hardened stack and wait for every healthcheck
 make site-dev   # open the lessons at http://localhost:4321
 make verify     # the quality gate: build, boot, test, and prove the hardening
+
+make k8s-up     # module 2: the SAME stack in a kind cluster, at 127.0.0.1:8081
+make k8s-verify # its own gate — 33 checks, from scratch, cluster destroyed after
 ```
 
 Requirements: Docker 25+ with BuildKit, Docker Compose v2+, Node 22+ (site only),
@@ -74,7 +78,7 @@ seconds instead of paying for fifteen containers.
 
 ## The lessons
 
-16 lessons — 8 topics, in English and Portuguese — under
+22 lessons — 11 topics, in English and Portuguese — under
 `site/src/content/lessons/`, with three interactive widgets that run entirely in
 the browser (the site stays 100% static and deployable anywhere).
 
@@ -82,6 +86,12 @@ the browser (the site stays 100% static and deployable anywhere).
 · the Dockerfile instruction by instruction · the build cache · lifecycle and
 exit codes · volumes, bind mounts and tmpfs · networks and internal DNS · Compose
 and healthchecks.
+
+**Kubernetes track** (module 2): why an orchestrator — ADR 0001's accepted
+limits, measured · from compose.yaml to Deployment, block by block · liveness
+vs readiness, with the database outage staged and counted. The numbers these
+lessons cite are written by `make k8s-verify` into
+`site/src/data/k8s-measured.json`.
 
 Every lesson ends with a **"Run it yourself"** block — real commands against this
 repository's stack, not pseudocode.
@@ -115,13 +125,31 @@ Current state: **30 passed · 0 failed**.
 
 For faster local iteration: `SKIP_SCAN=1 SKIP_OBS=1 make verify`.
 
+Module 2 has its own independent gate, `make k8s-verify` (**33 passed · 0
+failed**): it creates a kind cluster from scratch, loads the same images,
+applies the manifests, reruns the same smoke test through port 8081, proves the
+NetworkPolicies mirror the Compose networks (edge cannot reach db; db has no
+route out; the worker cannot touch link-local), and then measures what Compose
+cannot do — self-healing, counted restarts, readiness without restarts, and a
+rolling update with **zero dropped requests**. It destroys the cluster when done.
+
+## Roadmap
+
+One application crosses the whole infrastructure journey; each module is a
+deployment view of it, with its own gate. Module 1 (Docker, `stack/`) and
+module 2 (Kubernetes, `k8s/`) exist; self-hosted CI/CD with Jenkins, IaC and
+configuration management are reserved next. Details, rules and status:
+[`docs/ROADMAP.md`](docs/ROADMAP.md) (Portuguese).
+
 ## Layout
 
 ```
 stack/          production code: compose + services/{api-go,worker-py,edge,db,observability}
+k8s/            module 2: the same stack as kind + kustomize manifests
 site/           the bilingual lessons site (Astro + MDX + React islands)
-tools/scripts/  verify · sizes · scan · shutdown-test · update-pins · index-qdrant
+tools/scripts/  verify · k8s-verify · sizes · scan · shutdown-test · update-pins · index-qdrant
 docs/adr/       why Compose and not k8s, why Caddy and not Traefik, and the rest
+docs/ROADMAP.md the modules: done, in progress, reserved
 ```
 
 Decisions and the alternatives that were **rejected** live in

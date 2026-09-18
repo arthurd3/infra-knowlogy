@@ -62,12 +62,37 @@ justamente por isso.
 10. **Volume nomeado herda dono do diretório que já existe na imagem.** Apontar
     para um subdiretório inexistente cria um volume vazio do root, e um serviço
     não-root não escreve nele (foi o caso do Alloy em `/var/lib/alloy/data`).
+11. **O kubelet IGNORA o `HEALTHCHECK` do Dockerfile.** Sem probes declaradas
+    no manifest, um pod com processo travado fica "Ready" recebendo tráfego.
+    Toda saúde no k8s vem do `deployment.yaml`, sempre.
+12. **kind < 0.23 ignora NetworkPolicy em silêncio** — a API aceita e nada
+    aplica. O `k8s-prereqs.sh` recusa versões menores e o `k8s-verify` prova o
+    enforcement de qualquer jeito (uma conexão proibida tem que falhar).
+13. **Probe verde não prova alcançabilidade entre pods.** A probe parte do nó e
+    não atravessa NetworkPolicy — o `web` ficou Ready respondendo 502 atrás do
+    edge até ganhar a policy de ingress que faltava.
+14. **PV novo nasce do root** (o primo k8s da armadilha 10). O entrypoint do
+    Redis morria em `chown /data` sem a capability CHOWN. Correção:
+    `runAsUser` + `fsGroup` no pod — e o cache ficou com `drop: [ALL]` sem
+    devolver nenhuma capability.
+15. **SIGKILL no PID 1 de dentro do namespace não funciona** (kernel ignora; é
+    a física da lição 3 do módulo Docker). O teste de restart do `k8s-verify`
+    usa SIGTERM, que o worker trata.
+16. **Rolling update derruba requisição sem cooperação da aplicação**: SIGTERM
+    chega antes de o kube-proxy parar de mandar conexões novas. A api espera
+    `SHUTDOWN_DELAY` (0 por padrão; 2s no Deployment) antes de fechar o
+    listener — o preStop com `sleep` não existe em imagem distroless.
 
 ## Ao mexer na stack
 
 - Rode `make verify` antes de considerar qualquer coisa pronta. Para iterar
   rápido: `SKIP_SCAN=1 SKIP_OBS=1 make verify`. O estado bom conhecido é
   **30 passaram · 0 falharam**.
+- O módulo Kubernetes tem portão próprio: `make k8s-verify` (estado bom:
+  **33 passaram · 0 falharam**). Para iterar sem recriar o cluster:
+  `KEEP_CLUSTER=1 make k8s-verify`. Os portões são independentes de propósito
+  (ADR 0007) — mexeu em `k8s/`, rode os dois; o smoke test é compartilhado
+  (`tools/scripts/lib/smoke.sh`), então mudanças nele afetam ambos.
 - O `verify` separa "scanner quebrou" de "achou CVE" de propósito. Se você
   mexer no `scan.sh`, preserve essa distinção: reportar as duas coisas como a
   mesma falha faz o portão mentir (já aconteceu — o Trivy não alcançava o
@@ -124,6 +149,19 @@ nada guardado na coleção por outra via é tocado.
 não usaram Traefik?" ou "qual o tamanho da imagem do worker?" já têm resposta
 indexada, com o caminho do arquivo de origem no metadata.
 
+## Os módulos e o roadmap
+
+O repositório deixou de ser só o módulo Docker: `docs/ROADMAP.md` é a fonte de
+verdade dos módulos (2 = Kubernetes em `k8s/`, feito nesta primeira versão;
+3 = Jenkins/CI-CD em `cicd/`, reservado; depois IaC, Ansible, observabilidade
+avançada). Regras para módulo novo estão lá — em resumo: mesma aplicação de
+`stack/services/`, portão `make <módulo>-verify` próprio, lições bilíngues em
+trilha nova, decisões em ADR, números medidos.
+
+Trilha nova no site exige editar 5 pontos (enum em `content.config.ts`, labels
+em `i18n/ui.ts`, array em `[lang]/index.astro`, mapa de badge em
+`[slug].astro`, cor em `global.css`) — a trilha `kubernetes` serve de gabarito.
+
 ## O que ainda não existe
 
 A **Trilha Produção** (12 lições: multi-stage nos três idiomas, BuildKit, escolha
@@ -132,5 +170,7 @@ observabilidade, cadeia de suprimentos, CI/CD, limites do Compose, 12-Factor)
 está planejada e não escrita. O código que ela vai explicar **já existe** na
 stack — as lições é que faltam.
 
-Dois widgets também ficaram para depois: o grafo de topologia do Compose e a demo
-de vazamento de segredo via `docker history`.
+Na trilha Kubernetes, só as 3 primeiras lições existem; ficaram para depois:
+Ingress de verdade (ingress-nginx), StatefulSets a fundo, HPA e o job de kind
+no CI. Dois widgets também ficaram para depois: o grafo de topologia do Compose
+e a demo de vazamento de segredo via `docker history`.
