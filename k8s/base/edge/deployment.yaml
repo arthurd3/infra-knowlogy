@@ -1,0 +1,67 @@
+# edge — o porte do serviço `edge` do compose.yaml.
+#
+# SEM ingress controller (ADR 0007): o Caddy que era o proxy do módulo Docker
+# continua sendo o proxy aqui, como Deployment comum + Service NodePort. O
+# Caddyfile montado é LITERALMENTE o arquivo stack/services/edge/Caddyfile —
+# ele fala com api:8080 e web:8080, e Services com esses nomes resolvem no DNS
+# do cluster igualzinho ao DNS embutido das redes do Docker.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: edge
+  labels: {app: edge}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: edge}
+  template:
+    metadata:
+      labels: {app: edge}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: edge
+          # A MESMA imagem pinada do compose.yaml — atualize com `make pins`.
+          image: caddy:2-alpine@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648
+          env:
+            - {name: SITE_ADDRESS, value: ":8080"}
+            - {name: AUTO_HTTPS, value: "off"}
+          ports:
+            - {name: http, containerPort: 8080}
+          readinessProbe:
+            httpGet: {path: /edge-health, port: http}
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            httpGet: {path: /edge-health, port: http}
+            periodSeconds: 10
+            failureThreshold: 4
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+              add: [NET_BIND_SERVICE, CHOWN, DAC_OVERRIDE, SETGID, SETUID]
+          resources:
+            limits: {cpu: "500m", memory: 128Mi}
+            requests: {memory: 32Mi}
+          volumeMounts:
+            - {name: caddyfile, mountPath: /etc/caddy, readOnly: true}
+            - {name: tmp, mountPath: /tmp}
+            - {name: caddy-data, mountPath: /data}
+            - {name: caddy-config, mountPath: /config}
+      volumes:
+        - name: caddyfile
+          # Gerado pelo k8s-up.sh a partir de stack/services/edge/Caddyfile.
+          # Bônus sobre o bind mount do Compose: ConfigMap não precisa de :z —
+          # o kubelet cuida do rótulo SELinux.
+          configMap: {name: edge-caddyfile}
+        - name: tmp
+          emptyDir: {medium: Memory, sizeLimit: 32Mi}
+        - name: caddy-data
+          emptyDir: {sizeLimit: 32Mi}
+        - name: caddy-config
+          emptyDir: {sizeLimit: 8Mi}

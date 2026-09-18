@@ -76,59 +76,11 @@ step "4/9  Smoke test: criar link -> redirecionar -> enriquecer"
 PORT="$(grep -E '^EDGE_PORT=' stack/.env 2>/dev/null | cut -d= -f2)"; PORT="${PORT:-8080}"
 BASEURL="http://127.0.0.1:${PORT}"
 
-created=$(curl -fsS -X POST "$BASEURL/api/links" \
-  -H 'content-type: application/json' \
-  -d '{"url":"https://example.com/"}' 2>/dev/null)
-
-if [ -n "$created" ] && CODE=$(printf '%s' "$created" | python3 -c 'import sys,json; print(json.load(sys.stdin)["code"])' 2>/dev/null); then
-  ok "POST /api/links -> code=$CODE"
-
-  status=$(curl -s -o /dev/null -w '%{http_code}' "$BASEURL/r/$CODE")
-  if [ "$status" = "302" ]; then
-    ok "GET /r/$CODE -> 302 (redirect)"
-  else
-    bad "GET /r/$CODE -> $status (esperado 302)"
-  fi
-
-  # O worker é assíncrono: damos a ele alguns segundos para enriquecer.
-  enriched=""
-  for _ in $(seq 1 15); do
-    enriched=$(curl -fsS "$BASEURL/api/links/$CODE" 2>/dev/null \
-      | python3 -c 'import sys,json; d=json.load(sys.stdin); print(d.get("title") or "")' 2>/dev/null)
-    [ -n "$enriched" ] && break
-    sleep 1
-  done
-  if [ -n "$enriched" ]; then
-    ok "worker enriqueceu o link -> título: \"$enriched\""
-  else
-    bad "worker não enriqueceu o link em 15s"
-    "${COMPOSE[@]}" logs --tail 15 worker | sed 's/^/       /'
-  fi
-
-  # A defesa contra SSRF: uma URL interna precisa ser recusada.
-  ssrf=$(curl -fsS -X POST "$BASEURL/api/links" -H 'content-type: application/json' \
-    -d '{"url":"http://169.254.169.254/latest/meta-data/"}' 2>/dev/null \
-    | python3 -c 'import sys,json; print(json.load(sys.stdin)["code"])' 2>/dev/null)
-  if [ -n "$ssrf" ]; then
-    blocked=""
-    for _ in $(seq 1 15); do
-      blocked=$(curl -fsS "$BASEURL/api/links/$ssrf" 2>/dev/null \
-        | python3 -c 'import sys,json; print(json.load(sys.stdin).get("enrich_error") or "")' 2>/dev/null)
-      [ -n "$blocked" ] && break
-      sleep 1
-    done
-    case "$blocked" in
-      *bloqueado*|*blocked*) ok "SSRF recusado: $blocked" ;;
-      "")                    bad "SSRF não foi avaliado em 15s" ;;
-      *)                     bad "SSRF não foi bloqueado: $blocked" ;;
-    esac
-  fi
-else
-  bad "POST /api/links falhou"
-  "${COMPOSE[@]}" logs --tail 20 api edge | sed 's/^/       /'
-fi
-
-if curl -fsS "$BASEURL/" >/dev/null 2>&1; then ok "site servido pelo edge"; else bad "site não responde em /"; fi
+# O miolo do smoke vive em lib/smoke.sh, compartilhado com o k8s-verify.sh —
+# os dois portões provam o mesmo fluxo porque a aplicação é a mesma.
+source tools/scripts/lib/smoke.sh
+smoke_logs() { "${COMPOSE[@]}" logs --tail 20 "$@" | sed 's/^/       /'; }
+run_smoke
 if "${COMPOSE[@]}" exec -T api /api-go healthcheck >/dev/null 2>&1; then
   ok "readyz da api responde"
 else

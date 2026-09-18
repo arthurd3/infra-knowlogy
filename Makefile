@@ -1,4 +1,4 @@
-# infra-knowlogy — Módulo 1: Docker
+# infra-knowlogy — Módulo 1: Docker (stack/) · Módulo 2: Kubernetes (k8s/)
 # `make` sozinho mostra esta ajuda. / `make` alone prints this help.
 
 SHELL := /bin/bash
@@ -15,9 +15,9 @@ DOCKERFILES := $(shell find stack site -name Dockerfile -not -path '*/node_modul
 .PHONY: help
 help: ## Mostra esta ajuda / Show this help
 	@echo ""
-	@echo "  infra-knowlogy — Módulo 1: Docker"
+	@echo "  infra-knowlogy — Módulo 1: Docker · Módulo 2: Kubernetes"
 	@echo ""
-	@grep -hE '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
+	@grep -hE '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
 		| awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
 	@echo ""
 
@@ -89,6 +89,33 @@ shutdown-test: ## Prova que todo serviço para graciosamente em menos de 3s
 .PHONY: pins
 pins: ## Atualiza os digests sha256 das imagens base
 	@bash tools/scripts/update-pins.sh
+
+# ─── Módulo Kubernetes / Kubernetes module ───────────────────────────────────
+# Portão separado de propósito (ADR 0007): quem estuda só Docker não precisa
+# de kind, e o estado bom conhecido do `verify` não muda.
+
+KUBECONFORM := ghcr.io/yannh/kubeconform:v0.8.0@sha256:faffaf43f95aa6425306e1ab8d6fcad72acb9049158f38e574c085ea1ec0f64e
+
+.PHONY: k8s-prereqs
+k8s-prereqs: ## Checa kind/kubectl e diz como instalar no Fedora
+	@bash tools/scripts/k8s-prereqs.sh
+
+.PHONY: k8s-up
+k8s-up: ## Sobe o cluster kind, carrega as imagens e aplica os manifests
+	@bash tools/scripts/k8s-up.sh
+
+.PHONY: k8s-down
+k8s-down: ## Deleta o cluster kind (e tudo dentro dele)
+	kind delete cluster --name infra-knowlogy
+	rm -f k8s/.kubeconfig
+
+.PHONY: k8s-lint
+k8s-lint: ## Valida os manifests (kustomize + kubeconform), sem cluster
+	@kubectl kustomize k8s/base | docker run --rm -i $(KUBECONFORM) -strict -summary -
+
+.PHONY: k8s-verify
+k8s-verify: ## O portão do módulo Kubernetes, end-to-end
+	@bash tools/scripts/k8s-verify.sh
 
 # ─── Site didático / Teaching site ───────────────────────────────────────────
 

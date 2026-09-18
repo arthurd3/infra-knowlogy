@@ -1,0 +1,22 @@
+# ≙ o web estar SÓ na rede `edge` do Compose: recebe do proxy e não fala com
+# ninguém — é um servidor de arquivos estáticos, sem banco e sem internet.
+#
+# Nota que rendeu uma pegadinha: sem ESTA policy, o default-deny bloqueia o
+# ingress vindo do edge e o site responde 502 — mas o pod continua "Ready",
+# porque a probe do kubelet parte do NÓ e não passa pela NetworkPolicy.
+# Probe verde não prova alcançabilidade entre pods.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: web
+spec:
+  podSelector:
+    matchLabels: {app: web}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: {app: edge}
+      ports:
+        - {protocol: TCP, port: 8080}
+  # Egress declarado e vazio (além do DNS de allow-dns): estáticos não saem.

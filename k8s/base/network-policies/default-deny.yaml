@@ -1,0 +1,39 @@
+# O ponto de partida da segmentação: NEGAR TUDO, e devolver por serviço só o
+# estritamente necessário — o mesmo princípio do compose.prod.yaml, agora na
+# camada de rede.
+#
+# No Compose, a topologia vinha das redes (edge/data/egress) e da AUSÊNCIA de
+# um serviço numa rede. No Kubernetes todos os pods enxergam todos por padrão;
+# a topologia precisa ser declarada como policy. Estas policies são o espelho
+# 1:1 daquelas redes — cada arquivo diz qual rede substitui.
+#
+# ATENÇÃO (armadilha documentada no ADR 0007): NetworkPolicy só vale se o CNI
+# aplicar. kind >= 0.23 aplica; antes disso, TUDO isto era aceito pela API e
+# ignorado em silêncio. O k8s-verify prova o enforcement de qualquer jeito.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+spec:
+  podSelector: {}   # todos os pods do namespace
+  policyTypes: [Ingress, Egress]
+---
+# DNS liberado para todos: sem isto, nenhum pod resolve `db` ou `cache` — o
+# equivalente do DNS embutido (127.0.0.11) que toda rede bridge nomeada dava
+# de graça no Docker.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: kube-system}
+          podSelector:
+            matchLabels: {k8s-app: kube-dns}
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}

@@ -1,0 +1,28 @@
+# ≙ o edge estar SÓ na rede `edge` do Compose: recebe de fora, fala com api e
+# web — e NÃO TEM CAMINHO até o db. É a checagem "o edge não alcança o banco"
+# do verify, agora como policy explícita.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: edge
+spec:
+  podSelector:
+    matchLabels: {app: edge}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    # De qualquer origem: o tráfego do NodePort chega com o IP do nó (SNAT do
+    # kube-proxy), que não é selecionável por podSelector. A porta exposta no
+    # host já está presa a 127.0.0.1 pelo kind (ver kind-config.yaml).
+    - ports:
+        - {protocol: TCP, port: 8080}
+  egress:
+    - to:
+        - podSelector:
+            matchLabels: {app: api}
+      ports:
+        - {protocol: TCP, port: 8080}
+    - to:
+        - podSelector:
+            matchLabels: {app: web}
+      ports:
+        - {protocol: TCP, port: 8080}

@@ -1,0 +1,92 @@
+# api — o porte do serviço `api` do compose.yaml.
+#
+# A armadilha central do porte inteiro está aqui: o kubelet IGNORA a instrução
+# HEALTHCHECK do Dockerfile, que o Compose herdava. Sem as probes declaradas
+# abaixo, o pod é "Running" e "Ready" mesmo com o processo morto por dentro.
+# Saúde no Kubernetes se declara no manifest, sempre.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  labels: {app: api}
+spec:
+  # 2 réplicas + maxUnavailable 0: é o que permite ao k8s-verify provar o
+  # rolling update com ZERO requisições falhas — a capacidade que o ADR 0001
+  # listou como limite aceito do Compose.
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: {maxUnavailable: 0, maxSurge: 1}
+  selector:
+    matchLabels: {app: api}
+  template:
+    metadata:
+      labels: {app: api}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile: {type: RuntimeDefault}
+      terminationGracePeriodSeconds: 15   # ≙ stop_grace_period: 15s
+      containers:
+        - name: api
+          # Imagem construída localmente e carregada com `kind load` (via
+          # make k8s-up). Never: se o load faltar, ErrImageNeverPull — alto e
+          # claro, em vez de puxar outra coisa de um registry.
+          image: infra-knowlogy/api-go:dev
+          imagePullPolicy: Never
+          env:
+            - {name: LISTEN_ADDR, value: ":8080"}
+            # 8081 porque é a porta do kind no host (ver kind-config.yaml).
+            - {name: BASE_URL, value: "http://localhost:8081/r"}
+            - {name: POSTGRES_HOST, value: db}
+            - {name: POSTGRES_DB, value: links}
+            - {name: POSTGRES_USER, value: links}
+            - {name: POSTGRES_PASSWORD_FILE, value: /run/secrets/postgres_password}
+            - {name: REDIS_HOST, value: cache}
+            - {name: LOG_LEVEL, value: info}
+            # SIGTERM chega antes de o kube-proxy parar de mandar conexões
+            # novas para o pod que está morrendo. A api espera este tanto antes
+            # de fechar o listener — sem isso, o rolling update derruba as
+            # requisições que caem na janela de propagação (foi medido: 1 em
+            # 26 falhava). É a alternativa distroless ao preStop com `sleep`,
+            # que aqui não existe — não há shell na imagem.
+            - {name: SHUTDOWN_DELAY, value: 2s}
+          ports:
+            - {name: http, containerPort: 8080}
+          # httpGet, e não exec: a imagem é distroless — não há shell para um
+          # exec chamar, e o kubelet faz a requisição HTTP ele mesmo.
+          #
+          # Liveness (/healthz) ≠ readiness (/readyz), de propósito:
+          #   /healthz — "o processo está vivo?" — falhou => RESTART.
+          #   /readyz  — "as dependências respondem?" — falhou => sai do
+          #              balanceamento, SEM restart. Reiniciar a api não
+          #              ressuscita o Postgres. Ver a lição 3 da trilha.
+          livenessProbe:
+            httpGet: {path: /healthz, port: http}
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet: {path: /readyz, port: http}
+            periodSeconds: 5
+            failureThreshold: 3
+          # ≙ compose.prod: distroless, não-root, zero capabilities — binário
+          # estático que não faz bind privilegiado nem muda de usuário.
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            limits: {cpu: "1", memory: 256Mi}
+            requests: {memory: 64Mi}
+          volumeMounts:
+            - {name: secrets, mountPath: /run/secrets, readOnly: true}
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: secrets
+          secret: {secretName: postgres-password}
+        - name: tmp
+          emptyDir: {medium: Memory, sizeLimit: 16Mi}

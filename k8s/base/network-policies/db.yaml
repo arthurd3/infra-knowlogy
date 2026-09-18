@@ -1,0 +1,21 @@
+# ≙ o db na rede `data` com `internal: true`: aceita api e worker, e não tem
+# NENHUMA rota para fora além do DNS (allow-dns). "Exfiltrar dados a partir
+# dele exige antes comprometer um serviço que esteja nas duas redes" — a frase
+# do compose.yaml, agora como policy.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: db
+spec:
+  podSelector:
+    matchLabels: {app: db}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: {app: api}
+        - podSelector:
+            matchLabels: {app: worker}
+      ports:
+        - {protocol: TCP, port: 5432}
+  # Egress declarado e vazio: o espelho do `internal: true`.

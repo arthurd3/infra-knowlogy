@@ -1,0 +1,93 @@
+# db — o porte do serviço `db` do compose.yaml.
+#
+# StatefulSet, e não Deployment: o Postgres tem dado que importa e identidade
+# de rede estável; o volumeClaimTemplate cria um PVC POR RÉPLICA que sobrevive
+# ao pod (≙ o volume nomeado `pgdata` do Compose). Compare com o cache, que é
+# Deployment de propósito.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: db
+  labels: {app: db}
+spec:
+  serviceName: db
+  replicas: 1
+  selector:
+    matchLabels: {app: db}
+  template:
+    metadata:
+      labels: {app: db}
+    spec:
+      # Nenhum pod desta stack fala com a API do Kubernetes; sem isto, todo
+      # container ganha um token de ServiceAccount montado de brinde.
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile: {type: RuntimeDefault}
+      terminationGracePeriodSeconds: 30   # ≙ stop_grace_period: 30s
+      containers:
+        - name: db
+          # A MESMA imagem pinada do compose.yaml — atualize com `make pins`.
+          image: postgres:17-alpine@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73
+          env:
+            - {name: POSTGRES_DB, value: links}
+            - {name: POSTGRES_USER, value: links}
+            # A convenção <VAR>_FILE, intacta: a senha chega como ARQUIVO
+            # montado (volume `secrets` abaixo), nunca como valor de env.
+            - {name: POSTGRES_PASSWORD_FILE, value: /run/secrets/postgres_password}
+            - {name: POSTGRES_INITDB_ARGS, value: "--auth-host=scram-sha-256 --auth-local=scram-sha-256"}
+          ports:
+            - {name: pg, containerPort: 5432}
+          # ≙ compose.prod: o entrypoint começa root, ajusta o dono do datadir
+          # e SÓ ENTÃO vira `postgres` — por isso as quatro devoluções. E o
+          # setuid de DESCIDA funciona mesmo com allowPrivilegeEscalation
+          # false: no_new_privs impede GANHAR privilégio, não largar.
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+              add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
+          resources:
+            # ≙ deploy.resources do compose.prod. O teto de PIDs não tem campo
+            # por pod — no Kubernetes ele é config do kubelet (podPidsLimit).
+            limits: {cpu: "1", memory: 512Mi}
+            requests: {memory: 128Mi}
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "pg_isready -U links -d links -q"]
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 10
+            # ≙ start_period: o initdb da primeira vez leva alguns segundos.
+            initialDelaySeconds: 5
+          # Liveness deliberadamente mais frouxa que a readiness: "o processo
+          # aceita TCP" ≠ "o banco está pronto". Ver a lição 3 da trilha.
+          livenessProbe:
+            tcpSocket: {port: pg}
+            periodSeconds: 10
+            failureThreshold: 6
+          volumeMounts:
+            - {name: pgdata, mountPath: /var/lib/postgresql/data}
+            # Só é lido na PRIMEIRA inicialização, com o volume vazio — igual
+            # ao bind mount do Compose.
+            - {name: db-init, mountPath: /docker-entrypoint-initdb.d, readOnly: true}
+            - {name: secrets, mountPath: /run/secrets, readOnly: true}
+            # ≙ os tmpfs do compose.prod (o rootfs é read-only).
+            - {name: tmp, mountPath: /tmp}
+            - {name: run-postgresql, mountPath: /run/postgresql}
+      volumes:
+        - name: db-init
+          configMap: {name: db-init}
+        - name: secrets
+          secret: {secretName: postgres-password}
+        - name: tmp
+          emptyDir: {medium: Memory, sizeLimit: 64Mi}
+        - name: run-postgresql
+          emptyDir: {medium: Memory, sizeLimit: 8Mi}
+  volumeClaimTemplates:
+    - metadata:
+        name: pgdata
+      spec:
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests: {storage: 1Gi}

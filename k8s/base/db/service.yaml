@@ -1,0 +1,12 @@
+# O nome `db` no DNS do cluster — exatamente o nome que config.go/config.py
+# já recebem em POSTGRES_HOST. O porte não mudou uma linha da aplicação.
+apiVersion: v1
+kind: Service
+metadata:
+  name: db
+  labels: {app: db}
+spec:
+  clusterIP: None   # headless: StatefulSet com 1 réplica não precisa de VIP
+  selector: {app: db}
+  ports:
+    - {name: pg, port: 5432, targetPort: pg}

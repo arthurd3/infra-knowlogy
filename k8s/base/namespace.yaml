@@ -1,0 +1,6 @@
+# Um namespace próprio: as NetworkPolicies fazem default-deny com
+# podSelector: {} — o escopo desse "tudo" é o namespace, e não o cluster.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: infra-knowlogy

@@ -1,0 +1,24 @@
+# kind-config.yaml — o cluster local do módulo Kubernetes.
+#
+# Um nó só: o assunto das primeiras lições é o porte da stack, não topologia de
+# cluster. O nó é um container Docker; `kind delete cluster` não deixa rastro.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: infra-knowlogy
+nodes:
+  - role: control-plane
+    # Pinado por digest como toda imagem do repositório (ADR 0004). O digest é
+    # OBRIGATÓRIO aqui por mais um motivo: a tag v1.37.0 é republicada a cada
+    # release do kind, e uma imagem de nó construída para outro kind não é
+    # garantida de funcionar. Atualize com `make pins`.
+    image: kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5
+    extraPortMappings:
+      # O Service NodePort do edge (30080) vira 127.0.0.1:8081 no host.
+      # - 8081, e não 8080: a stack Compose continua dona do 8080 — as lições
+      #   comparam as duas rodando AO MESMO TEMPO.
+      # - listenAddress 127.0.0.1 pela mesma razão do compose.yaml: porta
+      #   publicada em 0.0.0.0 fura o firewall via DNAT (OWASP 5a).
+      - containerPort: 30080
+        hostPort: 8081
+        listenAddress: "127.0.0.1"
+        protocol: TCP

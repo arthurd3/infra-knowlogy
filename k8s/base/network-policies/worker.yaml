@@ -1,0 +1,39 @@
+# ≙ o worker nas redes `data` + `egress` do Compose: é a EXCEÇÃO ESTUDADA que
+# tem saída para a internet (precisa baixar as URLs), enquanto db e cache não
+# têm nenhuma.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: worker
+spec:
+  podSelector:
+    matchLabels: {app: worker}
+  policyTypes: [Ingress, Egress]
+  # Sem regra de ingress: ninguém abre conexão para o worker (não há nem
+  # Service). policyTypes com Ingress e lista vazia = tudo negado.
+  egress:
+    - to:
+        - podSelector:
+            matchLabels: {app: db}
+      ports:
+        - {protocol: TCP, port: 5432}
+    - to:
+        - podSelector:
+            matchLabels: {app: cache}
+      ports:
+        - {protocol: TCP, port: 6379}
+    # Internet http/https, EXCETO as faixas privadas e a de link-local (onde
+    # vivem os metadados de nuvem tipo 169.254.169.254). O guard de SSRF da
+    # aplicação (enrich.py) continua sendo a primeira linha; isto é defesa em
+    # profundidade — se o guard regredir, a rede ainda bloqueia.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+              - 169.254.0.0/16
+      ports:
+        - {protocol: TCP, port: 80}
+        - {protocol: TCP, port: 443}

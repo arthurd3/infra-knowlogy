@@ -1,0 +1,31 @@
+# O agregador dos manifests: `kubectl apply -k k8s/base` aplica tudo isto.
+#
+# YAML puro de propósito (ADR 0007): nada de Helm/templating — o YAML que a
+# lição mostra é o YAML que roda. O Secret e os ConfigMaps NÃO estão aqui:
+# são gerados pelo k8s-up.sh a partir dos arquivos de stack/ (fonte única).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: infra-knowlogy
+
+resources:
+  - namespace.yaml
+  - db/statefulset.yaml
+  - db/service.yaml
+  - cache/deployment.yaml
+  - cache/service.yaml
+  - cache/pvc.yaml
+  - api/deployment.yaml
+  - api/service.yaml
+  - worker/deployment.yaml
+  - web/deployment.yaml
+  - web/service.yaml
+  - edge/deployment.yaml
+  - edge/service.yaml
+  - network-policies/default-deny.yaml
+  - network-policies/edge.yaml
+  - network-policies/api.yaml
+  - network-policies/worker.yaml
+  - network-policies/web.yaml
+  - network-policies/db.yaml
+  - network-policies/cache.yaml

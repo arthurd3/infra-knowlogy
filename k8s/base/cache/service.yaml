@@ -1,0 +1,10 @@
+# O nome `cache` no DNS do cluster (≙ REDIS_HOST que a aplicação já usa).
+apiVersion: v1
+kind: Service
+metadata:
+  name: cache
+  labels: {app: cache}
+spec:
+  selector: {app: cache}
+  ports:
+    - {name: redis, port: 6379, targetPort: redis}

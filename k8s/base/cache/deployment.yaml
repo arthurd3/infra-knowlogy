@@ -1,0 +1,79 @@
+# cache — o porte do serviço `cache` do compose.yaml.
+#
+# Deployment DE PROPÓSITO, e não StatefulSet: o Redis aqui é cache com política
+# de evicção — perder o conteúdo é aceitável por definição. Identidade estável
+# só onde há dado que importa (compare com o db).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cache
+  labels: {app: cache}
+spec:
+  replicas: 1
+  # O PVC é ReadWriteOnce e o AOF está desligado: recreate evita dois pods
+  # disputando o mesmo volume durante um update.
+  strategy: {type: Recreate}
+  selector:
+    matchLabels: {app: cache}
+  template:
+    metadata:
+      labels: {app: cache}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile: {type: RuntimeDefault}
+        # Diferença medida em relação ao Compose: lá, o volume nomeado herda o
+        # dono do diretório da imagem e o entrypoint (root) faz chown+setuid.
+        # Aqui o PV nasce do root, o chown do entrypoint falharia sem a
+        # capability CHOWN — então declaramos o usuário DIRETO no manifest
+        # (o entrypoint pula o ramo de root) e o fsGroup manda o kubelet
+        # ajustar o grupo do volume. Resultado: cap_drop ALL sem NENHUMA
+        # devolução, melhor que as SETGID/SETUID do compose.prod.
+        runAsUser: 999    # uid do usuário `redis` na imagem alpine
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+        - name: cache
+          image: redis:7-alpine@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf
+          # ≙ o `command:` do compose.yaml, argumento por argumento.
+          args:
+            - redis-server
+            - --save
+            - "60 1"
+            - --appendonly
+            - "no"
+            - --maxmemory
+            - 128mb
+            - --maxmemory-policy
+            - allkeys-lru
+          ports:
+            - {name: redis, containerPort: 6379}
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            # maxmemory (128mb) é o limite lógico; este é o físico, com folga
+            # para o alocador — senão o OOM killer chega antes da evicção.
+            limits: {cpu: "500m", memory: 192Mi}
+            requests: {memory: 64Mi}
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 5
+          livenessProbe:
+            tcpSocket: {port: redis}
+            periodSeconds: 10
+            failureThreshold: 6
+          volumeMounts:
+            - {name: redisdata, mountPath: /data}
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: redisdata
+          persistentVolumeClaim: {claimName: redisdata}
+        - name: tmp
+          emptyDir: {medium: Memory, sizeLimit: 16Mi}

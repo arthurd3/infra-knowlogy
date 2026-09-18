@@ -17,6 +17,9 @@ tools/reports/
 *.sbom.json
 *.trivy.json
 
+# Kubeconfig do cluster kind local (gerado pelo k8s-up.sh, varia por máquina)
+k8s/.kubeconfig
+
 # Editors / OS
 .DS_Store
 *.swp

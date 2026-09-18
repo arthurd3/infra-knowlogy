@@ -1,0 +1,58 @@
+# worker — o porte do serviço `worker` do compose.yaml.
+#
+# Sem Service: o worker só CONSOME (fila no Redis, escrita no Postgres, saída
+# para a internet). Ninguém abre conexão para ele — um Service seria um nome
+# DNS apontando para nada que escuta.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker
+  labels: {app: worker}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: worker}
+  template:
+    metadata:
+      labels: {app: worker}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile: {type: RuntimeDefault}
+      terminationGracePeriodSeconds: 30   # ≙ stop_grace_period: 30s
+      containers:
+        - name: worker
+          image: infra-knowlogy/worker-py:dev
+          imagePullPolicy: Never
+          env:
+            - {name: POSTGRES_HOST, value: db}
+            - {name: POSTGRES_DB, value: links}
+            - {name: POSTGRES_USER, value: links}
+            - {name: POSTGRES_PASSWORD_FILE, value: /run/secrets/postgres_password}
+            - {name: REDIS_HOST, value: cache}
+            - {name: LOG_LEVEL, value: INFO}
+          # Sem probes, como no Compose (que também não tem healthcheck aqui):
+          # um consumidor de fila sem porta não tem endpoint honesto para
+          # responder "estou saudável" — o sinal real é a fila andando, e isso
+          # o smoke test do k8s-verify prova de fora.
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            # O worker baixa páginas de terceiros: o teto de memória é a última
+            # linha de defesa se o limite de bytes da aplicação for contornado.
+            limits: {cpu: "1", memory: 384Mi}
+            requests: {memory: 64Mi}
+          volumeMounts:
+            - {name: secrets, mountPath: /run/secrets, readOnly: true}
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: secrets
+          secret: {secretName: postgres-password}
+        - name: tmp
+          emptyDir: {medium: Memory, sizeLimit: 64Mi}

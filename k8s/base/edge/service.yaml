@@ -1,0 +1,16 @@
+# O único caminho para dentro da stack, como no Compose.
+#
+# NodePort 30080 → o kind mapeia para 127.0.0.1:8081 no host (ver
+# kind-config.yaml). O nodePort é FIXO, e não alocado, porque o
+# extraPortMapping do kind aponta para um número — se o Kubernetes sorteasse
+# outro, o mapeamento quebraria em silêncio.
+apiVersion: v1
+kind: Service
+metadata:
+  name: edge
+  labels: {app: edge}
+spec:
+  type: NodePort
+  selector: {app: edge}
+  ports:
+    - {name: http, port: 8080, targetPort: http, nodePort: 30080}
