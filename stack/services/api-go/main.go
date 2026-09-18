@@ -76,6 +76,17 @@ func main() {
 		logger.Info("sinal recebido, desligando graciosamente")
 	}
 
+	// No Kubernetes, SIGTERM chega ANTES de o endpoint ser removido de todos os
+	// kube-proxies: fechar o listener imediatamente derruba as conexões que
+	// ainda chegam nessa janela de propagação. A pausa mantém o pod servindo
+	// enquanto o cluster para de mandar tráfego novo. Zero-downtime não é um
+	// dom do orquestrador — é uma cooperação da aplicação (ver a lição 1 da
+	// trilha kubernetes). No Compose o delay é 0 e nada muda.
+	if cfg.ShutdownDelay > 0 {
+		logger.Info("esperando a remoção do endpoint propagar", "delay", cfg.ShutdownDelay)
+		time.Sleep(cfg.ShutdownDelay)
+	}
+
 	// Drena as requisições em voo antes de sair. O timeout precisa ser MENOR do
 	// que o stop_grace_period do Compose, senão o SIGKILL chega no meio do drain.
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)

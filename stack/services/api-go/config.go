@@ -20,6 +20,7 @@ type Config struct {
 	RedisQueue      string
 	CacheTTL        time.Duration
 	ShutdownTimeout time.Duration
+	ShutdownDelay   time.Duration
 }
 
 func loadConfig() (Config, error) {
@@ -29,6 +30,12 @@ func loadConfig() (Config, error) {
 		RedisQueue:      getenv("REDIS_QUEUE", "links:enrich"),
 		CacheTTL:        getenvDuration("CACHE_TTL", 10*time.Minute),
 		ShutdownTimeout: getenvDuration("SHUTDOWN_TIMEOUT", 10*time.Second),
+		// Pausa entre receber SIGTERM e fechar o listener. Zero por padrão (o
+		// Compose tira o container do DNS antes do stop, ninguém mais conecta).
+		// No Kubernetes o pod recebe SIGTERM ANTES de o kube-proxy parar de
+		// mandar conexões novas para ele; fechar o listener na hora derruba as
+		// que chegam nessa janela. O Deployment define SHUTDOWN_DELAY=2s.
+		ShutdownDelay: getenvDuration("SHUTDOWN_DELAY", 0),
 	}
 
 	// A senha nunca chega por variável de ambiente: ela é lida de um arquivo
