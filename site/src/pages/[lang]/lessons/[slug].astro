@@ -32,7 +32,11 @@ const next = index >= 0 && index < siblings.length - 1 ? siblings[index + 1] : u
 // determinístico — sem tabela de tradução de URL.
 const altPath = `/${otherLang(lang)}/lessons/${entry.data.key}/`;
 const toc = headings.filter((h) => h.depth === 2 || h.depth === 3);
-const badgeClass = entry.data.track === "fundamentos" ? "badge--fund" : "badge--prod";
+const badgeClass = {
+  fundamentos: "badge--fund",
+  producao: "badge--prod",
+  kubernetes: "badge--k8s",
+}[entry.data.track];
 ---
 
 <Base lang={lang} title={`${entry.data.title} — ${t("site.title")}`}

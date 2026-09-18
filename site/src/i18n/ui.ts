@@ -21,10 +21,13 @@ export const ui = {
     "nav.stack": "A stack",
     "track.fundamentos": "Fundamentos",
     "track.producao": "Produção",
+    "track.kubernetes": "Kubernetes",
     "track.fundamentos.desc":
       "O que um container realmente é, como uma imagem é montada e por que o cache de build se comporta assim.",
     "track.producao.desc":
       "O que muda quando a stack precisa sobreviver a usuários reais: multi-stage, segurança, segredos e cadeia de suprimentos.",
+    "track.kubernetes.desc":
+      "A mesma stack, portada para um cluster kind: o que um orquestrador acrescenta — auto-cura, probes, rolling — medido lado a lado com o Compose.",
     "lesson.minutes": "min de leitura",
     "lesson.sources": "Fontes",
     "lesson.next": "Próxima",
@@ -50,10 +53,13 @@ export const ui = {
     "nav.stack": "The stack",
     "track.fundamentos": "Fundamentals",
     "track.producao": "Production",
+    "track.kubernetes": "Kubernetes",
     "track.fundamentos.desc":
       "What a container actually is, how an image is assembled, and why the build cache behaves the way it does.",
     "track.producao.desc":
       "What changes when the stack has to survive real users: multi-stage, security, secrets and supply chain.",
+    "track.kubernetes.desc":
+      "The same stack, ported to a kind cluster: what an orchestrator adds — self-healing, probes, rolling updates — measured side by side with Compose.",
     "lesson.minutes": "min read",
     "lesson.sources": "Sources",
     "lesson.next": "Next",
@@ -84,6 +90,9 @@ export function otherLang(lang: Lang): Lang {
 }
 
 /** Rótulo localizado de uma trilha. */
-export function trackLabel(lang: Lang, track: "fundamentos" | "producao"): string {
+export function trackLabel(
+  lang: Lang,
+  track: "fundamentos" | "producao" | "kubernetes",
+): string {
   return ui[lang][`track.${track}` as UIKey];
 }

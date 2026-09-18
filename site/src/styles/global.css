@@ -28,6 +28,7 @@
 
   --track-fund:    #0b6b5e;
   --track-prod:    #6a3fa0;
+  --track-k8s:     #1d63c2;
 
   --radius:        8px;
   --radius-lg:     14px;
@@ -69,6 +70,7 @@
 
     --track-fund:    #4dd4bd;
     --track-prod:    #b490e8;
+    --track-k8s:     #74a9f0;
 
     --shadow:        0 1px 2px rgb(0 0 0 / 0.4), 0 4px 14px rgb(0 0 0 / 0.25);
 
@@ -95,6 +97,7 @@
   --danger-soft:   #2e1917;
   --track-fund:    #4dd4bd;
   --track-prod:    #b490e8;
+  --track-k8s:     #74a9f0;
   --shadow:        0 1px 2px rgb(0 0 0 / 0.4), 0 4px 14px rgb(0 0 0 / 0.25);
   color-scheme: dark;
 }
@@ -242,6 +245,7 @@ blockquote {
 }
 .badge--fund { color: var(--track-fund); border-color: color-mix(in srgb, var(--track-fund) 35%, transparent); }
 .badge--prod { color: var(--track-prod); border-color: color-mix(in srgb, var(--track-prod) 35%, transparent); }
+.badge--k8s { color: var(--track-k8s); border-color: color-mix(in srgb, var(--track-k8s) 35%, transparent); }
 
 .card {
   display: block; text-decoration: none; color: inherit;

@@ -1,0 +1,157 @@
+---
+key: liveness-and-readiness
+lang: en
+track: kubernetes
+order: 3
+title: Liveness and readiness
+summary: They are two different questions — "is the process alive?" and "can I take traffic?" — and confusing them turns a database outage into a crash-loop of every replica. Measured with this stack's api.
+minutes: 12
+tags: [kubernetes, probes, liveness, readiness, healthcheck]
+sources:
+  - label: "Kubernetes Docs — Liveness, Readiness and Startup Probes"
+    url: "https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#container-probes"
+  - label: "Kubernetes Docs — Configure Probes"
+    url: "https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/"
+---
+
+This stack's api has exposed two health endpoints since the Docker module, and
+the comment in `server.go` already said the essential part:
+
+```go
+// handleHealthz is LIVENESS: "is the process alive?". It never touches an
+// external dependency. If it checked Postgres, a database outage would make
+// the orchestrator kill and restart every api replica — replicas that are
+// perfectly healthy and just need to wait for the database to come back.
+// Restarting does not fix a database that is down.
+```
+
+Under Compose that separation was good hygiene with little practical effect —
+the healthcheck inherited from the image called `/readyz` and the outcome was a
+status in `docker ps`. Under Kubernetes it becomes **mechanics**, because each
+question has an enforcer with different powers:
+
+| Probe | Question | When it fails… |
+|---|---|---|
+| `livenessProbe` → `/healthz` | is the process alive? | the kubelet **restarts** the container (and counts) |
+| `readinessProbe` → `/readyz` | do the dependencies answer? | the pod **leaves the Service Endpoints** — no restart |
+
+## The kubelet inherits nothing
+
+Before the mechanics, the prerequisite (lesson 2 showed it in detail): the
+kubelet **ignores the Dockerfile's `HEALTHCHECK`**. Both probes exist because
+they are declared in `k8s/base/api/deployment.yaml`:
+
+```yaml
+livenessProbe:
+  httpGet: {path: /healthz, port: http}
+  periodSeconds: 10
+  failureThreshold: 3
+readinessProbe:
+  httpGet: {path: /readyz, port: http}
+  periodSeconds: 5
+  failureThreshold: 3
+```
+
+`httpGet`, not `exec`: the image is distroless — there is no shell to run a
+command, and it is the kubelet making the request, from outside the container.
+
+## The database outage, measured
+
+`k8s-verify` stages the classic incident: it scales Postgres to **zero
+replicas** and watches what happens to the api. The predicted arithmetic:
+`periodSeconds: 5` × `failureThreshold: 3` — within **15 s** the replica must
+leave the load balancing. Measured on this machine: **11 s**.
+
+Both halves of the result matter equally:
+
+1. **The api left the Endpoints.** The edge starts getting clean 502/503 from
+   the proxy on `/api/*`, instead of requests hanging on replicas that have no
+   way to answer.
+2. **`restartCount` stayed at 0.** No replica was killed. When `k8s-verify`
+   scales the database back up, readiness passes again and the replicas
+   **rejoin the load balancing on their own** — no restart, no intervention,
+   no crash log.
+
+<RunIt title="Stage the database outage yourself">
+
+```bash
+make k8s-up
+export KUBECONFIG=k8s/.kubeconfig
+
+kubectl -n infra-knowlogy scale statefulset/db --replicas=0
+kubectl -n infra-knowlogy get pods -l app=api --watch
+# READY goes from 1/1 to 0/1 on both replicas… and RESTARTS stays at 0.
+
+kubectl -n infra-knowlogy get endpointslices -l kubernetes.io/service-name=api
+# the endpoint list drains — THIS is what takes the api out of the balancer
+
+kubectl -n infra-knowlogy scale statefulset/db --replicas=1
+kubectl -n infra-knowlogy get pods -l app=api --watch
+# everything returns to 1/1, with no restart along the way
+```
+
+</RunIt>
+
+## The anti-pattern, counted
+
+Now the wrong version — liveness pointing at `/readyz`. It looks harmless
+("checking more things is safer, right?") and it is the most classic incident
+amplifier in Kubernetes: the database goes down, liveness fails, the kubelet
+**kills perfectly healthy replicas**, they come back, the database is still
+down, they die again — a crash-loop with growing backoff. When the database
+returns, your replicas are mid-way through a minutes-long backoff, and the
+outage **outlives its cause**.
+
+<RunIt title="Measure the damage of the anti-pattern (and undo it)">
+
+```bash
+export KUBECONFIG=k8s/.kubeconfig
+
+# point liveness at /readyz — the deliberate anti-pattern:
+kubectl -n infra-knowlogy patch deployment api --type json -p '[
+  {"op":"replace","path":"/spec/template/spec/containers/0/livenessProbe/httpGet/path","value":"/readyz"}
+]'
+kubectl -n infra-knowlogy rollout status deployment/api
+
+kubectl -n infra-knowlogy scale statefulset/db --replicas=0
+sleep 90
+kubectl -n infra-knowlogy get pods -l app=api
+# RESTARTS climbing and STATUS flapping into CrashLoopBackOff:
+# healthy replicas being executed for a database that is not their fault.
+
+# undo: the database back up and the correct manifest over the patch
+kubectl -n infra-knowlogy scale statefulset/db --replicas=1
+kubectl apply -k k8s/base
+```
+
+</RunIt>
+
+<Callout type="danger" label="The rule that should outlive this lesson">
+Liveness answers ONE thing: does this process need replacing? A deadlock, an
+infinite loop — yes. A dependency that is down — no, because restarting the
+dependent does not fix the dependency. Every check of a database, queue or
+neighboring service belongs in readiness, whose punishment — leaving the load
+balancing — reverses the instant the dependency returns.
+</Callout>
+
+## The three pieces of fine print
+
+Three subtleties the port of this stack hit in practice, to carry along with
+the rule:
+
+- **A green probe does not prove reachability.** The probe originates at the
+  kubelet, on the node, and does not traverse NetworkPolicy — the `web` pod sat
+  "Ready" while no neighbor could reach it (the full story is in lesson 2).
+  Only real traffic proves the full path.
+- **Readiness does not protect against the listener closing.** During a rolling
+  update, SIGTERM reaches the pod before kube-proxy stops sending it new
+  connections; the api waits (`SHUTDOWN_DELAY=2s`) before closing its listener.
+  Probes measure steady state; the switchover window is a different problem.
+- **The worker has no probe at all — on purpose.** A queue consumer with no
+  port has no honest endpoint to answer "I am healthy"; the real signal is the
+  queue moving, and that is proven by the gate's smoke test, from the outside.
+  A fake probe is worse than no probe.
+
+`make k8s-verify` runs all of this — the database outage, the counted restart,
+the unassisted recovery — on every execution. If this lesson is lying, the gate
+fails before you get to read it.

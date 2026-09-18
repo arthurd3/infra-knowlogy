@@ -1,0 +1,157 @@
+---
+key: liveness-and-readiness
+lang: pt
+track: kubernetes
+order: 3
+title: Liveness e readiness
+summary: São duas perguntas diferentes — "o processo está vivo?" e "posso receber tráfego?" — e confundi-las transforma a queda de um banco num crash-loop de todas as réplicas. Medido com a api desta stack.
+minutes: 12
+tags: [kubernetes, probes, liveness, readiness, healthcheck]
+sources:
+  - label: "Kubernetes Docs — Liveness, Readiness and Startup Probes"
+    url: "https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#container-probes"
+  - label: "Kubernetes Docs — Configure Probes"
+    url: "https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/"
+---
+
+A api desta stack expõe dois endpoints de saúde desde o módulo Docker, e o
+comentário no `server.go` já dizia o essencial:
+
+```go
+// handleHealthz é LIVENESS: "o processo está vivo?". Nunca toca em dependência
+// externa. Se ele checasse o Postgres, uma queda do banco faria o orquestrador
+// matar e reiniciar todas as réplicas da API — que estão perfeitamente sadias e
+// só precisam esperar o banco voltar. Reiniciar não conserta um banco fora do ar.
+```
+
+No Compose essa separação era boa higiene com pouco efeito prático — o
+healthcheck herdado da imagem chamava `/readyz` e o resultado era um estado no
+`docker ps`. No Kubernetes ela vira **mecânica**, porque cada pergunta tem um
+executor com poderes diferentes:
+
+| Probe | Pergunta | Quando falha… |
+|---|---|---|
+| `livenessProbe` → `/healthz` | o processo está vivo? | o kubelet **reinicia** o container (e conta) |
+| `readinessProbe` → `/readyz` | as dependências respondem? | o pod **sai dos Endpoints** do Service — sem restart |
+
+## O kubelet não herda nada
+
+Antes da mecânica, o pré-requisito (a lição 2 mostrou em detalhe): o kubelet
+**ignora o `HEALTHCHECK` do Dockerfile**. As duas probes existem porque estão
+declaradas no `k8s/base/api/deployment.yaml`:
+
+```yaml
+livenessProbe:
+  httpGet: {path: /healthz, port: http}
+  periodSeconds: 10
+  failureThreshold: 3
+readinessProbe:
+  httpGet: {path: /readyz, port: http}
+  periodSeconds: 5
+  failureThreshold: 3
+```
+
+`httpGet`, e não `exec`: a imagem é distroless — não há shell para executar um
+comando, e é o kubelet quem faz a requisição, de fora do container.
+
+## A queda do banco, medida
+
+O `k8s-verify` encena o incidente clássico: escala o Postgres para **zero
+réplicas** e observa o que acontece com a api. A aritmética prevista:
+`periodSeconds: 5` × `failureThreshold: 3` — em até **15 s** a réplica deve
+sair do balanceamento. Medido nesta máquina: **11 s**.
+
+E as duas metades do resultado são igualmente importantes:
+
+1. **A api saiu dos Endpoints.** O edge passa a receber 502/503 limpos do
+   proxy em `/api/*`, em vez de timeouts pendurados em réplicas que não têm
+   como responder.
+2. **`restartCount` continuou em 0.** Nenhuma réplica foi morta. Quando o
+   `k8s-verify` escala o banco de volta, a readiness volta a passar e as
+   réplicas **reentram no balanceamento sozinhas** — sem restart, sem
+   intervenção, sem log de crash.
+
+<RunIt title="Encene a queda do banco você mesmo">
+
+```bash
+make k8s-up
+export KUBECONFIG=k8s/.kubeconfig
+
+kubectl -n infra-knowlogy scale statefulset/db --replicas=0
+kubectl -n infra-knowlogy get pods -l app=api --watch
+# READY vai de 1/1 para 0/1 nas duas réplicas… e RESTARTS fica em 0.
+
+kubectl -n infra-knowlogy get endpointslices -l kubernetes.io/service-name=api
+# a lista de endpoints esvazia — é ISTO que tira a api do balanceador
+
+kubectl -n infra-knowlogy scale statefulset/db --replicas=1
+kubectl -n infra-knowlogy get pods -l app=api --watch
+# tudo volta a 1/1, sem nenhum restart no meio
+```
+
+</RunIt>
+
+## O anti-padrão, contado
+
+Agora a versão errada — a liveness apontando para `/readyz`. Parece inofensivo
+("checar mais coisas é mais seguro, não?") e é o amplificador de incidente mais
+clássico do Kubernetes: o banco cai, a liveness reprova, o kubelet **mata
+réplicas perfeitamente sadias**, elas voltam, o banco continua fora, morrem de
+novo — crash-loop com backoff crescente. Quando o banco volta, suas réplicas
+estão no meio de um backoff de minutos, e a indisponibilidade **sobrevive à
+causa**.
+
+<RunIt title="Meça o estrago do anti-padrão (e desfaça)">
+
+```bash
+export KUBECONFIG=k8s/.kubeconfig
+
+# aponte a liveness para /readyz — o anti-padrão deliberado:
+kubectl -n infra-knowlogy patch deployment api --type json -p '[
+  {"op":"replace","path":"/spec/template/spec/containers/0/livenessProbe/httpGet/path","value":"/readyz"}
+]'
+kubectl -n infra-knowlogy rollout status deployment/api
+
+kubectl -n infra-knowlogy scale statefulset/db --replicas=0
+sleep 90
+kubectl -n infra-knowlogy get pods -l app=api
+# RESTARTS incrementando e STATUS oscilando para CrashLoopBackOff:
+# réplicas sadias sendo executadas por causa de um banco que não é culpa delas.
+
+# desfaça: o banco de volta e o manifest correto por cima do patch
+kubectl -n infra-knowlogy scale statefulset/db --replicas=1
+kubectl apply -k k8s/base
+```
+
+</RunIt>
+
+<Callout type="danger" label="A regra que sobrevive a esta lição">
+Liveness responde por UMA coisa: este processo precisa ser substituído? Um
+deadlock, um loop infinito — sim. Uma dependência fora do ar — não, porque
+reiniciar o dependente não conserta a dependência. Toda checagem de banco,
+fila ou serviço vizinho pertence à readiness, cuja punição — sair do
+balanceamento — é reversível no instante em que a dependência volta.
+</Callout>
+
+## As três letras miúdas
+
+Três sutilezas que o porte desta stack encontrou na prática, para levar junto
+com a regra:
+
+- **Probe verde não prova alcançabilidade.** A probe parte do kubelet, no nó, e
+  não atravessa NetworkPolicy — o pod do `web` ficou "Ready" enquanto nenhum
+  vizinho o alcançava (a história completa está na lição 2). O caminho
+  completo, só o tráfego real prova.
+- **Readiness não protege contra o listener fechar.** Durante um rolling
+  update, o SIGTERM chega ao pod antes de o kube-proxy parar de mandar
+  conexões novas; a api espera (`SHUTDOWN_DELAY=2s`) antes de fechar o
+  listener. Probes medem o regime permanente; a janela de troca é outro
+  problema.
+- **O worker não tem probe nenhuma — de propósito.** Um consumidor de fila sem
+  porta não tem endpoint honesto para responder "estou saudável"; o sinal real
+  é a fila andando, e quem prova isso é o smoke test do portão, de fora. Probe
+  de mentira é pior que probe nenhuma.
+
+O `make k8s-verify` roda tudo isto — a queda do banco, o restart contado, a
+recuperação sozinha — em toda execução. Se esta lição estiver mentindo, o
+portão reprova antes de você ler.

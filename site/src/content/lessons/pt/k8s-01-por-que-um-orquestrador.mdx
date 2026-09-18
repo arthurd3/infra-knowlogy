@@ -1,0 +1,200 @@
+---
+key: why-an-orchestrator
+lang: pt
+track: kubernetes
+order: 1
+title: Por que um orquestrador
+summary: O ADR 0001 escolheu Compose e listou o preço da escolha. Este módulo porta a mesma stack para um cluster kind e mede esse preço, item por item — auto-cura, restart contado e rolling update sem downtime.
+minutes: 12
+tags: [kubernetes, kind, orchestration, self-healing, rolling-update]
+sources:
+  - label: "Kubernetes Docs — Deployments"
+    url: "https://kubernetes.io/docs/concepts/workloads/controllers/deployment/"
+  - label: "kind — Quick Start"
+    url: "https://kind.sigs.k8s.io/docs/user/quick-start/"
+  - label: "Kubernetes Docs — Pod Lifecycle"
+    url: "https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/"
+---
+
+O módulo Docker terminou com uma decisão registrada: **Compose, e não Kubernetes**
+(ADR 0001). A decisão veio com uma lista honesta do que estávamos abrindo mão —
+o Compose não recria um container que sumiu, não faz deploy sem downtime, não
+reagenda nada quando uma máquina morre. E veio com uma prescrição para o futuro:
+
+> um módulo futuro sobre orquestração deve portar **esta mesma stack** para
+> Kubernetes, e não introduzir uma stack nova — a comparação lado a lado é boa
+> justamente porque a aplicação é a mesma.
+
+Este módulo é essa prescrição cumprida. Os mesmos seis serviços — `edge`, `api`,
+`worker`, `web`, `db`, `cache` —, as mesmas imagens construídas pelos mesmos
+Dockerfiles, o mesmo Caddyfile sem mudar uma linha. O que muda é o orquestrador
+por baixo. E, como em todo o resto deste repositório, cada item daquela lista de
+limites vira um **número medido**, não uma frase de marketing.
+
+## O cluster cabe num container
+
+Usamos **kind** (Kubernetes-in-Docker): o "nó" do cluster é um container Docker
+rodando kubelet, containerd e o control plane inteiro. Nada é instalado no host
+além de dois binários (`kind`, `kubectl`), e destruir o cluster é destruir um
+container.
+
+```bash
+make k8s-up      # cria o cluster, carrega as imagens, aplica os manifests
+make k8s-down    # apaga tudo, sem deixar rastro
+```
+
+Na máquina em que este módulo foi escrito, medido pelo `make k8s-verify`
+(os números ficam em `site/src/data/k8s-measured.json`): criar o cluster do zero
+até o nó ficar pronto levou **25 s**; do `kubectl apply` até os seis serviços
+responderem saúde, **22 s**. Não é instantâneo como um `docker
+compose up`, e não precisa ser — o que compramos com esses segundos é o assunto
+desta lição.
+
+<Callout type="why" label="Por que kind e não minikube/k3s">
+O kind roda o cluster dentro de containers — que é exatamente o assunto do
+módulo 1 —, cria e destrói em segundos e é a ferramenta de teste do próprio
+projeto Kubernetes. E há uma exigência dura: **kind ≥ 0.23**, porque antes disso
+NetworkPolicy era aceita pela API e ignorada em silêncio. A partir da 0.23 o CNI
+embutido aplica as policies — e o portão do módulo prova isso na prática.
+Ver docs/adr/0007.
+</Callout>
+
+## O que o Compose já fazia igual
+
+Sejamos justos antes de vender o orquestrador. Se o **processo** do worker
+morre, o Docker com `restart: unless-stopped` o ressuscita — e o kubelet também
+(`restartPolicy: Always`). Crash de processo não é o diferencial; os dois
+recuperam.
+
+A diferença começa quando o problema não é o processo, e sim o **container
+inteiro** — ou a máquina embaixo dele.
+
+## Prova 1 — o controller recria o que sumiu
+
+No Compose, `docker rm -f` num container é definitivo: a política de restart
+vive no container, e um container removido não tem mais quem o defenda. Ele só
+volta quando alguém rodar `docker compose up` de novo. No Kubernetes, o pod não
+é a unidade que você gerencia — o **Deployment** declara "quero 2 réplicas da
+api", e um controller compara desejo com realidade o tempo todo.
+
+O `k8s-verify` deleta um pod da api e cronometra até o substituto ficar
+**Ready**: **2 s**.
+
+<RunIt title="Delete um pod e veja o controller repor">
+
+```bash
+make k8s-up
+export KUBECONFIG=k8s/.kubeconfig
+
+kubectl -n infra-knowlogy get pods -l app=api
+kubectl -n infra-knowlogy delete pod <um-dos-pods-da-api> &
+kubectl -n infra-knowlogy get pods -l app=api --watch
+# um pod novo aparece ANTES do velho terminar de morrer
+
+# o equivalente no módulo Docker:
+docker compose -f stack/compose.yaml -f stack/compose.prod.yaml up -d
+docker rm -f infra-knowlogy-api-1
+docker compose -f stack/compose.yaml ps api   # sumiu; ninguém o recria
+```
+
+</RunIt>
+
+É o mesmo mecanismo que responde por uma máquina morta: num cluster de verdade
+com vários nós, os pods do nó perdido são reagendados para os vivos. O kind de
+um nó só não pode demonstrar isso — mas o mecanismo que o faz é literalmente o
+que você acabou de assistir.
+
+## Prova 2 — restart é contado, não silencioso
+
+No módulo Docker, o `restart: unless-stopped` recupera crashes **em silêncio**:
+o container reinicia e, a menos que você compare o `docker ps` de antes e
+depois, nada registra que aquilo aconteceu. O Kubernetes expõe o contador:
+
+```text
+NAME                      READY   STATUS    RESTARTS      AGE
+worker-54f54d8f9b-d4t8k   1/1     Running   1 (12s ago)   9m
+```
+
+O `k8s-verify` termina o processo do worker por dentro e confere que o
+`restartCount` incrementou. Um serviço que reinicia toda madrugada deixa de ser
+uma lenda ("acho que às vezes ele cai?") e vira um número no `kubectl get pods`.
+
+<Callout type="trap" label="SIGKILL no PID 1 não funciona — de novo">
+A primeira versão desse teste fazia <code>os.kill(1, 9)</code> de dentro do
+container. Não aconteceu nada: o kernel **ignora SIGKILL enviado ao PID 1 a
+partir do próprio namespace** — o mesmo tratamento especial de sinais que a
+lição 3 do módulo Docker mediu no <code>docker stop</code>. O teste usa SIGTERM,
+que é entregue porque o worker instala handler. A física do PID 1 não muda de
+orquestrador.
+</Callout>
+
+## Prova 3 — deploy sem derrubar ninguém
+
+Este era o item mais caro da lista do ADR 0001. No Compose, trocar a imagem da
+api é `up -d --force-recreate`: o container velho morre, o novo sobe, e quem
+estava no meio de uma requisição recebe o erro na cara. No Kubernetes, o
+Deployment da api declara:
+
+```yaml
+replicas: 2
+strategy:
+  type: RollingUpdate
+  rollingUpdate: {maxUnavailable: 0, maxSurge: 1}
+```
+
+"Nunca fique abaixo de 2 réplicas prontas; crie a nova ANTES de matar a velha."
+O `k8s-verify` roda um loop de requisições contra a api **durante** um
+`kubectl rollout restart` e conta as falhas: **27 requisições, 0
+falharam**.
+
+<RunIt title="Assista a um deploy com tráfego passando">
+
+```bash
+export KUBECONFIG=k8s/.kubeconfig
+CODE=$(curl -s -X POST http://127.0.0.1:8081/api/links \
+  -H 'content-type: application/json' -d '{"url":"https://example.com/"}' \
+  | python3 -c 'import sys,json; print(json.load(sys.stdin)["code"])')
+
+while :; do curl -s -o /dev/null -w '%{http_code} ' \
+  "http://127.0.0.1:8081/api/links/$CODE"; sleep 0.1; done &
+
+kubectl -n infra-knowlogy rollout restart deployment/api
+kubectl -n infra-knowlogy rollout status deployment/api
+kill %1   # só 200 no terminal — nenhuma requisição caiu no chão
+```
+
+</RunIt>
+
+<Callout type="trap" label="Zero-downtime exige cooperação da aplicação">
+A primeira versão deste teste derrubava **1 requisição em 26**. Causa: o
+SIGTERM chega ao pod ANTES de o kube-proxy parar de mandar conexões novas para
+ele, e a api fechava o listener na hora — quem caiu nessa janela de propagação
+levou connection refused. A correção está na própria api
+(`SHUTDOWN_DELAY=2s`): ao receber SIGTERM, ela continua servindo por 2s antes
+de fechar. O manual chama isso de preStop sleep — que numa imagem distroless
+não existe, porque não há shell para rodar <code>sleep</code>. O orquestrador
+promete o rolling; quem entrega o "sem downtime" é a aplicação.
+</Callout>
+
+## O veredito continua o mesmo
+
+Nada disso revoga o ADR 0001. Um host bem configurado com Compose continua
+atendendo a maioria dos projetos, e a lista acima é exatamente o critério de
+decisão: quando "container que some tem que voltar sozinho", "restart precisa
+ser auditável" e "deploy não pode derrubar requisição" viram requisitos do SEU
+sistema — é aí que o orquestrador paga o próprio custo. Antes disso, ele é
+YAML a mais.
+
+O resto da trilha mostra **como** o porte foi feito: a lição 2 traduz cada bloco
+do `compose.yaml` para o objeto Kubernetes equivalente, e a lição 3 disseca as
+probes — onde mora a diferença mais mal-compreendida entre os dois mundos.
+
+<RunIt title="Rode o portão inteiro do módulo">
+
+```bash
+make k8s-verify
+# cria o cluster do zero, prova tudo o que esta lição afirmou e o destrói.
+# As medições ficam em site/src/data/k8s-measured.json.
+```
+
+</RunIt>

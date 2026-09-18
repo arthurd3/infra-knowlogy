@@ -1,0 +1,183 @@
+---
+key: from-compose-to-deployment
+lang: pt
+track: kubernetes
+order: 2
+title: Do compose.yaml ao Deployment
+summary: O porte da stack, bloco a bloco — serviço vira Deployment + Service, rede vira NetworkPolicy, segredo-arquivo vira Secret montado. Com a contagem de linhas que o ADR 0001 previu e as duas pegadinhas que o porte revelou.
+minutes: 14
+tags: [kubernetes, deployment, service, networkpolicy, secrets, kustomize]
+sources:
+  - label: "Kubernetes Docs — Services"
+    url: "https://kubernetes.io/docs/concepts/services-networking/service/"
+  - label: "Kubernetes Docs — Network Policies"
+    url: "https://kubernetes.io/docs/concepts/services-networking/network-policies/"
+  - label: "Kubernetes Docs — Secrets"
+    url: "https://kubernetes.io/docs/concepts/configuration/secret/"
+---
+
+O porte inteiro vive em `k8s/base/` — YAML puro, sem Helm, agregado por um
+`kustomization.yaml` e aplicado com `kubectl apply -k`. A tradução é mecânica na
+superfície e cheia de física por baixo. Esta lição percorre as duas camadas.
+
+## O mapa da tradução
+
+| No Compose | No Kubernetes | Onde está |
+|---|---|---|
+| `services.api` | Deployment + Service | `k8s/base/api/` |
+| `services.db` (volume nomeado) | **StatefulSet** + volumeClaimTemplate | `k8s/base/db/` |
+| `services.cache` (volume nomeado) | Deployment + PVC | `k8s/base/cache/` |
+| `networks:` edge/data/egress | **NetworkPolicies** | `k8s/base/network-policies/` |
+| `secrets:` (arquivo) | Secret montado em `/run/secrets/` | gerado pelo `k8s-up.sh` |
+| `deploy.resources.limits` | `resources.limits` | em cada workload |
+| `cap_drop`/`read_only`/no-new-privileges | `securityContext` | em cada workload |
+| `stop_grace_period` | `terminationGracePeriodSeconds` | em cada workload |
+| porta publicada em 127.0.0.1 | NodePort + `extraPortMappings` do kind | `k8s/kind/kind-config.yaml` |
+
+Duas coisas **não mudaram**: as imagens (são as mesmas, carregadas no cluster
+com `kind load`) e a aplicação. A api continua lendo
+`POSTGRES_PASSWORD_FILE=/run/secrets/postgres_password`; o que mudou foi quem
+monta o arquivo ali — o Compose montava do `stack/secrets/`, o kubelet monta de
+um Secret **gerado a partir do mesmo arquivo** pelo `k8s-up.sh`. Fonte única,
+zero drift.
+
+## O custo em linhas, medido
+
+O ADR 0001 argumentou que o YAML do Kubernetes descreve a mesma coisa com mais
+conceitos. Agora dá para medir. Contando linhas não vazias e sem comentários
+(`grep -vc '^\s*#\|^\s*$'`):
+
+| O serviço `api` | linhas |
+|---|---|
+| bloco `api` do `compose.yaml` + overlay do `compose.prod.yaml` | **34** |
+| `deployment.yaml` + `service.yaml` + `network-policies/api.yaml` | **96** |
+
+Quase **3×** — e é uma troca, não um desperdício. As 96 linhas declaram coisas
+que as 34 deixavam implícitas: quantas réplicas, o que é estar "pronto", quem
+pode falar com quem porta a porta, o que acontece durante um update. O Compose
+era mais curto porque decidia menos.
+
+<Callout type="why" label="Por que YAML puro e não Helm">
+Porque o YAML final é o material didático. Templating esconde exatamente o
+arquivo que esta lição precisa mostrar. `kubectl apply -k` (kustomize embutido)
+dá o agregador sem introduzir uma linguagem de template. Ver docs/adr/0007.
+</Callout>
+
+## DNS: a parte que portou sozinha
+
+No módulo Docker, toda rede bridge nomeada tem um DNS embutido que resolve nome
+de serviço. No Kubernetes, um **Service** chamado `db` vira o nome DNS `db` no
+namespace. Consequência prática: o Caddyfile do edge — que fala com `api:8080` e
+`web:8080` — foi montado no cluster **sem mudar um byte**. É o mesmo arquivo de
+`stack/services/edge/Caddyfile`, virado ConfigMap pelo `k8s-up.sh`.
+
+<RunIt title="Prove que o nome resolve igual nos dois mundos">
+
+```bash
+# Compose:
+docker compose -f stack/compose.yaml -f stack/compose.prod.yaml \
+  exec worker getent hosts db
+
+# Kubernetes:
+export KUBECONFIG=k8s/.kubeconfig
+kubectl -n infra-knowlogy exec deploy/worker -- getent hosts db
+# IPs diferentes, contrato idêntico: "db" resolve onde a aplicação precisa.
+```
+
+</RunIt>
+
+## A pegadinha nº 1: o kubelet ignora o HEALTHCHECK
+
+No módulo Docker, definimos a saúde da api **dentro da imagem** (instrução
+`HEALTHCHECK` no Dockerfile) e o Compose a herdou — elogiamos isso na época:
+"definir a saúde junto do artefato é melhor do que espalhá-la pelos
+orquestradores". O Kubernetes discorda frontalmente: **o kubelet ignora o
+HEALTHCHECK da imagem**. Sem probes declaradas no manifest, um pod com o
+processo travado continua `Running` e `Ready`, recebendo tráfego.
+
+<RunIt title="Veja a instrução existir na imagem e sumir no pod">
+
+```bash
+docker image inspect infra-knowlogy/api-go:dev \
+  --format '{{json .Config.Healthcheck}}'   # está lá, gravada na imagem
+
+export KUBECONFIG=k8s/.kubeconfig
+kubectl -n infra-knowlogy describe pod -l app=api | grep -iE 'liveness|readiness'
+# o que aparece aqui veio do deployment.yaml — e de lugar NENHUM mais
+```
+
+</RunIt>
+
+Por isso o `deployment.yaml` da api declara `livenessProbe` e `readinessProbe`
+explícitas — e a diferença entre as duas é o assunto inteiro da lição 3.
+
+## Redes viram NetworkPolicy — e a pegadinha nº 2
+
+No Compose, a topologia era **posicional**: o `db` só estava na rede `data`
+(com `internal: true`), logo o edge não o alcançava e ele não alcançava a
+internet. No Kubernetes todo pod enxerga todo pod por padrão; a topologia
+precisa ser **declarada**. O espelho fica em `k8s/base/network-policies/`:
+um `default-deny` para o namespace inteiro e uma policy por serviço devolvendo
+só o estritamente necessário — o mesmo desenho do `compose.prod.yaml`, agora na
+camada de rede.
+
+```bash
+# a prova espelho do módulo 1, nos dois mundos:
+docker compose -f stack/compose.yaml -f stack/compose.prod.yaml \
+  exec edge sh -c 'nc -z -w2 db 5432'                       # falha
+kubectl -n infra-knowlogy exec deploy/edge -- nc -z -w2 db 5432   # falha igual
+```
+
+<Callout type="trap" label="Probe verde não prova alcançabilidade">
+Durante o porte, o `web` ficou sem policy própria — só com o default-deny. O
+site respondia **502** atrás do edge… com o pod do web **Ready e saudável**.
+Como? A probe do kubelet parte do **nó**, não de outro pod, e não passa pelas
+NetworkPolicies. O pod jurava estar ótimo enquanto nenhum vizinho conseguia
+falar com ele. A moral: probe mede o pod por dentro; alcançabilidade entre pods
+só o tráfego real (ou o portão) prova. O `k8s-verify` testa o caminho completo
+por fora justamente por isso.
+</Callout>
+
+O worker segue sendo a exceção estudada: a policy dele libera saída para a
+internet (portas 80/443), **exceto** as faixas privadas e a link-local
+(`169.254.0.0/16`, onde vivem metadados de nuvem). É defesa em profundidade por
+baixo do guard de SSRF da aplicação — se o guard regredir um dia, a rede ainda
+segura, e o `k8s-verify` testa as duas camadas.
+
+## A pegadinha nº 3: volume de PV nasce do root
+
+A armadilha 10 do módulo Docker: volume nomeado herda o dono do diretório que
+já existe na imagem. O primo dela no Kubernetes: um PersistentVolume novo nasce
+**do root**, e o entrypoint do Redis — que no Compose nem precisava de chown —
+tentou `chown /data` e morreu em CrashLoopBackOff, porque tínhamos derrubado a
+capability CHOWN. A correção portável está no `cache/deployment.yaml`:
+
+```yaml
+securityContext:
+  runAsUser: 999      # o usuário `redis` da imagem — o entrypoint pula o ramo de root
+  fsGroup: 1000       # o kubelet ajusta o grupo do volume na montagem
+```
+
+Resultado melhor que o original: o cache roda com `capabilities.drop: [ALL]`
+**sem devolver nenhuma** — no Compose ele precisava de SETGID/SETUID para o
+entrypoint trocar de usuário.
+
+## O que o porte não resolve
+
+`kubectl apply -k` no lugar de `docker compose up` não muda a natureza dos
+problemas de produção — muda onde eles se declaram. Recursos continuam
+limitados (agora em `resources.limits`), o rootfs continua read-only (agora em
+`securityContext`), o segredo continua sendo um arquivo que nunca aparece em
+`env` (o `k8s-verify` confere no spec e no processo). Quem fez o módulo 1
+reconhece cada peça — é essa a graça de portar a mesma stack.
+
+<RunIt title="Compare os dois mundos lado a lado, rodando juntos">
+
+```bash
+make up        # a stack Compose em http://127.0.0.1:8080
+make k8s-up    # a MESMA stack num cluster kind em http://127.0.0.1:8081
+curl -s http://127.0.0.1:8080/edge-health -o /dev/null -w '%{http_code}\n'
+curl -s http://127.0.0.1:8081/edge-health -o /dev/null -w '%{http_code}\n'
+```
+
+</RunIt>
