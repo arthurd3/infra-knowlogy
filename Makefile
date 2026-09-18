@@ -30,6 +30,8 @@ init: ## Gera stack/.env e os secrets locais a partir dos .example
 .PHONY: up
 up: init ## Sobe a stack endurecida (base + prod) e espera ficar saudável
 	$(COMPOSE_PROD) up -d --wait
+	@port=$$(grep -E '^EDGE_PORT=' stack/.env 2>/dev/null | cut -d= -f2); \
+	printf '\n  site no ar: \033[36mhttp://127.0.0.1:%s\033[0m\n\n' "$${port:-8080}"
 
 .PHONY: dev
 dev: init ## Sobe em modo desenvolvimento com hot-reload (compose watch)
@@ -38,6 +40,12 @@ dev: init ## Sobe em modo desenvolvimento com hot-reload (compose watch)
 .PHONY: obs
 obs: init ## Sobe a stack + observabilidade (Prometheus/Grafana/Loki)
 	$(COMPOSE_OBS) up -d --wait
+	@port=$$(grep -E '^EDGE_PORT=' stack/.env 2>/dev/null | cut -d= -f2); \
+	gport=$$(grep -E '^GRAFANA_PORT=' stack/.env 2>/dev/null | cut -d= -f2); \
+	pport=$$(grep -E '^PROMETHEUS_PORT=' stack/.env 2>/dev/null | cut -d= -f2); \
+	printf '\n  site no ar:  \033[36mhttp://127.0.0.1:%s\033[0m\n' "$${port:-8080}"; \
+	printf '  grafana:     \033[36mhttp://127.0.0.1:%s\033[0m\n' "$${gport:-3000}"; \
+	printf '  prometheus:  \033[36mhttp://127.0.0.1:%s\033[0m\n\n' "$${pport:-9090}"
 
 .PHONY: down
 down: ## Derruba a stack (mantém os volumes)
