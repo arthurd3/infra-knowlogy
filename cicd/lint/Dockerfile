@@ -18,8 +18,13 @@ COPY . /work
 
 # `find -print0`/`xargs -0` porque caminho com espaço existe. O `|| exit 1` é
 # redundante com `set -e`, mas deixa explícito que este RUN é o portão.
+# A fixture NEGATIVA fica de fora: ela viola hadolint de propósito, para o
+# portão poder provar que o lint recusa. Incluí-la aqui faria o pipeline bom
+# falhar sempre. A fixture `hello` continua entrando — ela é código normal.
+ENV EXCLUDES="-not -path ./node_modules/* -not -path ./*/node_modules/* -not -path ./cicd/fixtures/bad/*"
+
 RUN set -eu; \
     echo "── Dockerfiles encontrados:"; \
-    find . -name Dockerfile -not -path './node_modules/*' -not -path './*/node_modules/*' -print; \
-    find . -name Dockerfile -not -path './node_modules/*' -not -path './*/node_modules/*' -print0 \
+    find . -name Dockerfile $EXCLUDES -print; \
+    find . -name Dockerfile $EXCLUDES -print0 \
       | xargs -0 -r hadolint --no-color

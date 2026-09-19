@@ -1,0 +1,25 @@
+// O pipeline negativo: ele tem que FALHAR.
+//
+// Existe para o portão poder provar que o estágio de lint recusa de verdade.
+// Sem isto, `make cicd-verify` passaria igualzinho com o hadolint desligado —
+// e o módulo estaria ensinando uma regra que ele não verifica.
+pipeline {
+    agent { label 'builder' }
+    options { timeout(time: 10, unit: 'MINUTES') }
+    environment { BUILDKIT_HOST = 'unix:///run/buildkit/buildkitd.sock' }
+
+    stages {
+        stage('lint') {
+            steps {
+                sh '''
+                    set -eu
+                    buildctl build \
+                      --frontend dockerfile.v0 \
+                      --local context=cicd/fixtures/bad \
+                      --local dockerfile=cicd/fixtures/bad \
+                      --output type=tar,dest=/dev/null
+                '''
+            }
+        }
+    }
+}

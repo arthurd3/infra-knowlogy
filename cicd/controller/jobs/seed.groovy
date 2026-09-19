@@ -31,3 +31,23 @@ pipelineJob('stack-pipeline') {
         }
     }
 }
+
+// O job negativo. Ele constrói uma fixture com violações de hadolint
+// deliberadas, e o portão exige que ele REPROVE. Um portão que só conhece o
+// caminho feliz passaria com o lint desligado.
+pipelineJob('stack-negative-lint') {
+    description('Tem que FALHAR. Prova que o estagio de lint recusa de verdade. Criado pelo seed.')
+    definition {
+        cpsScm {
+            scm {
+                git {
+                    remote { url('git://scm/repo') }
+                    branch('*/main')
+                    extensions {}
+                }
+            }
+            scriptPath('cicd/Jenkinsfile.negative')
+            lightweight(false)
+        }
+    }
+}

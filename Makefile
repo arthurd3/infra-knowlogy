@@ -10,7 +10,10 @@ COMPOSE_PROD := $(COMPOSE) -f stack/compose.prod.yaml
 COMPOSE_OBS  := $(COMPOSE_PROD) -f stack/compose.obs.yaml --profile obs
 
 # Todo Dockerfile do repositório, descoberto e não hardcoded.
-DOCKERFILES := $(shell find stack site cicd -name Dockerfile -not -path '*/node_modules/*' 2>/dev/null)
+# `cicd/fixtures/bad` fica de fora: ele viola hadolint DE PROPÓSITO, para o
+# portão do módulo 3 poder provar que o lint recusa de verdade. A fixture
+# `hello` continua sendo lintada — ela é código normal.
+DOCKERFILES := $(shell find stack site cicd -name Dockerfile -not -path '*/node_modules/*' -not -path 'cicd/fixtures/bad/*' 2>/dev/null)
 
 .PHONY: help
 help: ## Mostra esta ajuda / Show this help
