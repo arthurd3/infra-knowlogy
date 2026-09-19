@@ -131,8 +131,8 @@ seconds instead of paying for fifteen containers.
 
 ## The lessons
 
-22 lessons — 11 topics, in English and Portuguese — under
-`site/src/content/lessons/`, with 15 hand-drawn SVG diagrams and seven
+34 lessons — 17 topics, in English and Portuguese — under
+`site/src/content/lessons/`, with 20 hand-drawn SVG diagrams and eight
 interactive widgets. The diagrams are written as markup, not exported as
 pictures: they inherit the light/dark theme from CSS custom properties, stay
 sharp at any zoom and show up in `git diff` as text.
@@ -141,6 +141,16 @@ sharp at any zoom and show up in `git diff` as text.
 · the Dockerfile instruction by instruction · the build cache · lifecycle and
 exit codes · volumes, bind mounts and tmpfs · networks and internal DNS · Compose
 and healthchecks.
+
+**Security track:** what a port actually is, and why scanning the internet is
+cheap · remote access (22, 23, 3389) — one family, one stolen credential · 80
+and 443, where the poster this track came from gets it backwards: injections
+attack the *application* and cross TLS unchanged, while SSL stripping lives on
+80 · 25, 53 and 445 — the service working as designed, for somebody else · **how
+a database is attacked**, with the four ways in and SQL injection demonstrated
+against this stack's own Postgres · layered defense, including the list of what
+this stack deliberately does **not** defend. Every claim is tied to a step of
+`make attack-lab`; the numbers come from `site/src/data/attack-lab.json`.
 
 **Kubernetes track** (module 2): why an orchestrator — ADR 0001's accepted
 limits, measured · from compose.yaml to Deployment, block by block · liveness
@@ -216,7 +226,7 @@ the code compiles — it **proves the lessons' claims**:
   `docker history` nor `env`, and `edge` **cannot reach** `db`;
 - graceful shutdown — fails if any service takes longer than 3 s to stop;
 - Trivy failing on HIGH/CRITICAL, with a CycloneDX SBOM per image;
-- the site in four layers: `astro check` (types), 43 unit tests, the build, and
+- the site in four layers: `astro check` (types), 70 unit tests, the build, and
   a scan of the **generated HTML** — every internal link and anchor has to
   resolve, both language trees must match, every lesson must ship a diagram or a
   widget, and no SVG may carry a hard-coded colour;
@@ -235,6 +245,23 @@ route out; the worker cannot touch link-local), and then measures what Compose
 cannot do — self-healing, counted restarts, readiness without restarts, and a
 rolling update with **zero dropped requests**. It destroys the cluster when done.
 
+The security track has its own gate too, and it runs **inverted**:
+`make attack-lab` fires eleven real attacks at the local stack and a check
+passes when the attack **fails** — a host port sweep, hitting 5432 directly,
+crossing from the proxy to the database, a wrong password against
+scram-sha-256, SQL injection through three API entry points, SSRF at the cloud
+metadata address, reading the secret out of `env`/`inspect`/`history`, dropping
+a webshell onto a read-only rootfs, getting a shell out of a distroless image,
+and exfiltrating from a database with no route out. Current state: **10
+repelled · 0 succeeded**.
+
+Step 6 is the exception, and it leaks on purpose: it runs the *same* hostile
+input two ways against a temporary table inside a rolled-back transaction —
+**3 rows** when concatenated into the query text, **0** when passed as a
+parameter. No vulnerable endpoint ships in the application; the reasoning is in
+[ADR 0013](docs/adr/0013-laboratorio-de-ataque-na-propria-stack.md). The script
+refuses to run against anything but this project's containers on `127.0.0.1`.
+
 ## Roadmap
 
 One application crosses the whole infrastructure journey; each module is a
@@ -249,13 +276,13 @@ configuration management are reserved next. Details, rules and status:
 stack/          production code: compose + services/{api-go,worker-py,edge,db,observability}
 k8s/            module 2: the same stack as kind + kustomize manifests
 site/           the bilingual lessons site (Astro + MDX + React islands)
-tools/scripts/  verify · k8s-verify · site-check · sizes · scan · shutdown-test · record-gate
+tools/scripts/  verify · k8s-verify · attack-lab · site-check · sizes · scan · shutdown-test
 docs/adr/       why Compose and not k8s, why Caddy and not Traefik, and the rest
 docs/ROADMAP.md the modules: done, in progress, reserved
 ```
 
 Decisions and the alternatives that were **rejected** live in
-[`docs/adr/`](docs/adr/) — ten records, written in Portuguese. `CLAUDE.md`
+[`docs/adr/`](docs/adr/) — thirteen records, written in Portuguese. `CLAUDE.md`
 records the conventions and the traps
 already hit — SELinux and Compose secrets, `cap_drop` breaking `exec()` on a
 binary with file capabilities, `build:` without `target:` shipping the wrong

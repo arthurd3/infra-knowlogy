@@ -158,6 +158,23 @@ justamente por isso.
     `cicd-verify` a checagem cujo padrão estava na linha 20 de 571 falhava, e a
     do padrão no fim do log passava. Use `case "$texto" in *PADRÃO*)` — sem
     pipe, sem sinal, sem depender de onde o padrão está.
+30. **`: ` dentro de um escalar YAML não citado encerra o escalar.** Um
+    `summary:` de lição com "demonstrada aqui: a mesma entrada" derruba a
+    sincronização da coleção com `bad indentation of a mapping entry` e uma
+    linha:coluna que aponta para o meio da frase, não para a causa. Vale para
+    `title:` também. Cite a string, ou não use dois-pontos seguidos de espaço.
+31. **`docker run` sem `-i` descarta o heredoc em silêncio.** O `psql` recebe
+    EOF imediato, sai com 0 e não imprime nada — e a checagem que lê a saída
+    vira "pulado" em vez de falhar. Só acontece com stdin; `docker run … psql
+    -c 'SELECT 1'` funciona sem `-i`, o que esconde o problema. Foi o que fez
+    a demonstração de injeção do `attack-lab` nascer muda.
+32. **Uma porta ocupada no seu loopback pode não ser da stack que você está
+    testando.** O passo 2 do `attack-lab` reprovou dizendo que a 5432 estava
+    publicada; era um Postgres de OUTRO projeto, esquecido rodando na máquina.
+    Portão que acusa sem **atribuir** o socket produz alarme falso e, pior,
+    ensina a ignorar o alarme. O script cruza com `docker compose ps` antes de
+    culpar a stack — e o nome do container alheio fica no terminal de quem
+    roda, nunca no JSON versionado, que é público.
 
 ## Ao mexer na stack
 
@@ -170,6 +187,12 @@ justamente por isso.
   `KEEP_JENKINS=1 SKIP_BUILD=1 SKIP_NEGATIVE=1 make cicd-verify`. Antes de
   qualquer coisa nele, `make cicd-prereqs` — a sonda que prova que este host
   constrói imagem sem daemon.
+- A trilha de Segurança tem portão próprio e **invertido**: `make attack-lab`
+  dispara 11 ataques contra a stack local e cada checagem passa quando o ataque
+  FALHA (estado bom: **10 repelidos · 0 funcionaram**; o passo 6 vaza de
+  propósito, é a demonstração de injeção de SQL da lição 5). Ele regrava
+  `site/src/data/attack-lab.json`, que as lições citam — número de lição de
+  segurança escrito à mão, nenhum. `KEEP_JSON=1` para não regravar. Ver ADR 0013.
 - O módulo Kubernetes tem portão próprio: `make k8s-verify` (estado bom:
   **33 passaram · 0 falharam**). Para iterar sem recriar o cluster:
   `KEEP_CLUSTER=1 make k8s-verify`. Os portões são independentes de propósito
@@ -224,6 +247,8 @@ O
 | `convention` | `CLAUDE.md` | as armadilhas já encontradas |
 | `overview` | `README.md` | arquitetura e o que o `verify` prova |
 | `measurement` | `site/src/data/measured.json` | tamanhos medidos, virados em prosa |
+| `port` | `site/src/data/ports.json` | o mecanismo de cada ataque, por porta |
+| `attack` | `site/src/data/attack-lab.json` | o resultado de cada ataque do portão |
 
 O formato do ponto imita o do mcp-server-qdrant (vetor `fast-all-minilm-l6-v2`,
 payload `{document, metadata}`) para que o MCP leia o que o script escreve.
@@ -248,9 +273,14 @@ trilha nova, decisões em ADR, números medidos.
 Trilha nova no site exige editar **3 pontos**, e não 5 como esta seção dizia
 antes: `TRACKS` em `i18n/ui.ts` (que é a fonte única da lista e da ordem), o
 enum em `content.config.ts` e a cor em `global.css` (três blocos de tema mais
-`.badge--<trilha>`). A home, a página da lição e os testes derivam de `TRACKS`
-— antes cada um repetia a lista à mão, e acrescentar uma trilha era caçar
-literais. A trilha `cicd` serve de gabarito.
+`.badge--<trilha>`). A home, a página da lição, a **nav do `Base.astro`** e os
+testes derivam de `TRACKS` — antes cada um repetia a lista à mão, e acrescentar
+uma trilha era caçar literais. A nav foi a última a ceder: ela tinha dois links
+escritos à mão e a trilha de Segurança nasceu **invisível na barra** com seis
+lições publicadas. Hoje ela lista as trilhas que TÊM lição naquele idioma —
+trilha cadastrada e vazia continua fora, porque mandar o leitor para uma âncora
+sem conteúdo é pior do que não oferecer o link. As trilhas `cicd` (vazia) e
+`seguranca` (cheia) servem de gabarito para os dois casos.
 
 ## O que ainda não existe
 
@@ -265,6 +295,16 @@ Ingress de verdade (ingress-nginx), StatefulSets a fundo, HPA e o job de kind
 no CI. Os dois widgets pendentes saíram: a topologia do Compose virou o
 diagrama `StackTopology.astro` (lições 7 e 8) e a demo de vazamento de segredo
 via `docker history` virou o `<LabExercise>` da lição 3.
+
+A **Trilha Segurança** existe e está completa em primeira versão: 6 lições
+bilíngues (`sec-01`…`sec-06`), 5 diagramas, o widget `PortExplorer` sobre
+`site/src/data/ports.json` (14 portas — as 8 do cartaz que originou a trilha
+mais as 6 de banco de dados que ele não tem) e o portão `make attack-lab`. Ela
+é **transversal**, e não um módulo numerado: não porta a stack para lugar
+nenhum, ataca a que já existe. Ficou para depois: força bruta com taxa medida
+(hoje o passo 4 só prova a recusa) e o espelho do laboratório contra o cluster
+kind — as NetworkPolicies dizem a mesma coisa que as redes do Compose e ninguém
+tentou atravessá-las ainda.
 
 O módulo 3 (`cicd/`) está **de pé e verde**: controller com JCasC e 67 plugins
 pinados, buildkitd rootless, agente sem socket, `git daemon` servindo o
@@ -282,7 +322,7 @@ A moldura visual tem convenções próprias, e todas elas têm teste.
 discreta e continua valendo como nome antigo. Não crie uma classe de botão nova:
 o ponto do sistema é que a variante diz a **importância** da ação.
 
-**Diagramas** (`site/src/components/diagrams/`, 15 deles). São SVG escritos à
+**Diagramas** (`site/src/components/diagrams/`, 20 deles). São SVG escritos à
 mão, envolvidos por `Figure.astro`, que pintam **por classe** (`.dg-box`,
 `.dg-line`, `.dg-fill-accent`…) e nunca por hex — é o que faz eles seguirem o
 tema claro/escuro. O `site-check.mjs` reprova qualquer `fill="#…"` num SVG
@@ -297,7 +337,7 @@ pelo edge); sem stack, reencenam `site/src/data/recorded-gate.json`, gravado por
 com o `fetch` entrando por parâmetro, que é o que a torna testável.
 
 **Os primitivos didáticos** (ADR 0009). Além de `Callout`, `Figure` e `RunIt`,
-a página da lição injeta quatro componentes — nenhum precisa de `import` no MDX,
+a página da lição injeta cinco componentes — nenhum precisa de `import` no MDX,
 e todos pegam o idioma da URL:
 
 - **`Tradeoff`** — opção A × opção B, e o **critério** de quando cada uma ganha.
@@ -313,6 +353,13 @@ e todos pegam o idioma da URL:
   certa ou errada**, inclusive as erradas — é ali que está o ensino.
 - **`LabExercise`** — a pergunta cuja resposta é um comando, com o gabarito num
   `<details>` e o nome da checagem do portão que a prova.
+- **`Term`** — o conceito aberto ali mesmo, para quem não é da área. É um
+  `<details>` de bloco (e não um balão em linha) porque a definição pode ter
+  parágrafo, lista e código, e porque `<details>` funciona sem JavaScript — o
+  que mantém a lição legível numa aba que nunca pintou (armadilha 20). A prop
+  `alt` carrega o nome em inglês: traduzir "pass-the-hash" e esconder o
+  original deixa o leitor sem o termo de busca. O teste conta `<Term>` nos dois
+  idiomas: um a mais em pt é um conceito que o leitor inglês ficou sem.
 
 **Imagens** (ADR 0010). `Figure` aceita `src`/`credit`/`creditUrl`/`license` e
 a prop `plate="light"` para diagrama de terceiro desenhado para fundo branco.
@@ -320,11 +367,16 @@ Sem licença apurada, redesenhe em SVG e use `redrawnFrom`. O slot `legend` é o
 formato "figura anotada": lista numerada amarrando cada peça do desenho a algo
 que este repositório mede.
 
-**Testes** (`site/tests/`, 59 casos, `make site-test`). Cobrem a lógica do
+**Testes** (`site/tests/`, 70 casos, `make site-test`). Cobrem a lógica do
 portão, o fluxo do laboratório, a fidelidade da gravação, a paridade das chaves
 de i18n e as invariantes do conteúdo bilíngue — inclusive a que os diagramas
 tornaram necessária: **as duas versões de uma lição usam os mesmos
 componentes**. Uma âncora de inserção escrita errado deixa a lição inglesa sem o
 desenho e o build passa igual; só o teste reprova. Também reprovam: lição sem
 exercício, `FieldNote` sem fonte, `Tradeoff` sem critério, e quiz cujo gabarito
-está em posições diferentes nos dois idiomas.
+está em posições diferentes nos dois idiomas. O `ports.test.ts` guarda as duas
+regras editoriais do cartaz de portas: **todo ataque explica o mecanismo**
+(`how`, mínimo de 120 caracteres — rótulo sem o como não ensina nada a um
+leigo) e **toda defesa declara o custo** (`cost` — defesa sem preço é conselho
+de quem nunca operou nada, e é o que faz uma lista de boas práticas ser
+ignorada em bloco). Os dois já reprovaram conteúdo meu enquanto eu escrevia.

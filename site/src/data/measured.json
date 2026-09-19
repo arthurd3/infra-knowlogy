@@ -1,13 +1,13 @@
 {
-  "generatedAt": "2026-09-19T14:30:08Z",
+  "generatedAt": "2026-09-19T16:22:38Z",
   "dockerVersion": "29.7.2",
   "platform": "linux/amd64",
   "images": [
     {"service": "api-go", "language": "Go", "target": "minimal", "base": "scratch", "bytes": 5384457, "layers": 3, "note_pt": "Só o binário, os certificados CA e /etc/passwd, copiados à mão.", "note_en": "Just the binary, CA certificates and /etc/passwd, copied by hand."},
     {"service": "api-go", "language": "Go", "target": "dist", "base": "distroless/static", "bytes": 5999103, "layers": 13, "note_pt": "Certificados, tzdata e usuário nonroot prontos. Sem shell.", "note_en": "CA certs, tzdata and a nonroot user, ready. No shell."},
     {"service": "api-go", "language": "Go", "target": "debug", "base": "alpine", "bytes": 9312204, "layers": 3, "note_pt": "Tem shell e apk: dá para investigar, e dá para ser investigado.", "note_en": "Has a shell and apk: you can debug it, and so can an intruder."},
-    {"service": "worker-py", "language": "Python", "target": "dist", "base": "python slim", "bytes": 52321364, "layers": 7, "note_pt": "Runtime + venv. O uv e o cache de wheels ficaram para trás.", "note_en": "Runtime + venv. uv and the wheel cache were left behind."},
+    {"service": "worker-py", "language": "Python", "target": "dist", "base": "python slim", "bytes": 52759032, "layers": 8, "note_pt": "Runtime + venv. O uv e o cache de wheels ficaram para trás.", "note_en": "Runtime + venv. uv and the wheel cache were left behind."},
     {"service": "worker-py", "language": "Python", "target": "fat", "base": "uv bookworm-slim", "bytes": 74735052, "layers": 8, "note_pt": "Antipadrão: uma stage só, o toolchain inteiro vai junto.", "note_en": "Anti-pattern: a single stage, so the whole toolchain ships too."},
-    {"service": "web", "language": "Node", "target": "dist", "base": "caddy alpine", "bytes": 27773221, "layers": 8, "note_pt": "HTML estático servido pelo Caddy. Zero Node na imagem final.", "note_en": "Static HTML served by Caddy. Zero Node in the final image."}
+    {"service": "web", "language": "Node", "target": "dist", "base": "caddy alpine", "bytes": 28030718, "layers": 8, "note_pt": "HTML estático servido pelo Caddy. Zero Node na imagem final.", "note_en": "Static HTML served by Caddy. Zero Node in the final image."}
   ]
 }

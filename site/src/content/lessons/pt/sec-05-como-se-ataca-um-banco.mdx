@@ -1,0 +1,340 @@
+---
+key: attacking-a-database
+lang: pt
+track: seguranca
+order: 5
+title: Como se ataca um banco de dados
+summary: "O cartaz das portas mais atacadas não tem uma única porta de banco de dados — e são elas que guardam tudo o que interessa. São quatro portas de entrada, na ordem em que acontecem de verdade, com a injeção de SQL demonstrada aqui: a mesma entrada hostil devolvendo a tabela inteira de um jeito e nada do outro."
+minutes: 18
+tags: [seguranca, banco-de-dados, sql-injection, postgres, redis, credenciais]
+sources:
+  - label: "OWASP Top 10 2021 — A03: Injection"
+    url: "https://owasp.org/Top10/A03_2021-Injection/"
+    kind: docs
+  - label: "OWASP — SQL Injection Prevention Cheat Sheet"
+    url: "https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html"
+    kind: docs
+  - label: "CWE-89 — Improper Neutralization of Special Elements used in an SQL Command"
+    url: "https://cwe.mitre.org/data/definitions/89.html"
+    kind: spec
+  - label: "PostgreSQL — The pg_hba.conf File"
+    url: "https://www.postgresql.org/docs/current/auth-pg-hba-conf.html"
+    kind: docs
+  - label: "PostgreSQL — Password Authentication"
+    url: "https://www.postgresql.org/docs/current/auth-password.html"
+    kind: docs
+  - label: "pgx — PostgreSQL Driver and Toolkit"
+    url: "https://pkg.go.dev/github.com/jackc/pgx/v5"
+    kind: docs
+  - label: "Wiz Research — Critical Redis RCE (CVE-2025-49844)"
+    url: "https://www.wiz.io/blog/wiz-research-redis-rce-cve-2025-49844"
+    kind: blog
+    accessed: "2026-09-19"
+  - label: "Krebs on Security — Extortionists Wipe Thousands of Databases, Victims Who Pay Up Get Stiffed"
+    url: "https://krebsonsecurity.com/2017/01/extortionists-wipe-thousands-of-databases-victims-who-pay-up-get-stiffed/"
+    kind: postmortem
+---
+
+import InjectionPath from "../../../components/diagrams/InjectionPath.astro";
+import PortExplorer from "../../../components/PortExplorer.astro";
+
+Volte ao cartaz e procure uma porta de banco de dados. Não há nenhuma.
+
+Não é descuido do autor: é o recorte natural de quem lista "as portas mais
+atacadas" pensando em varredura da internet. E é uma ausência que vale discutir,
+porque **o banco é onde estão os dados** — o resto da lista é o caminho até ele.
+
+As portas que faltavam estão aqui, com o mesmo formato das outras:
+
+<PortExplorer group="database" />
+
+## O que um banco de dados é, para começar
+
+<Term word="banco de dados" alt="database" open>
+Um **programa** que fica rodando, escutando numa porta, e que responde a
+perguntas escritas numa linguagem — quase sempre SQL. Ele tem usuários, cada
+usuário tem uma senha, e cada usuário tem permissões diferentes sobre cada
+tabela.
+
+Três consequências que o resto da lição depende:
+
+1. Se é um programa escutando numa porta, vale tudo da lição 1: alguém varre,
+   alguém acha, alguém tenta entrar.
+2. Se tem usuário e senha, vale tudo da lição 2: força bruta, credencial vazada,
+   senha padrão.
+3. E se ele **responde a perguntas em texto**, existe uma quarta porta de
+   entrada que não é rede nem senha: convencer alguém que já está autenticado a
+   fazer a pergunta que você quer. É a injeção de SQL.
+</Term>
+
+Nas próximas seções, as quatro portas de entrada — na ordem em que acontecem de
+verdade, não na ordem em que costumam ser ensinadas.
+
+## Porta 1: pela aplicação (injeção de SQL)
+
+É a mais comum porque não exige alcançar o banco. A aplicação **já está
+autenticada** nele; o atacante só precisa emprestar essa sessão.
+
+<Term word="injeção de SQL" alt="SQL injection">
+Fazer o banco executar como **comando** aquilo que a aplicação mandou como
+**dado**.
+
+O banco recebe uma cadeia de caracteres e decide sozinho o que ali é instrução e
+o que é valor. Quando a aplicação monta a consulta grudando texto do usuário no
+meio, essa fronteira desaparece: o que o usuário escreveu passa a ser lido como
+parte do comando.
+
+Note o que a definição **não** menciona: aspas, caracteres especiais, listas de
+palavras proibidas. Nada disso é a causa. A causa é o valor entrar no lugar
+errado.
+</Term>
+
+<InjectionPath />
+
+O diagrama não é ilustrativo — os dois números saem do passo 6 do
+`make attack-lab`, na mesma tabela e com a mesma entrada hostil. E você pode
+reproduzi-los em trinta segundos:
+
+<RunIt title="A mesma entrada, duas formas de escrever a consulta">
+
+```bash
+make up
+
+docker run --rm -i --network infra-knowlogy_data \
+  -e PGPASSWORD="$(cat stack/secrets/postgres_password)" postgres:17-alpine \
+  psql -h db -U links -d links -At <<'SQL'
+BEGIN;
+CREATE TEMP TABLE demo(nome text, segredo text);
+INSERT INTO demo VALUES ('alice','a1'), ('bob','b2'), ('admin','root-token');
+
+-- (a) A entrada CONCATENADA no texto da consulta.
+--     O parser lê "nome = '' OU uma verdade", e verdade casa com tudo.
+SELECT 'concatenada=' || count(*) FROM demo WHERE nome = '' OR '1'='1';
+
+-- (b) A MESMA entrada, agora como PARÂMETRO.
+--     O banco procura literalmente por alguém chamado  ' OR '1'='1
+PREPARE q(text) AS SELECT 'parametrizada=' || count(*) FROM demo WHERE nome = $1;
+EXECUTE q(''' OR ''1''=''1');
+ROLLBACK;
+SQL
+# concatenada=3     ← a tabela inteira
+# parametrizada=0   ← não existe esse nome
+```
+
+</RunIt>
+
+Três e zero. Mesma tabela, mesma entrada, duas linhas de código de distância.
+
+<Callout type="why" label="Por que o parâmetro é impossível de escapar">
+A intuição de quem está começando é que o `$1` "escapa as aspas". Não é isso, e
+a diferença é o que torna a defesa confiável.
+
+Numa consulta parametrizada, o driver manda ao servidor **duas coisas
+separadas**: o texto da consulta, com um marcador no lugar do valor, e o valor,
+num campo à parte do protocolo. O servidor faz o *parse* do texto **antes** de
+olhar o valor — o plano de execução já está pronto quando o dado chega.
+
+Não há momento em que o valor possa virar comando, porque quando ele aparece a
+decisão de "o que é comando" já foi tomada. É por isso que a defesa não depende
+de lembrar de escapar nada, e por isso ela continua valendo para qualquer
+conteúdo: emoji, aspas, `DROP TABLE`, um romance inteiro.
+</Callout>
+
+E é assim que a api desta stack escreve **todas** as consultas — não há exceção
+no `app.go`:
+
+```go
+err = a.db.QueryRow(ctx, `
+    INSERT INTO links (code, url)
+    VALUES ($1, $2)
+    RETURNING code, url, title, favicon, clicks, created_at, enriched_at, enrich_error
+`, code, rawURL).Scan(...)
+```
+
+<Callout type="trap" label="A gravidade não depende da injeção — depende do usuário">
+Duas injeções idênticas podem ter consequências completamente diferentes, e o
+que decide é **o que o banco permite ao usuário que a aplicação usa**:
+
+- num PostgreSQL com usuário `SUPERUSER`, `COPY ... FROM PROGRAM` executa
+  comando do sistema operacional;
+- num MySQL com privilégio `FILE`, `SELECT ... INTO OUTFILE` escreve arquivos na
+  máquina do banco;
+- num SQL Server com `xp_cmdshell` habilitado, a injeção vira prompt de comando.
+
+É a diferença entre "vazaram a tabela de clientes" e "o servidor é deles". Por
+isso privilégio mínimo no usuário do banco não é burocracia: é o que define o
+tamanho do seu pior dia.
+</Callout>
+
+## Porta 2: pela porta exposta
+
+A mais simples e, em números absolutos, ainda muito frequente: o banco está na
+internet e a autenticação é fraca, padrão ou inexistente.
+
+<FieldNote kind="blog" source="Wiz Research" url="https://www.wiz.io/blog/wiz-research-redis-rce-cve-2025-49844" when="2025">
+Ao investigar uma falha crítica no Redis, a Wiz levantou quantas instâncias
+estão expostas na internet: cerca de **330 mil**, das quais aproximadamente
+**60 mil sem autenticação nenhuma**.
+
+Sessenta mil bancos de dados que respondem a qualquer um que conectar. E o Redis
+é o caso em que isso é pior do que parece: com acesso não autenticado dá para
+usar `CONFIG SET dir` e `CONFIG SET dbfilename` para escolher onde o Redis vai
+gravar o próprio dump — por exemplo, em `/root/.ssh/authorized_keys`. Grava-se a
+chave pública do atacante numa chave qualquer, manda-se `SAVE`, e o cache vira
+acesso SSH à máquina.
+
+Nada disso é uma falha de software. São funções legítimas, ao alcance de quem
+nunca deveria alcançá-las.
+</FieldNote>
+
+<FieldNote kind="postmortem" source="Krebs on Security" url="https://krebsonsecurity.com/2017/01/extortionists-wipe-thousands-of-databases-victims-who-pay-up-get-stiffed/" when="janeiro de 2017">
+Em janeiro de 2017, dezenas de milhares de bancos MongoDB expostos e sem senha
+tiveram os dados apagados e substituídos por um pedido de resgate. Não houve
+exploração de falha: o padrão de então era escutar em todas as interfaces sem
+exigir autenticação, e um script automatizado varreu, conectou e apagou.
+
+O detalhe que dá o título à reportagem é o que vale levar: **das vítimas que
+pagaram, várias não receberam nada de volta** — em muitos casos os dados nunca
+tinham sido copiados antes de serem apagados. Não havia o que devolver.
+
+O projeto mudou o padrão depois disso. É a admissão mais clara possível de que o
+padrão era o problema — e é o motivo de "qual é o padrão?" ser uma pergunta de
+segurança, não de conveniência.
+</FieldNote>
+
+<Callout type="danger" label="O padrão que o `initdb` escolhe por você">
+O `initdb` do PostgreSQL, chamado sem argumentos, escreve um `pg_hba.conf` em
+que as conexões locais usam o método `trust` — que significa **entrar sem
+senha**.
+
+Dentro de um container isso é pior do que parece: qualquer processo que consiga
+execução ali dentro entra no banco como dono, sem credencial nenhuma. É por isso
+que o `compose.yaml` desta stack passa isto explicitamente:
+
+```yaml
+POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256 --auth-local=scram-sha-256"
+```
+
+O passo 4 do `make attack-lab` prova que está valendo — e prova direito, testando
+a senha errada e depois a certa. Sem esse segundo teste, a checagem passaria
+mesmo com a autenticação desligada.
+</Callout>
+
+## Porta 3: pela credencial vazada
+
+O banco pode estar perfeitamente configurado e a senha vazar em outro lugar.
+Os quatro lugares, em ordem de frequência:
+
+| Onde vaza | Por quê | O comando que mostra |
+|---|---|---|
+| `environment:` do Compose | aparece no `docker inspect` e no ambiente de todo processo filho | `docker inspect <container>` |
+| `ENV` ou `ARG` do Dockerfile | fica gravado na **camada** e viaja com a imagem para o registry | `docker history --no-trunc <imagem>` |
+| commit no git | fica no histórico para sempre, mesmo depois de removida | `git log -p -S'senha'` |
+| log da aplicação ou do CI | uma string de conexão numa mensagem de erro | busca no índice de log |
+
+A convenção desta stack fecha os dois primeiros: a senha nunca é variável de
+ambiente, e sim um **arquivo** cujo caminho é a variável.
+
+```yaml
+POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+```
+
+O Compose monta o arquivo num tmpfs, o processo lê o conteúdo no arranque, e o
+`docker inspect` mostra só o caminho. O passo 8 do `make attack-lab` procura a
+senha nos três lugares — ambiente, inspect e histórico da imagem — e reprova se
+achar.
+
+## Porta 4: pela cópia que ninguém endureceu
+
+A porta mais esquecida, e a que não aparece em auditoria de produção: **a
+réplica de leitura** que alguém subiu para um relatório, o **dump** noturno num
+bucket, o ambiente de **homologação** com dados reais.
+
+O dado não precisa ser roubado de onde ele é bem cuidado. Precisa ser roubado de
+onde ele existe — e ele quase sempre existe em mais lugares do que o inventário
+diz.
+
+## O que o invasor faz depois de entrar
+
+Três movimentos, nesta ordem, e vale saber porque a defesa de cada um é
+diferente:
+
+1. **Ler.** `pg_dump`, ou um `SELECT` paciente. É o objetivo declarado.
+2. **Persistir.** Criar um usuário, uma função, um gatilho — algo que sobreviva
+   à troca da senha que ele usou para entrar.
+3. **Exfiltrar.** Mandar o que leu para fora. E é aqui que esta stack trava o
+   caminho: a rede `data` é `internal: true`, então o container do banco **não
+   tem rota para lugar nenhum** fora do Docker.
+
+<Callout type="why" label="Roubar e levar embora são problemas separados">
+Quase toda discussão sobre segurança de banco trata do primeiro movimento. O
+terceiro é onde uma defesa barata tem retorno desproporcional.
+
+Um invasor com acesso total ao Postgres desta stack ainda precisa comprometer um
+**segundo** serviço — um dos que estão em duas redes — só para conseguir mandar
+o que roubou. Isso não impede o roubo; encarece muito a operação e cria uma
+segunda chance de detecção.
+
+É o passo 11 do laboratório, e é a mesma ideia que no Kubernetes se escreve como
+NetworkPolicy de egresso.
+</Callout>
+
+<Tradeoff
+  a="Usuário da aplicação com privilégio mínimo"
+  b="Usuário da aplicação dono do esquema"
+  whenA="Quando você aceita manter um segundo usuário só para migrações. Uma injeção bem-sucedida lê e escreve dados, e <b>não</b> cria função, não lê arquivo do disco e não muda configuração — é o que separa um vazamento de uma invasão."
+  whenB="Em protótipo, em ambiente descartável, ou enquanto o esquema muda todo dia e o custo de administrar dois usuários supera o risco que você está correndo. É uma escolha legítima, desde que seja uma escolha."
+  chose="none"
+  verdict="Esta stack usa <b>um</b> usuário (<code>links</code>), que é dono do esquema — a escolha B, e é uma dívida honesta: com o banco inalcançável e toda consulta parametrizada, o ganho de separar os dois usuários seria menor que o custo. Num sistema com usuários reais, a resposta muda."
+/>
+
+<LabExercise check="6/11 — concatenada × parametrizada" file="tools/scripts/attack-lab.sh">
+O passo 6 do `make attack-lab` é o único ataque do laboratório que **funciona** —
+ele devolve 3 linhas quando deveria devolver 0. Duas perguntas:
+
+1. Por que esse passo não conta como falha do portão?
+2. Por que a demonstração roda numa tabela temporária dentro de um `BEGIN` que
+   termina em `ROLLBACK`, em vez de num endpoint vulnerável da própria API?
+
+<Fragment slot="hint">
+A segunda pergunta é sobre o que ficaria no repositório depois que a lição
+terminasse de ser lida.
+</Fragment>
+
+<Fragment slot="answer">
+**1.** Porque ele não está testando uma defesa — está **demonstrando o
+mecanismo**. O resultado desejado ali é o vazamento: sem ele não há o que
+comparar com o zero da consulta parametrizada. O script marca esse passo como
+`teaching` em vez de `blocked`, e o resumo o exclui da contagem de ataques
+repelidos. Um portão que contasse isso como falha estaria medindo a coisa
+errada.
+
+**2.** Porque um endpoint vulnerável **fica no repositório**. Qualquer um que
+clone isto e suba a stack passaria a ter um caminho de injeção real, e o
+`trivy`/`hadolint` teriam que ganhar uma exceção para não reprovar o próprio
+projeto — o que corrói a premissa do portão inteiro.
+
+A tabela temporária dentro de uma transação descartada ensina exatamente a mesma
+coisa e não deixa nada para trás: a tabela nem chega a existir depois do
+`ROLLBACK`, e o código da aplicação continua sem uma única concatenação. Está
+registrado no ADR 0013.
+</Fragment>
+</LabExercise>
+
+## O que fica
+
+- O banco é um **programa escutando numa porta**, com usuários e senhas. Tudo
+  das lições 1 e 2 vale para ele.
+- São quatro portas de entrada: a aplicação, a porta exposta, a credencial
+  vazada e a cópia esquecida. A primeira é a mais comum porque **não precisa
+  alcançar o banco**.
+- Consulta parametrizada não "escapa aspas": ela manda comando e dado
+  **separados**, e o plano já está pronto quando o valor chega.
+- Medido aqui: mesma entrada hostil, **3 linhas** concatenada e **0**
+  parametrizada.
+- A gravidade de uma injeção é decidida pelo **privilégio do usuário** do banco,
+  não pela injeção.
+- Roubar e exfiltrar são problemas diferentes. `internal: true` não impede o
+  primeiro e trava o segundo.
+
+<Quiz set="attacking-a-database" />

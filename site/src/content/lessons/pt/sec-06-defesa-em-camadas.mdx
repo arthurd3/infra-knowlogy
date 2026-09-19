@@ -1,0 +1,232 @@
+---
+key: layered-defense
+lang: pt
+track: seguranca
+order: 6
+title: A defesa em camadas, medida
+summary: Cinco lições de ataque, e agora a arrumação — as sete camadas desta stack, cada uma amarrada ao passo do laboratório que a prova. Com a lista do que ela deliberadamente NÃO defende, porque só isso torna o resto confiável.
+minutes: 14
+tags: [seguranca, defesa-em-profundidade, hardening, owasp, portao]
+sources:
+  - label: "OWASP — Docker Security Cheat Sheet"
+    url: "https://cheatsheetseries.owasp.org/cheatsheets/Docker_Security_Cheat_Sheet.html"
+    kind: docs
+  - label: "NIST SP 800-207 — Zero Trust Architecture"
+    url: "https://csrc.nist.gov/pubs/sp/800/207/final"
+    kind: spec
+  - label: "OWASP Top 10 2021 — A05: Security Misconfiguration"
+    url: "https://owasp.org/Top10/A05_2021-Security_Misconfiguration/"
+    kind: docs
+---
+
+import AttackSurface from "../../../components/diagrams/AttackSurface.astro";
+
+As cinco lições anteriores foram o lado de quem ataca. Esta é a arrumação — e
+ela tem uma forma específica neste repositório: **cada camada tem um comando que
+a prova**.
+
+Isso não é estilo. É o que impede uma lista de boas práticas de virar uma
+lista de boas intenções.
+
+<Term word="defesa em profundidade" alt="defense in depth" open>
+Supor que **cada camada vai falhar** e desenhar a próxima para que a falha não
+seja suficiente.
+
+O contrário disso é a defesa de perímetro: uma muralha forte e, atrás dela,
+confiança. Funciona até a primeira vez que alguém entra — e aí não há nada.
+
+O nome moderno para levar essa suposição às últimas consequências é
+*confiança zero*: nenhum lugar da rede é confiável por estar "dentro". Na
+prática de um sistema pequeno, isso quase sempre se traduz em três perguntas
+por serviço: quem precisa falar com ele, com que privilégio, e o que acontece se
+ele for comprometido.
+</Term>
+
+<AttackSurface />
+
+## As sete camadas, e o que prova cada uma
+
+| # | Camada | Como ela aparece nesta stack | Passo do laboratório |
+|---|---|---|---|
+| 1 | **Reduzir a superfície** | uma única porta publicada, presa a `127.0.0.1` | 1, 2 |
+| 2 | **Segmentar** | três redes; `data` é `internal: true` | 3, 11 |
+| 3 | **Autenticar** | `--auth-host=scram-sha-256` no `initdb` | 4 |
+| 4 | **Não confundir dado com comando** | toda consulta com `$1` no `app.go` | 5, 6 |
+| 5 | **Validar o que o sistema busca por você** | `assert_public()` no `enrich.py` | 7 |
+| 6 | **Não deixar o segredo vazar** | convenção `<VAR>_FILE` e `/run/secrets/` | 8 |
+| 7 | **Limitar o que dá para fazer depois de entrar** | `read_only`, `cap_drop: [ALL]`, distroless | 9, 10 |
+
+As três primeiras são de rede e configuração — as que quase toda equipe
+consegue aplicar numa tarde. A quarta e a quinta são de **código**, e é onde
+elas costumam ser esquecidas, porque não aparecem em nenhum painel. As duas
+últimas são as que só importam no dia em que as anteriores falharem, e é
+exatamente por isso que valem a pena.
+
+<Callout type="why" label="A camada 7 é a que parece inútil até não ser">
+`read_only: true` e a imagem distroless não impedem ninguém de entrar. Elas
+mudam o que acontece **depois**.
+
+Quem consegue execução de código dentro do container da api encontra: nenhum
+`/bin/sh` para encadear comandos, nenhuma raiz gravável para depositar um
+webshell, e os únicos diretórios graváveis montados com `noexec`. Dá para
+escrever; não dá para executar o que escreveu.
+
+Isso não é hipotético — os passos 9 e 10 do laboratório tentam as duas coisas em
+toda execução. E é a diferença entre "um invasor teve execução momentânea" e
+"um invasor se instalou".
+</Callout>
+
+## Os onze ataques, e o que cada um prova
+
+Este é o conteúdo do `make attack-lab` inteiro. A semântica está invertida em
+relação aos outros portões do repositório: **uma checagem passa quando o ataque
+falha**.
+
+| # | O ataque | A defesa que o repele |
+|---|---|---|
+| 1 | varrer as portas do host | `ports:` com prefixo `127.0.0.1:` |
+| 2 | conectar na 5432 pelo host | o banco não publica porta |
+| 3 | ir do proxy ao banco | ausência de rota entre `edge` e `data` |
+| 4 | entrar no banco com a senha errada | `scram-sha-256` |
+| 5 | injeção de SQL pela API | `$1` em toda consulta do `app.go` |
+| 6 | **concatenada × parametrizada** | *vaza de propósito — é a demonstração* |
+| 7 | SSRF para o serviço de metadados | `assert_public()` |
+| 8 | ler o segredo de fora do processo | convenção `_FILE` |
+| 9 | depositar um webshell | `read_only: true` |
+| 10 | conseguir um shell na api | imagem distroless |
+| 11 | exfiltrar do banco para a internet | `internal: true` |
+
+<RunIt title="Rode o laboratório inteiro contra a sua stack">
+
+```bash
+make up
+make attack-lab
+
+# ── Resumo ═══
+#    10 ataques repelidos · 0 funcionaram · 0 pulados
+#    (o passo 6 vaza de propósito: é a demonstração da lição)
+#
+#    medições -> site/src/data/attack-lab.json
+```
+
+</RunIt>
+
+<Callout type="trap" label="O laboratório só ataca o que é seu">
+A primeira coisa que o `attack-lab.sh` faz, antes de qualquer pacote, é conferir
+que o alvo é `127.0.0.1` e que os containers são os deste projeto. Se não for,
+ele aborta.
+
+A trava existe porque um script que dispara ataques não deveria aceitar um
+endereço vindo do ambiente. Varrer host de terceiro é outra coisa — precisa de
+autorização por escrito, e não é o que este repositório ensina.
+</Callout>
+
+## O que esta stack NÃO defende
+
+Esta seção é a que dá credibilidade a todas as anteriores. Nada aqui é
+esquecimento: é escopo, e está escrito para você não sair da trilha achando que
+a stack é completa.
+
+- **Não há WAF.** Nenhum filtro genérico na frente da aplicação. A escolha é
+  deliberada — um WAF é bom como segunda camada e péssimo como primeira, porque
+  ele convida a não consertar a aplicação.
+- **Não há limite de requisições por IP na API.** Um cliente insistente consome
+  o que quiser até os limites de CPU e memória do cgroup. É a lacuna mais fácil
+  de fechar e ainda não foi.
+- **Não há `Content-Security-Policy`.** O site é estático e o risco é baixo, mas
+  "baixo" não é "zero" e o cabeçalho é barato.
+- **Não há TLS entre os serviços.** O tráfego entre `edge`, `api` e `db` é
+  texto claro dentro das redes do Docker. A defesa aqui é a segmentação, e ela é
+  uma escolha: quem confia na rede interna está confiando em quem tem acesso ao
+  host.
+- **A API não tem autenticação nenhuma.** Qualquer um cria um link. É um
+  encurtador público de propósito, e isso significa que todo o raciocínio de
+  controle de acesso — papéis, sessões, tokens — simplesmente não existe aqui.
+- **Não há rotação de segredo.** A senha do Postgres é gerada uma vez pelo
+  `init-secrets.sh` e fica.
+- **A aplicação usa um usuário de banco dono do esquema.** A dívida registrada
+  no tradeoff da lição 5.
+
+<FieldNote kind="spec" source="NIST, SP 800-207" url="https://csrc.nist.gov/pubs/sp/800/207/final" when="2020">
+A publicação que normalizou o termo *confiança zero* faz uma distinção que vale
+levar para qualquer sistema, do tamanho que for: confiança zero não é um
+produto, é um **conjunto de princípios**. Nenhum recurso é confiável por causa
+da localização dele na rede; toda sessão é autenticada e autorizada; e o acesso
+é concedido por requisição, não por perímetro.
+
+O que a leitura do documento costuma deixar claro para quem esperava uma receita
+é que a maior parte do trabalho não é comprar nada — é **saber o que existe**:
+quais serviços, quais dados, quem fala com quem. Um inventário honesto é
+pré-requisito de qualquer arquitetura, e é a parte que ninguém gosta de fazer.
+</FieldNote>
+
+<Tradeoff
+  a="Confiar na borda: firewall forte, rede interna confiável"
+  b="Assumir a borda vencida: cada serviço se defende"
+  whenA="Quando o perímetro é real e pequeno — uma máquina, um serviço, uma equipe — e o custo de instrumentar cada componente não se paga. É honesto em laboratório e em ferramenta interna de uso restrito."
+  whenB="Quando existem vários serviços, gente entrando e saindo, e dependências de terceiros. O WannaCry é o argumento: a infecção entrou por outro caminho e a rede interna plana fez o resto. Borda não é uma camada ruim — é uma camada só."
+  chose="b"
+  verdict="Esta stack assume a borda vencida em todos os passos: o passo 3 supõe o proxy já comprometido, o 9 e o 10 supõem execução de código já obtida, e o 11 supõe o banco já aberto. Nenhuma das checagens pergunta “o invasor entrou?” — todas perguntam “e se já tiver entrado?”."
+  adr="0013-laboratorio-de-ataque-na-propria-stack"
+/>
+
+<LabExercise check="9/11 — depositar um webshell" file="stack/compose.prod.yaml">
+A melhor forma de confiar num portão é vê-lo **reprovar**. Quebre a camada 7 de
+propósito e observe o laboratório acusar — depois desfaça.
+
+<Fragment slot="hint">
+O `read_only: true` mora no bloco `x-hardened` do `compose.prod.yaml`, e é
+herdado por todos os serviços.
+</Fragment>
+
+<Fragment slot="answer">
+```bash
+# 1. Desligue o rootfs imutável só do worker, por cima do overlay:
+cat > /tmp/quebra.yaml <<'YAML'
+services:
+  worker:
+    read_only: false
+YAML
+
+docker compose -f stack/compose.yaml -f stack/compose.prod.yaml \
+  -f /tmp/quebra.yaml up -d worker
+
+# 2. Agora o ataque funciona — e o laboratório deve dizer isso alto:
+make attack-lab
+#   ── 9/11  Escrever um webshell no sistema de arquivos do container
+#      ✗ ATAQUE FUNCIONOU — o rootfs é gravável (read_only não está valendo)
+#   ═══ Resumo ═══  9 ataques repelidos · 1 funcionaram
+
+# 3. Desfaça:
+make up && rm /tmp/quebra.yaml
+```
+
+Repare que o script **remove o arquivo que conseguiu escrever** antes de
+continuar: um portão que sabota o próprio ambiente ao reprovar não é utilizável
+duas vezes seguidas.
+
+E repare no código de saída. Com um ataque bem-sucedido o `attack-lab` sai com
+`1`, o que faz o `make` acusar erro — é o que permite pendurá-lo num pipeline
+sem que ninguém precise ler a saída.
+</Fragment>
+</LabExercise>
+
+## O que fica da trilha inteira
+
+- Uma **porta** é um número numa tabela do sistema. Sem processo escutando, não
+  há porta — e a defesa que funciona é o serviço não existir do lado de fora.
+- 22, 23 e 3389 são a mesma família: **credencial**. A defesa com melhor retorno
+  é não publicar.
+- 80 e 443 não sofrem injeção — a **aplicação** sofre, e a injeção atravessa o
+  TLS sem perder um caractere.
+- 25, 53 e 445 são o serviço **funcionando como projetado**, a serviço de outra
+  pessoa.
+- Um **banco de dados** tem quatro portas de entrada, e a mais comum não precisa
+  alcançar a porta dele.
+- E a arrumação de tudo: **camadas**, cada uma supondo que a anterior falhou, e
+  cada uma com um comando que prova que ela está de pé.
+
+O cartaz que abriu esta trilha continua sendo um bom cartaz. Ele só não é um
+modelo de ameaça — e agora você sabe a diferença.
+
+<Quiz set="layered-defense" />

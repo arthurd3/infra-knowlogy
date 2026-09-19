@@ -1,0 +1,152 @@
+{
+  "note_pt": "Perguntas da lição 5 da trilha de Segurança.",
+  "note_en": "Questions for lesson 5 of the Security track.",
+  "pt": [
+    {
+      "q": "O que uma consulta parametrizada (`WHERE nome = $1`) faz que a concatenação não faz?",
+      "options": [
+        {
+          "text": "Manda comando e dado SEPARADOS: o servidor faz o parse do texto antes de olhar o valor.",
+          "correct": true,
+          "why": "É por isso que a defesa é confiável. Quando o valor chega, a decisão de 'o que é comando' já foi tomada e o plano de execução já está pronto — não existe momento em que o dado possa virar instrução. Não depende de lembrar de escapar nada, e vale para qualquer conteúdo."
+        },
+        {
+          "text": "Escapa as aspas do valor antes de montá-lo na consulta.",
+          "why": "É a intuição mais comum e está errada — e a diferença importa. Se fosse escape, dependeria de a rotina de escape estar correta para cada codificação e cada dialeto. Parâmetro não é escape: é outro campo do protocolo."
+        },
+        {
+          "text": "Valida o valor contra o tipo da coluna antes de executar.",
+          "why": "Há alguma checagem de tipo no caminho, mas não é ela que impede a injeção. A proteção vem da separação entre o texto da consulta e o valor — que continua valendo mesmo quando a coluna é `text` e aceita qualquer coisa."
+        }
+      ]
+    },
+    {
+      "q": "Duas aplicações têm a mesma injeção de SQL. Numa, o atacante lê a tabela de clientes; na outra, executa comandos no servidor. O que explica a diferença?",
+      "options": [
+        {
+          "text": "O privilégio do usuário com que a aplicação se conecta ao banco.",
+          "correct": true,
+          "why": "Com `SUPERUSER` no PostgreSQL, `COPY ... FROM PROGRAM` executa comando do sistema; com `FILE` no MySQL, `SELECT ... INTO OUTFILE` escreve arquivos; com `xp_cmdshell` no SQL Server, a injeção vira prompt. A injeção é a mesma — o que muda é o que o banco permite àquele usuário."
+        },
+        {
+          "text": "A gravidade da falha na aplicação: uma concatenava mais campos que a outra.",
+          "why": "Quantidade de campos concatenados muda o alcance da consulta, não a classe de consequência. Passar de 'ler dados' para 'executar comando' exige uma capacidade que o banco oferece — e ele só a oferece a quem tem privilégio."
+        },
+        {
+          "text": "O banco usado: alguns bancos são vulneráveis a execução de comando e outros não.",
+          "why": "Os três bancos citados têm o recurso; a diferença é se ele está habilitado e se o usuário alcança. Trocar de banco não resolve o problema, e configurar o privilégio resolve nos três."
+        }
+      ]
+    },
+    {
+      "q": "Em janeiro de 2017, dezenas de milhares de MongoDB expostos foram apagados e tiveram resgate pedido. Que falha os atacantes exploraram?",
+      "options": [
+        {
+          "text": "Nenhuma: o padrão de então escutava em todas as interfaces sem exigir autenticação.",
+          "correct": true,
+          "why": "Um script varreu, conectou e apagou — sem exploração nenhuma. O projeto mudou o padrão depois disso, o que é a admissão mais clara de que o padrão era o problema. É por isso que 'qual é o padrão?' é uma pergunta de segurança, e não de conveniência."
+        },
+        {
+          "text": "Uma falha de execução remota no motor do MongoDB.",
+          "why": "Não houve. O que torna o episódio tão instrutivo é justamente a ausência de sofisticação: o ataque cabia num script de varredura, e a defesa cabia em duas linhas de configuração."
+        },
+        {
+          "text": "Credenciais padrão que vinham na instalação.",
+          "why": "Chega perto mas erra o detalhe: não havia credencial nenhuma para adivinhar. A autenticação simplesmente não era exigida — que é um degrau abaixo de 'senha padrão'."
+        }
+      ]
+    },
+    {
+      "q": "A rede `data` desta stack é `internal: true`. Contra qual movimento do invasor isso ajuda?",
+      "options": [
+        {
+          "text": "A exfiltração: mesmo com acesso total ao banco, não há rota para mandar os dados para fora.",
+          "correct": true,
+          "why": "Roubar e levar embora são problemas separados, e quase toda discussão trata só do primeiro. Sem gateway, o invasor precisa comprometer um SEGUNDO serviço — dos que estão em duas redes — só para conseguir enviar o que leu. Não impede o roubo; encarece a operação e cria uma segunda chance de detecção."
+        },
+        {
+          "text": "A injeção de SQL: a consulta hostil não chega ao banco.",
+          "why": "Não ajuda nisso. A injeção entra pela aplicação, que está na mesma rede `data` e é quem faz a consulta — o `internal: true` não vê diferença entre uma consulta legítima e uma injetada."
+        },
+        {
+          "text": "A força bruta na senha do banco: a porta fica inalcançável.",
+          "why": "Quem torna a porta inalcançável de fora é não publicá-la, e isso vale mesmo numa rede não interna. O `internal: true` remove o gateway — corta a saída, não a entrada de quem já está na rede."
+        }
+      ]
+    }
+  ],
+  "en": [
+    {
+      "q": "What does a parameterised query (`WHERE name = $1`) do that concatenation does not?",
+      "options": [
+        {
+          "text": "It sends command and data SEPARATELY: the server parses the text before it looks at the value.",
+          "correct": true,
+          "why": "That is why the defense is trustworthy. By the time the value arrives, the decision about 'what is a command' has been made and the execution plan is built — there is no moment at which data could become instruction. It does not depend on remembering to escape anything, and it holds for any content."
+        },
+        {
+          "text": "It escapes the quotes in the value before assembling the query.",
+          "why": "That is the most common intuition and it is wrong — and the difference matters. If it were escaping, it would depend on the escaping routine being correct for every encoding and every dialect. A parameter is not escaping: it is a different field of the protocol."
+        },
+        {
+          "text": "It validates the value against the column's type before executing.",
+          "why": "There is some type checking along the way, but that is not what stops the injection. The protection comes from separating query text from value — which keeps holding even when the column is `text` and accepts anything."
+        }
+      ]
+    },
+    {
+      "q": "Two applications have the same SQL injection. In one, the attacker reads the customers table; in the other, he runs commands on the server. What explains the difference?",
+      "options": [
+        {
+          "text": "The privilege of the user the application connects to the database as.",
+          "correct": true,
+          "why": "With `SUPERUSER` on PostgreSQL, `COPY ... FROM PROGRAM` runs a system command; with `FILE` on MySQL, `SELECT ... INTO OUTFILE` writes files; with `xp_cmdshell` on SQL Server, the injection becomes a prompt. The injection is the same — what changes is what the database allows that user."
+        },
+        {
+          "text": "The severity of the flaw in the application: one concatenated more fields than the other.",
+          "why": "The number of concatenated fields changes the query's reach, not the class of consequence. Going from 'read data' to 'run a command' requires a capability the database offers — and it only offers it to whoever has the privilege."
+        },
+        {
+          "text": "The database used: some databases are vulnerable to command execution and others are not.",
+          "why": "All three databases mentioned have the feature; the difference is whether it is enabled and whether the user can reach it. Switching databases does not solve the problem, and configuring privilege solves it on all three."
+        }
+      ]
+    },
+    {
+      "q": "In January 2017, tens of thousands of exposed MongoDB databases were wiped and held for ransom. Which flaw did the attackers exploit?",
+      "options": [
+        {
+          "text": "None: the default of the day listened on all interfaces without requiring authentication.",
+          "correct": true,
+          "why": "A script scanned, connected and dropped — with no exploitation at all. The project changed the default afterwards, which is the clearest admission that the default was the problem. It is why 'what is the default?' is a security question, not a convenience one."
+        },
+        {
+          "text": "A remote code execution flaw in the MongoDB engine.",
+          "why": "There was none. What makes the episode so instructive is precisely the absence of sophistication: the attack fit in a scanning script, and the defense fit in two lines of configuration."
+        },
+        {
+          "text": "Default credentials that shipped with the installation.",
+          "why": "Close, but the detail is wrong: there was no credential to guess. Authentication simply was not required — which is one step below 'default password'."
+        }
+      ]
+    },
+    {
+      "q": "This stack's `data` network is `internal: true`. Which of the intruder's moves does that help against?",
+      "options": [
+        {
+          "text": "Exfiltration: even with full access to the database, there is no route to send the data out.",
+          "correct": true,
+          "why": "Stealing and carrying away are separate problems, and almost every discussion covers only the first. With no gateway, the attacker has to compromise a SECOND service — one of those on two networks — just to send what he read. It does not prevent the theft; it makes the operation expensive and creates a second chance at detection."
+        },
+        {
+          "text": "SQL injection: the hostile query never reaches the database.",
+          "why": "It does not help with that. The injection comes in through the application, which is on the same `data` network and is the one running the query — `internal: true` cannot tell a legitimate query from an injected one."
+        },
+        {
+          "text": "Brute force against the database password: the port becomes unreachable.",
+          "why": "What makes the port unreachable from outside is not publishing it, and that holds on a non-internal network too. `internal: true` removes the gateway — it cuts the way out, not the way in for whoever is already on the network."
+        }
+      ]
+    }
+  ]
+}

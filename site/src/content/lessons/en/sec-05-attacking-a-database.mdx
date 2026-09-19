@@ -1,0 +1,344 @@
+---
+key: attacking-a-database
+lang: en
+track: seguranca
+order: 5
+title: How a database is attacked
+summary: "The most-attacked-ports poster does not carry a single database port — and those are the ones holding everything that matters. There are four ways in, in the order they actually happen, with SQL injection demonstrated here: the same hostile input returning the entire table one way and nothing the other."
+minutes: 18
+tags: [security, database, sql-injection, postgres, redis, credentials]
+sources:
+  - label: "OWASP Top 10 2021 — A03: Injection"
+    url: "https://owasp.org/Top10/A03_2021-Injection/"
+    kind: docs
+  - label: "OWASP — SQL Injection Prevention Cheat Sheet"
+    url: "https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html"
+    kind: docs
+  - label: "CWE-89 — Improper Neutralization of Special Elements used in an SQL Command"
+    url: "https://cwe.mitre.org/data/definitions/89.html"
+    kind: spec
+  - label: "PostgreSQL — The pg_hba.conf File"
+    url: "https://www.postgresql.org/docs/current/auth-pg-hba-conf.html"
+    kind: docs
+  - label: "PostgreSQL — Password Authentication"
+    url: "https://www.postgresql.org/docs/current/auth-password.html"
+    kind: docs
+  - label: "pgx — PostgreSQL Driver and Toolkit"
+    url: "https://pkg.go.dev/github.com/jackc/pgx/v5"
+    kind: docs
+  - label: "Wiz Research — Critical Redis RCE (CVE-2025-49844)"
+    url: "https://www.wiz.io/blog/wiz-research-redis-rce-cve-2025-49844"
+    kind: blog
+    accessed: "2026-09-19"
+  - label: "Krebs on Security — Extortionists Wipe Thousands of Databases, Victims Who Pay Up Get Stiffed"
+    url: "https://krebsonsecurity.com/2017/01/extortionists-wipe-thousands-of-databases-victims-who-pay-up-get-stiffed/"
+    kind: postmortem
+---
+
+import InjectionPath from "../../../components/diagrams/InjectionPath.astro";
+import PortExplorer from "../../../components/PortExplorer.astro";
+
+Go back to the poster and look for a database port. There is not one.
+
+That is not an oversight by the author: it is the natural framing of anyone
+listing "the most attacked ports" with internet-wide scanning in mind. And it is
+an absence worth discussing, because **the database is where the data is** — the
+rest of the list is the route to it.
+
+The missing ports are here, in the same format as the others:
+
+<PortExplorer group="database" />
+
+## What a database is, to start with
+
+<Term word="database" alt="banco de dados" open>
+A **program** that keeps running, listening on a port, answering questions
+written in a language — almost always SQL. It has users, each user has a
+password, and each user has different permissions on each table.
+
+Three consequences the rest of this lesson rests on:
+
+1. If it is a program listening on a port, everything in lesson 1 applies:
+   somebody scans, somebody finds it, somebody tries to get in.
+2. If it has usernames and passwords, everything in lesson 2 applies: brute
+   force, leaked credentials, default passwords.
+3. And because it **answers questions written as text**, there is a fourth way
+   in that is neither network nor password: convincing somebody already
+   authenticated to ask the question you want. That is SQL injection.
+</Term>
+
+In the sections that follow, the four ways in — in the order they actually
+happen, not the order they are usually taught.
+
+## Way 1: through the application (SQL injection)
+
+The most common, because it does not require reaching the database at all. The
+application is **already authenticated** to it; the attacker only borrows that
+session.
+
+<Term word="SQL injection" alt="injeção de SQL">
+Making the database execute as a **command** what the application sent as
+**data**.
+
+The database receives a string of characters and decides on its own what in it
+is instruction and what is value. When the application builds its query by
+gluing the user's text into the middle, that boundary disappears: what the user
+wrote starts being read as part of the command.
+
+Note what the definition does **not** mention: quotes, special characters, lists
+of forbidden words. None of that is the cause. The cause is the value entering
+in the wrong place.
+</Term>
+
+<InjectionPath />
+
+The diagram is not illustrative — both numbers come from step 6 of
+`make attack-lab`, on the same table with the same hostile input. And you can
+reproduce them in thirty seconds:
+
+<RunIt title="The same input, two ways of writing the query">
+
+```bash
+make up
+
+docker run --rm -i --network infra-knowlogy_data \
+  -e PGPASSWORD="$(cat stack/secrets/postgres_password)" postgres:17-alpine \
+  psql -h db -U links -d links -At <<'SQL'
+BEGIN;
+CREATE TEMP TABLE demo(name text, secret text);
+INSERT INTO demo VALUES ('alice','a1'), ('bob','b2'), ('admin','root-token');
+
+-- (a) The input CONCATENATED into the query text.
+--     The parser reads "name = '' OR a truth", and a truth matches everything.
+SELECT 'concatenated=' || count(*) FROM demo WHERE name = '' OR '1'='1';
+
+-- (b) The SAME input, now as a PARAMETER.
+--     The database looks literally for someone called  ' OR '1'='1
+PREPARE q(text) AS SELECT 'parameterised=' || count(*) FROM demo WHERE name = $1;
+EXECUTE q(''' OR ''1''=''1');
+ROLLBACK;
+SQL
+# concatenated=3     ← the entire table
+# parameterised=0    ← no such name exists
+```
+
+</RunIt>
+
+Three and zero. Same table, same input, two lines of code apart.
+
+<Callout type="why" label="Why a parameter cannot be escaped out of">
+The beginner's intuition is that `$1` "escapes the quotes". It does not, and the
+difference is what makes the defense trustworthy.
+
+In a parameterised query the driver sends the server **two separate things**:
+the query text, with a placeholder where the value goes, and the value, in its
+own field of the protocol. The server *parses* the text **before** it looks at
+the value — the execution plan is already built by the time the data arrives.
+
+There is no moment at which the value could become a command, because by the
+time it appears the decision about "what is a command" has already been made.
+Which is why the defense does not depend on remembering to escape anything, and
+why it keeps holding for any content: emoji, quotes, `DROP TABLE`, an entire
+novel.
+</Callout>
+
+And this is how this stack's api writes **every** query — there is no exception
+in `app.go`:
+
+```go
+err = a.db.QueryRow(ctx, `
+    INSERT INTO links (code, url)
+    VALUES ($1, $2)
+    RETURNING code, url, title, favicon, clicks, created_at, enriched_at, enrich_error
+`, code, rawURL).Scan(...)
+```
+
+<Callout type="trap" label="Severity is not decided by the injection — it is decided by the user">
+Two identical injections can have completely different consequences, and what
+decides is **what the database allows the user the application connects as**:
+
+- on a PostgreSQL with a `SUPERUSER`, `COPY ... FROM PROGRAM` runs an operating
+  system command;
+- on a MySQL with the `FILE` privilege, `SELECT ... INTO OUTFILE` writes files on
+  the database machine;
+- on a SQL Server with `xp_cmdshell` enabled, the injection becomes a command
+  prompt.
+
+That is the difference between "the customers table leaked" and "the server is
+theirs". Which is why least privilege on the database user is not bureaucracy:
+it sets the size of your worst day.
+</Callout>
+
+## Way 2: through the exposed port
+
+The simplest and, in absolute numbers, still very frequent: the database is on
+the internet and authentication is weak, default or absent.
+
+<FieldNote kind="blog" source="Wiz Research" url="https://www.wiz.io/blog/wiz-research-redis-rce-cve-2025-49844" when="2025">
+While investigating a critical Redis flaw, Wiz counted how many instances are
+exposed to the internet: roughly **330,000**, of which about **60,000 with no
+authentication at all**.
+
+Sixty thousand databases that answer anyone who connects. And Redis is the case
+where that is worse than it sounds: with unauthenticated access you can use
+`CONFIG SET dir` and `CONFIG SET dbfilename` to choose where Redis will write
+its own dump — say, into `/root/.ssh/authorized_keys`. Store the attacker's
+public key under some key, issue `SAVE`, and the cache becomes SSH access to the
+machine.
+
+None of that is a software flaw. They are legitimate features, within reach of
+somebody who should never have been able to reach them.
+</FieldNote>
+
+<FieldNote kind="postmortem" source="Krebs on Security" url="https://krebsonsecurity.com/2017/01/extortionists-wipe-thousands-of-databases-victims-who-pay-up-get-stiffed/" when="January 2017">
+In January 2017, tens of thousands of exposed, password-less MongoDB databases
+had their data deleted and replaced with a ransom note. No flaw was exploited:
+the default of the day was listening on all interfaces without requiring
+authentication, and an automated script scanned, connected and dropped.
+
+The detail that gives the story its headline is the one worth keeping: **of the
+victims who paid, several got nothing back** — in many cases the data had never
+been copied before being deleted. There was nothing to return.
+
+The project changed the default afterwards. It is about the clearest possible
+admission that the default was the problem — and it is why "what is the default?"
+is a security question, not a convenience one.
+</FieldNote>
+
+<Callout type="danger" label="The default `initdb` picks for you">
+PostgreSQL's `initdb`, called with no arguments, writes a `pg_hba.conf` where
+local connections use the `trust` method — which means **getting in with no
+password**.
+
+Inside a container that is worse than it sounds: any process that gets execution
+in there logs into the database as the owner, with no credential at all. Which
+is why this stack's `compose.yaml` passes this explicitly:
+
+```yaml
+POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256 --auth-local=scram-sha-256"
+```
+
+Step 4 of `make attack-lab` proves it is in force — and proves it properly, by
+trying the wrong password and then the right one. Without that second test the
+check would pass even with authentication switched off.
+</Callout>
+
+## Way 3: through the leaked credential
+
+The database can be perfectly configured and the password can leak somewhere
+else entirely. The four places, in order of frequency:
+
+| Where it leaks | Why | The command that shows it |
+|---|---|---|
+| Compose `environment:` | it appears in `docker inspect` and in every child process's environment | `docker inspect <container>` |
+| Dockerfile `ENV` or `ARG` | it is baked into the **layer** and travels with the image to the registry | `docker history --no-trunc <image>` |
+| a git commit | it stays in the history forever, even after removal | `git log -p -S'password'` |
+| application or CI logs | a connection string inside an error message | a search in the log index |
+
+This stack's convention closes the first two: the password is never an
+environment variable, but a **file** whose path is the variable.
+
+```yaml
+POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+```
+
+Compose mounts the file on a tmpfs, the process reads the contents at startup,
+and `docker inspect` shows only the path. Step 8 of `make attack-lab` searches
+for the password in all three places — environment, inspect and image history —
+and fails if it finds it.
+
+## Way 4: through the copy nobody hardened
+
+The most forgotten way in, and the one that never shows up in a production
+audit: the **read replica** somebody spun up for a report, the nightly **dump**
+in a bucket, the **staging** environment with real data.
+
+Data does not have to be stolen from where it is well looked after. It has to be
+stolen from where it exists — and it almost always exists in more places than
+the inventory says.
+
+## What the intruder does after getting in
+
+Three moves, in this order, and they are worth knowing because each one's
+defense is different:
+
+1. **Read.** `pg_dump`, or a patient `SELECT`. It is the stated objective.
+2. **Persist.** Create a user, a function, a trigger — something that survives
+   the rotation of the password he used to get in.
+3. **Exfiltrate.** Send what he read outside. And this is where this stack
+   blocks the path: the `data` network is `internal: true`, so the database
+   container **has no route anywhere** outside Docker.
+
+<Callout type="why" label="Stealing and carrying away are separate problems">
+Almost every discussion about database security deals with the first move. The
+third is where a cheap defense has a disproportionate return.
+
+An attacker with full access to this stack's Postgres still has to compromise a
+**second** service — one of those sitting on two networks — just to send out
+what he took. That does not prevent the theft; it makes the operation far more
+expensive and creates a second chance at detection.
+
+It is step 11 of the lab, and it is the same idea that in Kubernetes is written
+as an egress NetworkPolicy.
+</Callout>
+
+<Tradeoff
+  a="An application user with least privilege"
+  b="An application user that owns the schema"
+  whenA="When you accept keeping a second user just for migrations. A successful injection reads and writes data, and does <b>not</b> create functions, read files from disk or change configuration — which is what separates a leak from a breach."
+  whenB="In a prototype, in a disposable environment, or while the schema changes daily and the cost of running two users exceeds the risk you are actually carrying. It is a legitimate choice, as long as it is a choice."
+  chose="none"
+  verdict="This stack uses <b>one</b> user (<code>links</code>), which owns the schema — option B, and it is an honest debt: with the database unreachable and every query parameterised, splitting the two users would return less than it costs. In a system with real users, the answer changes."
+/>
+
+<LabExercise check="6/11 — concatenated vs parameterised" file="tools/scripts/attack-lab.sh">
+Step 6 of `make attack-lab` is the lab's only attack that **works** — it returns
+3 rows where it should return 0. Two questions:
+
+1. Why does that step not count as a gate failure?
+2. Why does the demonstration run on a temporary table inside a `BEGIN` that
+   ends in `ROLLBACK`, instead of against a deliberately vulnerable endpoint in
+   the API itself?
+
+<Fragment slot="hint">
+The second question is about what would remain in the repository after the
+lesson had been read.
+</Fragment>
+
+<Fragment slot="answer">
+**1.** Because it is not testing a defense — it is **demonstrating the
+mechanism**. The desired outcome there is the leak: without it there is nothing
+to compare against the parameterised query's zero. The script marks that step as
+`teaching` rather than `blocked`, and the summary excludes it from the count of
+repelled attacks. A gate that counted it as a failure would be measuring the
+wrong thing.
+
+**2.** Because a vulnerable endpoint **stays in the repository**. Anyone who
+clones this and brings the stack up would then own a real injection path, and
+`trivy`/`hadolint` would need an exception so as not to fail the project itself
+— which corrodes the premise of the whole gate.
+
+A temporary table inside a discarded transaction teaches exactly the same thing
+and leaves nothing behind: the table does not even exist after the `ROLLBACK`,
+and the application code still contains not one concatenation. It is recorded in
+ADR 0013.
+</Fragment>
+</LabExercise>
+
+## What sticks
+
+- A database is a **program listening on a port**, with users and passwords.
+  Everything in lessons 1 and 2 applies to it.
+- There are four ways in: the application, the exposed port, the leaked
+  credential and the forgotten copy. The first is the most common because it
+  **does not require reaching the database**.
+- A parameterised query does not "escape quotes": it sends command and data
+  **separately**, and the plan is already built when the value arrives.
+- Measured here: same hostile input, **3 rows** concatenated and **0**
+  parameterised.
+- An injection's severity is decided by the database user's **privilege**, not
+  by the injection.
+- Stealing and exfiltrating are different problems. `internal: true` does not
+  prevent the first and blocks the second.
+
+<Quiz set="attacking-a-database" />

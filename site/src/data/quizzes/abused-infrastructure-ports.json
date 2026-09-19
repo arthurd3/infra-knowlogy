@@ -1,0 +1,152 @@
+{
+  "note_pt": "Perguntas da lição 4 da trilha de Segurança.",
+  "note_en": "Questions for lesson 4 of the Security track.",
+  "pt": [
+    {
+      "q": "Um ataque de amplificação por DNS precisa de três condições ao mesmo tempo. Qual destas NÃO é uma delas?",
+      "options": [
+        {
+          "text": "Uma falha de software no servidor DNS.",
+          "correct": true,
+          "why": "Não há falha nenhuma envolvida: o servidor responde a uma pergunta legítima, corretamente. As três condições são UDP (permite forjar a origem), resposta maior que a pergunta, e servidores dispostos a responder a estranhos. É o que torna esta família tão difícil de ver chegando — o serviço está funcionando bem."
+        },
+        {
+          "text": "O protocolo ser UDP, que não tem aperto de mão.",
+          "why": "É uma das três. Sem handshake, ninguém verifica quem realmente mandou o pacote, e o atacante põe o endereço da vítima como origem. Com TCP isso não funciona, porque o handshake exige uma resposta de volta ao endereço real."
+        },
+        {
+          "text": "Existirem muitos servidores que respondem a qualquer um.",
+          "why": "É uma das três, e é justamente a que a defesa ataca: um resolvedor que só atende a própria rede não amplifica nada. Por isso a recomendação nunca é 'bloqueie UDP'."
+        }
+      ]
+    },
+    {
+      "q": "Você configurou SPF no seu domínio. Isso já resolve a falsificação de remetente?",
+      "options": [
+        {
+          "text": "Não: o SPF quebra quando a mensagem é encaminhada, e sozinho ele não diz ao destinatário o que fazer com a falha.",
+          "correct": true,
+          "why": "São três registros porque resolvem coisas diferentes. SPF diz quais servidores podem enviar; DKIM assina a mensagem com uma chave sua; DMARC amarra os dois ao `From:` que o leitor de fato vê e, em `p=reject`, manda descartar o que não bater. Faltando o DMARC, o destinatário fica sem instrução."
+        },
+        {
+          "text": "Resolve: o SPF lista os servidores autorizados e o resto é rejeitado.",
+          "why": "Listar é metade do trabalho. Sem DMARC, cada destinatário decide sozinho o que fazer com uma mensagem que falha no SPF — e muitos entregam assim mesmo, para não perder e-mail legítimo encaminhado."
+        },
+        {
+          "text": "Resolve, desde que o servidor use STARTTLS.",
+          "why": "Mistura duas camadas. STARTTLS cifra um trecho da conversa, e cifra não é autenticidade de remetente. É a mesma confusão que faz alguém achar que o cadeado do navegador significa 'site confiável'."
+        }
+      ]
+    },
+    {
+      "q": "Na stack deste repositório, o container do `db` resolve o nome `cache` mas não alcança 1.1.1.1. Por quê?",
+      "options": [
+        {
+          "text": "Porque `internal: true` remove o gateway da rede `data` — o DNS interno continua lá, a rota para fora não.",
+          "correct": true,
+          "why": "Resolver um nome e alcançar um endereço são coisas diferentes. O resolvedor do Docker em 127.0.0.11 existe dentro da rede e responde pelos vizinhos; o que `internal: true` tira é a rota de saída. É o passo 11 do `make attack-lab`, e é a defesa contra exfiltração."
+        },
+        {
+          "text": "Porque o firewall do host bloqueia a saída dos containers.",
+          "why": "Não é o firewall: os outros serviços desta stack que estão na rede `egress` saem normalmente. A diferença é a configuração da rede, e não uma regra de filtragem."
+        },
+        {
+          "text": "Porque o container do `db` não tem cliente de rede instalado.",
+          "why": "Tem — o mesmo `nc` que responde 'sem rota' é o que resolve o nome do vizinho no comando anterior. Se fosse falta de ferramenta, os dois comandos falhariam igual."
+        }
+      ]
+    },
+    {
+      "q": "O MS17-010 foi publicado em março de 2017 e o WannaCry se espalhou em maio. Qual é a conclusão mais útil?",
+      "options": [
+        {
+          "text": "A janela entre correção e exploração existe quase sempre; o que costuma faltar é o processo para usá-la.",
+          "correct": true,
+          "why": "Foram dois meses com correção publicada e gratuita. Um verme não precisa de clique humano, então o crescimento é geométrico e a janela fecha em horas depois que ele começa — mas ela esteve aberta por dois meses antes disso."
+        },
+        {
+          "text": "Que o SMBv1 deveria ter sido removido do Windows antes de 2017.",
+          "why": "Verdade, e a Microsoft acabou fazendo isso — mas é uma conclusão sobre o passado que não ajuda a decidir nada hoje. A lição acionável é sobre o intervalo entre patch e exploração, que se repete a cada CVE nova."
+        },
+        {
+          "text": "Que a porta 445 estava exposta à internet na maioria das vítimas.",
+          "why": "Em parte das organizações, sim — e a regra de nunca cruzar a borda com a 445 continua valendo. Mas boa parte da propagação foi de dentro para dentro, numa rede interna plana, e é isso que torna a borda insuficiente sozinha."
+        }
+      ]
+    }
+  ],
+  "en": [
+    {
+      "q": "A DNS amplification attack needs three conditions at once. Which of these is NOT one of them?",
+      "options": [
+        {
+          "text": "A software flaw in the DNS server.",
+          "correct": true,
+          "why": "No flaw is involved at all: the server answers a legitimate question, correctly. The three conditions are UDP (which lets the source be forged), an answer larger than the question, and servers willing to answer strangers. That is what makes this family so hard to see coming — the service is working fine."
+        },
+        {
+          "text": "The protocol being UDP, with no handshake.",
+          "why": "That is one of the three. With no handshake, nobody verifies who actually sent the packet, and the attacker puts the victim's address in as the source. With TCP it does not work, because the handshake demands a reply back to the real address."
+        },
+        {
+          "text": "The existence of many servers that answer anyone.",
+          "why": "That is one of the three, and it is precisely the one the defense attacks: a resolver serving only its own network amplifies nothing. Which is why the advice is never 'block UDP'."
+        }
+      ]
+    },
+    {
+      "q": "You configured SPF for your domain. Does that solve sender spoofing?",
+      "options": [
+        {
+          "text": "No: SPF breaks when mail is forwarded, and on its own it does not tell the recipient what to do with a failure.",
+          "correct": true,
+          "why": "There are three records because they solve different problems. SPF names which servers may send; DKIM signs the message with a key of yours; DMARC ties both to the `From:` the reader actually sees and, at `p=reject`, orders mismatches dropped. Without DMARC, the recipient is left without instructions."
+        },
+        {
+          "text": "It does: SPF lists the authorised servers and everything else is rejected.",
+          "why": "Listing is half the job. Without DMARC, each recipient decides on its own what to do with a message that fails SPF — and many deliver it anyway, so as not to lose legitimately forwarded mail."
+        },
+        {
+          "text": "It does, as long as the server uses STARTTLS.",
+          "why": "That mixes two layers. STARTTLS encrypts one leg of the conversation, and encryption is not sender authenticity. It is the same confusion that makes people think a browser padlock means 'trustworthy site'."
+        }
+      ]
+    },
+    {
+      "q": "In this repository's stack, the `db` container resolves the name `cache` but cannot reach 1.1.1.1. Why?",
+      "options": [
+        {
+          "text": "Because `internal: true` removes the `data` network's gateway — the internal DNS stays, the route out does not.",
+          "correct": true,
+          "why": "Resolving a name and reaching an address are different things. Docker's resolver at 127.0.0.11 exists inside the network and answers for the neighbours; what `internal: true` removes is the egress route. That is step 11 of `make attack-lab`, and it is the defense against exfiltration."
+        },
+        {
+          "text": "Because the host firewall blocks outbound traffic from containers.",
+          "why": "It is not the firewall: this stack's other services on the `egress` network get out normally. The difference is the network's configuration, not a filtering rule."
+        },
+        {
+          "text": "Because the `db` container has no network client installed.",
+          "why": "It does — the same `nc` that answers 'no route' is what resolves the neighbour's name in the previous command. If it were a missing tool, both commands would fail the same way."
+        }
+      ]
+    },
+    {
+      "q": "MS17-010 was published in March 2017 and WannaCry spread in May. What is the most useful conclusion?",
+      "options": [
+        {
+          "text": "The window between fix and exploitation almost always exists; what is usually missing is the process to use it.",
+          "correct": true,
+          "why": "That was two months with a published, free fix available. A worm needs no human click, so growth is geometric and the window closes in hours once it starts — but it had been open for two months before that."
+        },
+        {
+          "text": "That SMBv1 should have been removed from Windows before 2017.",
+          "why": "True, and Microsoft eventually did — but it is a conclusion about the past that helps decide nothing today. The actionable lesson is about the interval between patch and exploitation, which repeats with every new CVE."
+        },
+        {
+          "text": "That port 445 was exposed to the internet at most of the victims.",
+          "why": "At some organisations, yes — and the rule about never crossing the border with 445 still holds. But much of the spread was inside to inside, across a flat internal network, and that is what makes the border insufficient on its own."
+        }
+      ]
+    }
+  ]
+}

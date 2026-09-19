@@ -1,0 +1,254 @@
+---
+key: abused-infrastructure-ports
+lang: pt
+track: seguranca
+order: 4
+title: "25, 53 e 445: a infraestrutura virada contra você"
+summary: Nas três portas que faltam do cartaz, ninguém rouba senha e ninguém explora bug na sua aplicação. O ataque é o serviço fazendo exatamente aquilo para que foi projetado — só que para outra pessoa.
+minutes: 15
+tags: [seguranca, smtp, dns, smb, amplificacao, wannacry]
+sources:
+  - label: "RFC 5321 — Simple Mail Transfer Protocol"
+    url: "https://www.rfc-editor.org/rfc/rfc5321"
+    kind: spec
+  - label: "RFC 6409 — Message Submission for Mail"
+    url: "https://www.rfc-editor.org/rfc/rfc6409"
+    kind: spec
+  - label: "RFC 7489 — DMARC"
+    url: "https://www.rfc-editor.org/rfc/rfc7489"
+    kind: spec
+  - label: "RFC 7873 — DNS Cookies"
+    url: "https://www.rfc-editor.org/rfc/rfc7873"
+    kind: spec
+  - label: "CISA — UDP-Based Amplification Attacks (TA14-017A)"
+    url: "https://www.cisa.gov/news-events/alerts/2014/01/17/udp-based-amplification-attacks"
+    kind: docs
+  - label: "Microsoft — MS17-010: Security Update for Microsoft Windows SMB Server"
+    url: "https://learn.microsoft.com/en-us/security-updates/securitybulletins/2017/ms17-010"
+    kind: docs
+  - label: "CISA — Indicators Associated With WannaCry Ransomware"
+    url: "https://www.cisa.gov/news-events/alerts/2017/05/12/indicators-associated-wannacry-ransomware"
+    kind: postmortem
+---
+
+import AmplificationLoop from "../../../components/diagrams/AmplificationLoop.astro";
+
+As lições 2 e 3 cobriram dois tipos de ataque. Na 22, 23 e 3389, alguém **entra**
+com uma credencial. Na 80 e 443, alguém explora um **defeito no seu código**.
+
+As três portas que faltam são de um terceiro tipo, e é o mais difícil de ver
+chegando: o serviço não tem defeito nenhum e ninguém rouba nada. **O ataque é o
+serviço funcionando como projetado, a serviço de outra pessoa.**
+
+## 25: o correio que entrega para qualquer um
+
+O SMTP nasceu numa internet em que todos os servidores se conheciam. Nela,
+"aceite entregar qualquer mensagem que chegar" era hospitalidade, não falha.
+
+<Term word="relay aberto" alt="open relay" open>
+Um servidor de e-mail que aceita entregar mensagem **de qualquer remetente para
+qualquer destinatário**, sem pedir autenticação.
+
+Quem descobre um relay aberto passa a mandar spam com a sua máquina, a sua banda
+e — a parte cara — a reputação do seu endereço IP. O prejuízo não é a banda: é o
+dia em que o seu domínio inteiro para de conseguir entregar e-mail porque entrou
+numa lista de bloqueio, e a sua equipe comercial descobre isso antes de você.
+
+A configuração correta é simples e é o padrão de qualquer servidor moderno: sem
+autenticação, só aceite mensagem **destinada** a um domínio seu. O risco real
+hoje é copiar uma configuração de um tutorial antigo.
+</Term>
+
+<Callout type="why" label="Por que a 25 e a 587 são portas diferentes">
+Isso confunde muita gente, e a distinção é a base de todo o resto:
+
+- **Porta 25** é a conversa entre **servidores** — o correio de um lado
+  entregando ao correio do outro. Não é para o seu cliente de e-mail.
+- **Porta 587** é a **submissão** (RFC 6409): você entregando a sua mensagem ao
+  SEU servidor. Ela exige autenticação, sempre.
+
+Separá-las foi o que permitiu exigir credencial de quem envia sem quebrar a
+entrega entre servidores. E é por isso que provedores de nuvem bloqueiam a 25 de
+saída por padrão: uma instância comprometida vira fonte de spam em minutos, e
+quase nenhuma aplicação legítima precisa falar 25 diretamente.
+</Callout>
+
+**A falsificação de remetente** é o outro lado. O campo `From:` que você lê no
+cliente é texto livre — o SMTP original não prova nada sobre quem enviou. Os
+três registros de DNS que consertam isso resolvem coisas diferentes, e é por
+isso que são três:
+
+| Registro | O que ele diz | O que ele não resolve |
+|---|---|---|
+| **SPF** | quais servidores podem enviar pelo seu domínio | quebra quando a mensagem é encaminhada |
+| **DKIM** | esta mensagem foi assinada por uma chave sua | não diz o que fazer se a assinatura falhar |
+| **DMARC** | amarra os dois ao `From:` que o leitor vê, e manda descartar o que não bater | nada, se ficar em `p=none` para sempre |
+
+## 53: a pergunta pequena que vira uma enxurrada
+
+<Term word="amplificação" alt="amplification">
+Fazer um servidor inocente mandar **muito mais dado** do que você gastou para
+provocá-lo, e apontar esse dado para outra pessoa.
+
+O mecanismo tem três partes e todas as três são necessárias:
+
+1. o protocolo é **UDP**, que não tem aperto de mão — então o endereço de
+   origem pode ser **forjado** sem que ninguém verifique;
+2. a **resposta é muito maior que a pergunta**;
+3. existem **muitos servidores** dispostos a responder a estranhos.
+
+Tire qualquer uma das três e o ataque some. É por isso que a defesa não é
+"bloquear UDP" — é o servidor parar de responder a quem não é da rede dele.
+</Term>
+
+<AmplificationLoop />
+
+<FieldNote kind="scale" source="CISA, alerta TA14-017A" url="https://www.cisa.gov/news-events/alerts/2014/01/17/udp-based-amplification-attacks" when="2014, revisado desde então">
+A CISA publica uma tabela de fatores de amplificação medidos por protocolo. O
+DNS aparece com fator entre **28 e 54 vezes**.
+
+A conta que isso permite fazer é o ponto: um atacante com 1 Gb/s de saída entrega
+de 28 a 54 Gb/s na vítima — e o tráfego chega de servidores DNS legítimos, de
+endereços que não têm nada a ver com ele. Filtrar pela origem não ajuda; a
+origem é inocente.
+
+Vale abrir a tabela inteira. O DNS não é o pior da lista, e alguns protocolos
+bem menos famosos amplificam muito mais.
+</FieldNote>
+
+O **envenenamento de cache** é o segundo ataque da 53, e é o mais sorrateiro:
+convencer um resolvedor a guardar uma resposta falsa. A partir daí, todo mundo
+que usa aquele resolvedor vai para o servidor do atacante ao digitar o seu
+domínio, enquanto o seu servidor continua no ar e correto. A falha que Dan
+Kaminsky mostrou em 2008 tornou isso prático em segundos; as respostas foram
+aleatorizar a porta de origem da consulta, os cookies do RFC 7873 e, no limite,
+assinar as respostas com DNSSEC.
+
+E há um terceiro, que reaparece na lição 5: **exfiltração por DNS**. Quando todo
+o resto está bloqueado, o DNS quase sempre sai — é a última porta que um firewall
+fecha. O invasor codifica o dado roubado no próprio nome consultado e lê o
+resultado no servidor autoritativo dele.
+
+<RunIt title="O resolvedor desta stack só atende a rede dele — medido">
+
+```bash
+make up
+
+# 1. De DENTRO da rede data: o resolvedor responde e conhece os vizinhos.
+docker run --rm --network infra-knowlogy_data alpine nslookup db
+# Server: 127.0.0.11 ... Name: db  Address: 172.x.x.x
+
+# 2. Do HOST, o mesmo endereço não é nada. 127.0.0.11 só existe DENTRO
+#    do namespace de rede de um container.
+nslookup db 127.0.0.11
+# communications error to 127.0.0.11#53: connection refused
+
+# 3. E de OUTRA rede do mesmo host, o nome não existe.
+docker run --rm --network infra-knowlogy_edge alpine nslookup db
+# ** server can't find db: NXDOMAIN
+```
+
+</RunIt>
+
+O terceiro comando é o mais instrutivo. Mesmo endereço de resolvedor, mesma
+máquina, e o nome não resolve — porque o escopo dele é a **rede**, não o host.
+É exatamente a forma que a defesa contra amplificação recomenda: um resolvedor
+que atende só a sua própria rede não amplifica nada.
+
+## 445: a porta que produziu um verme
+
+<Term word="verme" alt="worm">
+Um programa malicioso que se espalha **sem ninguém clicar em nada**. Ele
+encontra a próxima máquina sozinho, entra sozinho e recomeça.
+
+A diferença para o resto do malware é o tempo. Um phishing precisa de uma pessoa
+distraída por máquina; um verme precisa de uma vulnerabilidade alcançável e
+cresce em progressão geométrica. A janela entre "existe correção" e "não importa
+mais" fecha em horas.
+</Term>
+
+<FieldNote kind="postmortem" source="CISA, alerta sobre o WannaCry" url="https://www.cisa.gov/news-events/alerts/2017/05/12/indicators-associated-wannacry-ransomware" when="maio de 2017">
+A sequência de 2017, em datas, porque a sequência é o ensino:
+
+- **março**: a Microsoft publica o MS17-010, corrigindo uma falha no SMBv1 que
+  permitia executar código **sem nenhuma credencial**;
+- **maio**: o WannaCry usa essa falha para se espalhar sozinho, máquina a
+  máquina, dentro das redes.
+
+Houve dois meses de janela. A correção existia, estava publicada e era
+gratuita — e mesmo assim o estrago foi global.
+
+Dois detalhes que costumam ficar de fora do resumo. Primeiro: parte da
+propagação foi **de dentro para dentro**. A infecção entrava por outro caminho
+numa máquina qualquer e, dali, a 445 estava aberta entre todas as outras, porque
+a rede interna era plana. Segundo: não existe pagamento que desfaça isso — o que
+importava era a rede não ter 445 atravessando tudo.
+</FieldNote>
+
+Os outros dois ataques da 445 não usam falha nenhuma e continuam valendo hoje:
+
+- **Pass-the-hash** — o Windows autentica com o hash da senha, não com a senha.
+  Quem lê esse hash na memória de uma máquina onde teve administrador local o
+  apresenta em **outra** máquina e entra, sem nunca descobrir a senha.
+- **Retransmissão de autenticação (NTLM relay)** — o atacante induz a sua
+  máquina a tentar autenticar nele (basta um link para `\\atacante\x`) e repassa
+  essa autenticação, ao vivo, para um terceiro servidor. Ele entra como você sem
+  ter a sua senha nem o seu hash. A assinatura SMB obrigatória é o que quebra
+  isso, porque ele não consegue reassinar o que repassa.
+
+<Callout type="danger" label="A regra sem exceção">
+**A porta 445 nunca cruza a borda da rede.** Não há caso de uso legítimo:
+compartilhamento de arquivo entre escritórios passa por VPN.
+
+Se alguém pedir a exceção, o pedido é o problema — e vale tratá-lo como o sinal
+de que é. É a regra mais simples desta trilha inteira e a que teria evitado a
+maior parte da propagação do WannaCry **entre** organizações.
+</Callout>
+
+<LabExercise check="11/11 — exfiltrar a partir do banco" file="stack/compose.yaml">
+A exfiltração por DNS existe porque o DNS quase sempre tem saída. Nesta stack,
+o container do `db` consegue resolver nomes? E consegue **sair** para a internet?
+As duas respostas são diferentes, e a diferença é a defesa.
+
+<Fragment slot="hint">
+Resolver um nome e alcançar um endereço são duas coisas. Olhe o que
+`internal: true` faz com a rede `data`.
+</Fragment>
+
+<Fragment slot="answer">
+O `db` resolve nomes **da rede dele** — o resolvedor do Docker em `127.0.0.11`
+está lá e responde por `api`, `cache` e ele mesmo. O que ele não tem é **rota
+para fora**: a rede `data` é `internal: true`, o que remove o gateway.
+
+```bash
+# resolve o vizinho: funciona
+docker compose -f stack/compose.yaml -f stack/compose.prod.yaml \
+  exec db sh -c 'nslookup cache' | tail -3
+
+# alcança a internet: não há rota
+docker compose -f stack/compose.yaml -f stack/compose.prod.yaml \
+  exec db sh -c 'nc -z -w3 1.1.1.1 443' || echo "sem saída — internal: true"
+```
+
+É o passo 11 do `make attack-lab`. E é a razão de a exfiltração ser difícil
+aqui: um invasor com acesso total ao Postgres ainda precisa comprometer um
+segundo serviço — dos que estão em duas redes — só para conseguir **mandar** o
+que roubou. Roubar e levar embora são problemas separados, e vale defender os
+dois.
+</Fragment>
+</LabExercise>
+
+## O que fica
+
+- Nestas três portas o atacante não explora defeito: ele usa o serviço **como
+  ele foi feito para funcionar**.
+- A porta 25 é conversa entre servidores; a sua é a 587, e ela exige senha. Relay
+  aberto custa a reputação do seu IP, não a sua banda.
+- A amplificação precisa de três coisas ao mesmo tempo — UDP, resposta grande e
+  servidor que atende estranhos. Tire uma e o ataque some.
+- Medido aqui: o resolvedor desta stack responde só dentro da rede dele. É a
+  forma correta, em miniatura.
+- A 445 nunca cruza a borda. E a borda não é a única superfície: o WannaCry se
+  espalhou de dentro para dentro.
+
+<Quiz set="abused-infrastructure-ports" />

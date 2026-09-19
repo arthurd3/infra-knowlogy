@@ -1,0 +1,231 @@
+---
+key: layered-defense
+lang: en
+track: seguranca
+order: 6
+title: Layered defense, measured
+summary: Five lessons of attack, and now the tidying up — this stack's seven layers, each tied to the lab step that proves it. Including the list of what it deliberately does NOT defend, because only that makes the rest trustworthy.
+minutes: 14
+tags: [security, defense-in-depth, hardening, owasp, gate]
+sources:
+  - label: "OWASP — Docker Security Cheat Sheet"
+    url: "https://cheatsheetseries.owasp.org/cheatsheets/Docker_Security_Cheat_Sheet.html"
+    kind: docs
+  - label: "NIST SP 800-207 — Zero Trust Architecture"
+    url: "https://csrc.nist.gov/pubs/sp/800/207/final"
+    kind: spec
+  - label: "OWASP Top 10 2021 — A05: Security Misconfiguration"
+    url: "https://owasp.org/Top10/A05_2021-Security_Misconfiguration/"
+    kind: docs
+---
+
+import AttackSurface from "../../../components/diagrams/AttackSurface.astro";
+
+The five previous lessons were the attacker's side. This one is the tidying up —
+and it takes a specific shape in this repository: **every layer has a command
+that proves it**.
+
+That is not a stylistic choice. It is what stops a list of best practices from
+becoming a list of good intentions.
+
+<Term word="defense in depth" alt="defesa em profundidade" open>
+Assuming **every layer will fail** and designing the next one so that the
+failure is not enough.
+
+The opposite is perimeter defense: one strong wall and, behind it, trust. It
+works until the first time somebody gets in — and then there is nothing.
+
+The modern name for taking that assumption to its conclusion is *zero trust*: no
+place on the network is trusted for being "inside". In a small system that
+almost always boils down to three questions per service: who needs to talk to
+it, with what privilege, and what happens if it is compromised.
+</Term>
+
+<AttackSurface />
+
+## The seven layers, and what proves each one
+
+| # | Layer | How it shows up in this stack | Lab step |
+|---|---|---|---|
+| 1 | **Shrink the surface** | one published port, pinned to `127.0.0.1` | 1, 2 |
+| 2 | **Segment** | three networks; `data` is `internal: true` | 3, 11 |
+| 3 | **Authenticate** | `--auth-host=scram-sha-256` in `initdb` | 4 |
+| 4 | **Never confuse data with command** | every query using `$1` in `app.go` | 5, 6 |
+| 5 | **Validate what the system fetches for you** | `assert_public()` in `enrich.py` | 7 |
+| 6 | **Do not let the secret leak** | the `<VAR>_FILE` convention and `/run/secrets/` | 8 |
+| 7 | **Limit what is possible after entry** | `read_only`, `cap_drop: [ALL]`, distroless | 9, 10 |
+
+The first three are network and configuration — the ones almost any team can
+apply in an afternoon. The fourth and fifth live in **code**, and that is where
+they get forgotten, because they show up on no dashboard. The last two only
+matter on the day the earlier ones fail, which is exactly why they are worth it.
+
+<Callout type="why" label="Layer 7 is the one that looks useless until it is not">
+`read_only: true` and the distroless image stop nobody from getting in. They
+change what happens **afterwards**.
+
+Whoever obtains code execution inside the api container finds: no `/bin/sh` to
+chain commands with, no writable root to drop a webshell into, and the only
+writable directories mounted `noexec`. You can write; you cannot run what you
+wrote.
+
+This is not hypothetical — steps 9 and 10 of the lab attempt both on every run.
+And it is the difference between "an intruder had momentary execution" and "an
+intruder moved in".
+</Callout>
+
+## The eleven attacks, and what each one proves
+
+This is the whole content of `make attack-lab`. The semantics are inverted
+relative to the repository's other gates: **a check passes when the attack
+fails**.
+
+| # | The attack | The defense that repels it |
+|---|---|---|
+| 1 | sweeping the host's ports | `ports:` with the `127.0.0.1:` prefix |
+| 2 | connecting to 5432 from the host | the database publishes no port |
+| 3 | going from the proxy to the database | no route between `edge` and `data` |
+| 4 | logging into the database with the wrong password | `scram-sha-256` |
+| 5 | SQL injection through the API | `$1` in every query in `app.go` |
+| 6 | **concatenated vs parameterised** | *leaks on purpose — it is the demonstration* |
+| 7 | SSRF against the metadata service | `assert_public()` |
+| 8 | reading the secret from outside the process | the `_FILE` convention |
+| 9 | dropping a webshell | `read_only: true` |
+| 10 | getting a shell in the api | the distroless image |
+| 11 | exfiltrating from the database to the internet | `internal: true` |
+
+<RunIt title="Run the whole lab against your stack">
+
+```bash
+make up
+make attack-lab
+
+# ── Summary ═══
+#    10 attacks repelled · 0 succeeded · 0 skipped
+#    (step 6 leaks on purpose: it is the lesson's demonstration)
+#
+#    measurements -> site/src/data/attack-lab.json
+```
+
+</RunIt>
+
+<Callout type="trap" label="The lab only attacks what is yours">
+The first thing `attack-lab.sh` does, before any packet, is confirm that the
+target is `127.0.0.1` and that the containers belong to this project. If not, it
+aborts.
+
+The lock exists because a script that fires attacks should not accept an address
+from the environment. Scanning somebody else's host is a different matter — it
+needs written authorisation, and it is not what this repository teaches.
+</Callout>
+
+## What this stack does NOT defend
+
+This section is what gives the previous ones their credibility. Nothing here is
+an oversight: it is scope, and it is written down so you do not leave the track
+thinking the stack is complete.
+
+- **There is no WAF.** No generic filter in front of the application. The choice
+  is deliberate — a WAF is good as a second layer and terrible as a first,
+  because it invites you not to fix the application.
+- **There is no per-IP request limit on the API.** A persistent client consumes
+  whatever it likes up to the cgroup's CPU and memory limits. It is the easiest
+  gap to close and it is still open.
+- **There is no `Content-Security-Policy`.** The site is static and the risk is
+  low, but "low" is not "zero" and the header is cheap.
+- **There is no TLS between services.** Traffic between `edge`, `api` and `db`
+  is cleartext inside Docker's networks. The defense here is segmentation, and
+  it is a choice: trusting the internal network means trusting whoever has
+  access to the host.
+- **The API has no authentication at all.** Anyone can create a link. It is a
+  public shortener by design, which means the whole access-control line of
+  reasoning — roles, sessions, tokens — simply does not exist here.
+- **There is no secret rotation.** The Postgres password is generated once by
+  `init-secrets.sh` and stays.
+- **The application uses a database user that owns the schema.** The debt
+  recorded in lesson 5's trade-off.
+
+<FieldNote kind="spec" source="NIST, SP 800-207" url="https://csrc.nist.gov/pubs/sp/800/207/final" when="2020">
+The publication that standardised the term *zero trust* draws a distinction
+worth carrying into any system, of any size: zero trust is not a product, it is
+a **set of principles**. No resource is trusted because of where it sits on the
+network; every session is authenticated and authorised; and access is granted
+per request, not per perimeter.
+
+What reading the document tends to make clear to anyone expecting a recipe is
+that most of the work is not buying anything — it is **knowing what exists**:
+which services, which data, who talks to whom. An honest inventory is a
+prerequisite for any architecture, and it is the part nobody enjoys doing.
+</FieldNote>
+
+<Tradeoff
+  a="Trust the border: a strong firewall, a trusted internal network"
+  b="Assume the border is lost: every service defends itself"
+  whenA="When the perimeter is real and small — one machine, one service, one team — and instrumenting every component does not pay for itself. It is honest in a lab and in an internal tool with restricted use."
+  whenB="When there are several services, people coming and going, and third-party dependencies. WannaCry is the argument: the infection arrived by another route and the flat internal network did the rest. The border is not a bad layer — it is only one layer."
+  chose="b"
+  verdict="This stack assumes the border is lost at every step: step 3 assumes the proxy is already compromised, steps 9 and 10 assume code execution has already been obtained, and step 11 assumes the database is already open. None of the checks asks “did the intruder get in?” — they all ask “what if they already have?”."
+  adr="0013-laboratorio-de-ataque-na-propria-stack"
+/>
+
+<LabExercise check="9/11 — dropping a webshell" file="stack/compose.prod.yaml">
+The best way to trust a gate is to watch it **fail**. Break layer 7 on purpose
+and watch the lab call it out — then undo it.
+
+<Fragment slot="hint">
+`read_only: true` lives in the `x-hardened` block of `compose.prod.yaml`, and it
+is inherited by every service.
+</Fragment>
+
+<Fragment slot="answer">
+```bash
+# 1. Turn off the immutable rootfs for the worker only, on top of the overlay:
+cat > /tmp/break.yaml <<'YAML'
+services:
+  worker:
+    read_only: false
+YAML
+
+docker compose -f stack/compose.yaml -f stack/compose.prod.yaml \
+  -f /tmp/break.yaml up -d worker
+
+# 2. Now the attack works — and the lab must say so, loudly:
+make attack-lab
+#   ── 9/11  Writing a webshell into the container's filesystem
+#      ✗ ATTACK SUCCEEDED — the rootfs is writable (read_only is not in force)
+#   ═══ Summary ═══  9 attacks repelled · 1 succeeded
+
+# 3. Undo it:
+make up && rm /tmp/break.yaml
+```
+
+Notice that the script **removes the file it managed to write** before carrying
+on: a gate that sabotages its own environment when it fails cannot be used twice
+in a row.
+
+And notice the exit code. With a successful attack, `attack-lab` exits `1`,
+which makes `make` report an error — that is what lets you hang it off a
+pipeline without anyone needing to read the output.
+</Fragment>
+</LabExercise>
+
+## What sticks from the whole track
+
+- A **port** is a number in a system table. With no process listening there is
+  no port — and the defense that works is the service not existing from the
+  outside.
+- 22, 23 and 3389 are one family: **credentials**. The defense with the best
+  return is not publishing.
+- 80 and 443 do not suffer injection — the **application** does, and injection
+  crosses TLS without losing a character.
+- 25, 53 and 445 are the service **working as designed**, in somebody else's
+  service.
+- A **database** has four ways in, and the most common one does not need to
+  reach its port at all.
+- And the tidying up of all of it: **layers**, each assuming the previous one
+  failed, and each with a command proving it still stands.
+
+The poster that opened this track is still a good poster. It is just not a
+threat model — and now you know the difference.
+
+<Quiz set="layered-defense" />

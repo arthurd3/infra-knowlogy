@@ -20,6 +20,8 @@ O que é indexado:
   roadmap      docs/ROADMAP.md                      (os módulos e as regras deles)
   measurement  site/src/data/measured.json          (números medidos, virados em prosa)
   quiz         site/src/data/quizzes/*.json         (a explicação de cada alternativa)
+  port         site/src/data/ports.json             (o mecanismo de cada ataque por porta)
+  attack       site/src/data/attack-lab.json        (o resultado de cada ataque do portão)
 
 O formato do ponto imita o do mcp-server-qdrant de propósito — vetor nomeado
 `fast-all-minilm-l6-v2` e payload `{document, metadata}` — para que o MCP
@@ -211,6 +213,101 @@ def quiz_points():
                 )
 
 
+def port_points():
+    """Transforma ports.json em prosa pesquisável, uma porta por ponto.
+
+    É o conteúdo da trilha de Segurança em forma de dado, e ele é o lugar onde
+    o MECANISMO de cada ataque está escrito — "por que o SSL stripping não é da
+    443" e "o que o CONFIG SET dir do Redis faz" só existem aqui e no widget
+    que os apresenta. Sem este indexador, a busca não alcança nenhum dos dois.
+    """
+    f = ROOT / "site/src/data/ports.json"
+    if not f.is_file():
+        return
+    d = json.loads(f.read_text())
+    legend = d.get("legend", {}).get("inThisStack", {})
+    for p in d["ports"]:
+        for lang in ("pt", "en"):
+            side = p.get(lang)
+            if not side:
+                continue
+            aqui = legend.get(p["inThisStack"], {}).get(lang, p["inThisStack"])
+            rotulos = {
+                "pt": ("Uso", "Nesta stack", "Como atacam", "Como se defende",
+                       "Parece defesa e não é", "como perceber", "custo"),
+                "en": ("Use", "In this stack", "How it is attacked", "How it is defended",
+                       "Looks like a defense, is not", "how to spot it", "cost"),
+            }[lang]
+            lines = [
+                f"Porta {p['port']}/{p['transport']} — {p['service']}.",
+                "",
+                f"{rotulos[0]}: {side['use']}",
+                f"{rotulos[1]}: {aqui}. {side['stackNote']}",
+                "",
+                f"{rotulos[2]}:",
+            ]
+            for a in side["attacks"]:
+                lines.append(f"- {a['name']}: {a['how']}")
+                if a.get("tell"):
+                    lines.append(f"  ({rotulos[5]}: {a['tell']})")
+            lines += ["", f"{rotulos[3]}:"]
+            for x in side["defenses"]:
+                lines.append(f"- {x['name']}: {x['how']} ({rotulos[6]}: {x['cost']})")
+            for m in side.get("myths", []):
+                lines += ["", f"{rotulos[4]}: “{m['claim']}” — {m['why']}"]
+
+            yield point(
+                "port", f, f"{p['port']} {p['service']} [{lang}]", "\n".join(lines),
+                {"title": f"Porta {p['port']} — {p['service']}", "lang": lang,
+                 "port": p["port"], "service": p["service"], "group": p["group"]},
+            )
+
+
+def attack_points():
+    """Transforma attack-lab.json em prosa pesquisável, um ataque por ponto.
+
+    Mesmo papel do measurement_points() para os tamanhos de imagem: o resultado
+    de cada ataque existe como JSON dentro de um portão, e "o edge alcança o
+    banco?" merece resposta indexada — com o comando e a linha de configuração
+    que a sustentam.
+    """
+    f = ROOT / "site/src/data/attack-lab.json"
+    if not f.is_file():
+        return
+    d = json.loads(f.read_text())
+    veredito = {
+        "pt": {"blocked": "ataque repelido", "breached": "ATAQUE FUNCIONOU",
+               "teaching": "vaza de propósito — é a demonstração", "skipped": "pulado"},
+        "en": {"blocked": "attack repelled", "breached": "ATTACK SUCCEEDED",
+               "teaching": "leaks on purpose — it is the demonstration", "skipped": "skipped"},
+    }
+    for a in d["attacks"]:
+        for lang in ("pt", "en"):
+            nota = a.get(f"note_{lang}")
+            if not nota:
+                continue
+            cabecalho = (
+                f"Passo {a['n']} de 11 do `make attack-lab` ({a['id']}): "
+                f"{veredito[lang][a['outcome']]}."
+                if lang == "pt" else
+                f"Step {a['n']} of 11 in `make attack-lab` ({a['id']}): "
+                f"{veredito[lang][a['outcome']]}."
+            )
+            lines = [cabecalho, "", nota, "",
+                     f"{'Defesa' if lang == 'pt' else 'Defense'}: {a['defense']}"]
+            if a.get("detail"):
+                lines.append(f"{'Medido' if lang == 'pt' else 'Measured'}: {a['detail']}")
+            lines.append(
+                f"{'Gravado em' if lang == 'pt' else 'Recorded on'} {d['generatedAt'][:10]} "
+                f"(Docker {d['dockerVersion']}), alvo {d['target']}."
+            )
+            yield point(
+                "attack", f, f"attack-lab {a['n']} {a['id']} [{lang}]", "\n".join(lines),
+                {"title": f"Laboratório de ataque — passo {a['n']}", "lang": lang,
+                 "id": a["id"], "outcome": a["outcome"]},
+            )
+
+
 def collect() -> list[models.PointStruct]:
     points: list[models.PointStruct] = []
 
@@ -239,6 +336,8 @@ def collect() -> list[models.PointStruct]:
 
     points += list(measurement_points())
     points += list(quiz_points())
+    points += list(port_points())
+    points += list(attack_points())
     return points
 
 

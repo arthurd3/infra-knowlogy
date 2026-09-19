@@ -1,6 +1,7 @@
 ---
 import "../styles/global.css";
-import { useTranslations, otherLang, languages, repoUrl, type Lang } from "../i18n/ui";
+import { getCollection } from "astro:content";
+import { useTranslations, otherLang, languages, repoUrl, TRACKS, type Lang, type Track } from "../i18n/ui";
 
 interface Props {
   lang: Lang;
@@ -17,6 +18,14 @@ const t = useTranslations(lang);
 const other = otherLang(lang);
 const alt = altPath ?? `/${other}/`;
 const currentPath = Astro.url.pathname;
+
+// As trilhas da nav saem de TRACKS, e só entram as que TÊM lição neste idioma.
+// Antes eram dois literais escritos à mão — e a trilha de Segurança nasceu
+// invisível na barra por causa disso, mesmo com seis lições publicadas. Uma
+// trilha vazia continua fora: mandar o leitor para uma âncora sem conteúdo é
+// pior do que não oferecer o link.
+const doIdioma = await getCollection("lessons", (e) => e.data.lang === lang);
+const navTracks = TRACKS.filter((tr) => doIdioma.some((e) => e.data.track === tr)) as Track[];
 ---
 
 <!doctype html>
@@ -77,8 +86,9 @@ const currentPath = Astro.url.pathname;
           <a class="nav__link" href={`/${lang}/`} aria-current={currentPath === `/${lang}/` ? "page" : undefined}>
             {t("nav.home")}
           </a>
-          <a class="nav__link nav__link--optional" href={`/${lang}/#fundamentos`}>{t("track.fundamentos")}</a>
-          <a class="nav__link nav__link--optional" href={`/${lang}/#kubernetes`}>{t("track.kubernetes")}</a>
+          {navTracks.map((tr) => (
+            <a class="nav__link nav__link--optional" href={`/${lang}/#${tr}`}>{t(`track.${tr}`)}</a>
+          ))}
         </nav>
 
         <span class="nav__spacer"></span>

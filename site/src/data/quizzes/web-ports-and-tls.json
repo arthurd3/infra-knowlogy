@@ -1,0 +1,152 @@
+{
+  "note_pt": "Perguntas da lição 3 da trilha de Segurança.",
+  "note_en": "Questions for lesson 3 of the Security track.",
+  "pt": [
+    {
+      "q": "Seu site passou a atender só em HTTPS, com certificado válido. Ele ainda pode sofrer injeção de SQL?",
+      "options": [
+        {
+          "text": "Pode, exatamente igual: o TLS termina no servidor e a aplicação recebe a mesma string.",
+          "correct": true,
+          "why": "O túnel protege o caminho. Chegando ao servidor, a requisição é decifrada e entregue à aplicação idêntica à que viria pela 80 — inclusive a carga hostil. A linha de código que concatena a consulta nem sabe por qual porta a requisição entrou."
+        },
+        {
+          "text": "Não: o conteúdo cifrado não pode ser interpretado como comando SQL.",
+          "why": "Confunde onde a cifra acaba. Ela acaba no servidor, antes da aplicação. Se o conteúdo continuasse cifrado, a aplicação não conseguiria processar requisição nenhuma — nem as legítimas."
+        },
+        {
+          "text": "Só se o certificado for autoassinado.",
+          "why": "Qualidade de certificado é sobre a autenticação do servidor, e não tem relação com o que a aplicação faz com a string depois. Um certificado impecável e uma consulta concatenada convivem perfeitamente."
+        }
+      ]
+    },
+    {
+      "q": "O SSL stripping é listado no cartaz como ataque da porta 443. Onde ele acontece de verdade?",
+      "options": [
+        {
+          "text": "Na 80: o atacante intercepta a primeira requisição em texto claro e engole o redirecionamento.",
+          "correct": true,
+          "why": "Você digita o domínio sem `https://` e o navegador tenta HTTP primeiro. É essa requisição, na 80, que o atacante captura — e a partir daí ele fala HTTPS com o site e HTTP com você. Ele não ataca a 443: ele impede você de CHEGAR nela."
+        },
+        {
+          "text": "Na 443, quebrando a cifra do TLS.",
+          "why": "Nada é quebrado. O TLS do lado do servidor continua íntegro — o atacante o usa normalmente. O que ele faz é impedir que a SUA metade da conversa chegue a ser cifrada."
+        },
+        {
+          "text": "No servidor DNS, apontando o domínio para outro endereço.",
+          "why": "É outro ataque (spoofing de DNS), que também serve para pôr alguém no meio, mas não é o stripping. O stripping não precisa mexer em DNS nenhum: ele atua sobre o tráfego que já está passando por ele."
+        }
+      ]
+    },
+    {
+      "q": "Qual destas o TLS NÃO entrega?",
+      "options": [
+        {
+          "text": "Alguma garantia de que o conteúdo que trafega não é hostil.",
+          "correct": true,
+          "why": "O TLS é o envelope, não o revisor. Ele entrega confidencialidade, integridade e autenticação do servidor — e não tem a menor ideia do que é uma consulta SQL ou um comentário com `<script>`. É essa quarta garantia inexistente que o cartaz sugere sem querer."
+        },
+        {
+          "text": "Confidencialidade: quem está no caminho não lê.",
+          "why": "Essa ele entrega, e a lição mede: a credencial aparece uma vez no fio em HTTP e zero vezes em HTTPS, com o mesmo cabeçalho nos dois casos."
+        },
+        {
+          "text": "Autenticação do servidor: você fala com quem controla o domínio.",
+          "why": "Essa ele entrega, dentro de um limite que vale conhecer: ela vale o quanto valem as autoridades certificadoras em que o SEU dispositivo confia. Um certificado corporativo instalado no seu aparelho abre o túnel legalmente."
+        }
+      ]
+    },
+    {
+      "q": "A API desta stack rejeita `?limit=1;DROP TABLE links--`. Qual das duas defesas envolvidas é a que se pode confiar a longo prazo?",
+      "options": [
+        {
+          "text": "A consulta parametrizada (`LIMIT $1`), porque vale para qualquer valor, inclusive texto livre.",
+          "correct": true,
+          "why": "A validação com `strconv.Atoi` resolve este campo porque ele é numérico — e envelhece mal: no dia em que a API aceitar um campo de texto livre (uma busca, um nome), não haverá inteiro para validar. A parametrização continua valendo, porque ela separa comando de dado independentemente do conteúdo."
+        },
+        {
+          "text": "A validação de entrada (`strconv.Atoi`), porque impede a carga hostil de chegar ao banco.",
+          "why": "É uma rede de proteção excelente e barata, e neste campo ela até resolve sozinha. Só que ela é específica deste formato: nenhum `Atoi` protege um campo que legitimamente aceita texto com aspas."
+        },
+        {
+          "text": "As duas são equivalentes: qualquer uma sozinha basta.",
+          "why": "Equivalentes elas não são. As duas juntas são defesa em profundidade e isso é ótimo — mas se você tiver que escolher qual não pode faltar, é a parametrização: ela é a única que continua valendo quando o campo muda de tipo."
+        }
+      ]
+    }
+  ],
+  "en": [
+    {
+      "q": "Your site now serves HTTPS only, with a valid certificate. Can it still suffer SQL injection?",
+      "options": [
+        {
+          "text": "Yes, exactly as before: TLS terminates at the server and the application receives the same string.",
+          "correct": true,
+          "why": "The tunnel protects the path. On arrival at the server the request is decrypted and handed to the application identical to one that would have come over 80 — hostile payload included. The line of code concatenating the query does not even know which port the request came in on."
+        },
+        {
+          "text": "No: encrypted content cannot be interpreted as a SQL command.",
+          "why": "That mistakes where the encryption ends. It ends at the server, before the application. If the content stayed encrypted, the application could not process any request at all — not even the legitimate ones."
+        },
+        {
+          "text": "Only if the certificate is self-signed.",
+          "why": "Certificate quality is about server authentication, and has no bearing on what the application does with the string afterwards. A flawless certificate and a concatenated query coexist perfectly well."
+        }
+      ]
+    },
+    {
+      "q": "SSL stripping is listed on the poster as an attack on port 443. Where does it actually happen?",
+      "options": [
+        {
+          "text": "On 80: the attacker intercepts the first cleartext request and swallows the redirect.",
+          "correct": true,
+          "why": "You type the domain without `https://` and the browser tries HTTP first. That request, on port 80, is the one the attacker captures — and from there he speaks HTTPS to the site and HTTP to you. He does not attack 443: he stops you from REACHING it."
+        },
+        {
+          "text": "On 443, by breaking TLS encryption.",
+          "why": "Nothing is broken. The server-side TLS stays perfectly intact — the attacker uses it normally. What he does is stop YOUR half of the conversation from ever being encrypted."
+        },
+        {
+          "text": "At the DNS server, pointing the domain at another address.",
+          "why": "That is a different attack (DNS spoofing), which also serves to put someone in the middle, but it is not stripping. Stripping needs no DNS tampering at all: it operates on traffic that is already passing through it."
+        }
+      ]
+    },
+    {
+      "q": "Which of these does TLS NOT deliver?",
+      "options": [
+        {
+          "text": "Any assurance that the content travelling through it is not hostile.",
+          "correct": true,
+          "why": "TLS is the envelope, not the editor. It delivers confidentiality, integrity and server authentication — and has no idea what a SQL query or a comment containing `<script>` is. That non-existent fourth guarantee is the one the poster accidentally implies."
+        },
+        {
+          "text": "Confidentiality: whoever is on the path cannot read it.",
+          "why": "It does deliver that, and the lesson measures it: the credential shows up once on the wire over HTTP and zero times over HTTPS, with the same header in both cases."
+        },
+        {
+          "text": "Server authentication: you are talking to whoever controls the domain.",
+          "why": "It does deliver that, within a limit worth knowing: it is worth exactly what the certificate authorities YOUR device trusts are worth. A corporate certificate installed on your machine opens the tunnel entirely legally."
+        }
+      ]
+    },
+    {
+      "q": "This stack's API rejects `?limit=1;DROP TABLE links--`. Of the two defenses involved, which is the one you can rely on long term?",
+      "options": [
+        {
+          "text": "The parameterised query (`LIMIT $1`), because it holds for any value, free text included.",
+          "correct": true,
+          "why": "Validation with `strconv.Atoi` solves this field because the field is numeric — and it ages badly: the day the API accepts a free-text field (a search, a name), there will be no integer to validate. Parameterisation keeps holding, because it separates command from data regardless of the content."
+        },
+        {
+          "text": "Input validation (`strconv.Atoi`), because it stops the hostile payload from reaching the database.",
+          "why": "It is an excellent, cheap safety net, and on this field it even suffices on its own. But it is specific to this format: no `Atoi` protects a field that legitimately accepts text with quotes in it."
+        },
+        {
+          "text": "They are equivalent: either one alone is enough.",
+          "why": "Equivalent they are not. Together they are defense in depth, which is great — but if you have to pick the one that cannot be missing, it is parameterisation: it is the only one that keeps holding when the field changes type."
+        }
+      ]
+    }
+  ]
+}

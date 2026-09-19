@@ -16,7 +16,7 @@ const C = {
   pt: {
     attacker: "atacante", attackerNote: "banda modesta",
     ask: "pergunta pequena", askSize: "≈ 60 bytes",
-    forged: "com o endereço de origem FORJADO: o da vítima",
+    forged1: "com o endereço de origem", forged2: "FORJADO: o da vítima",
     resolvers: "servidores de DNS que respondem a qualquer um",
     answer: "resposta grande", answerSize: "≈ 1.700–3.200 bytes",
     victim: "vítima", victimNote: "nunca perguntou nada",
@@ -31,7 +31,7 @@ const C = {
   en: {
     attacker: "attacker", attackerNote: "modest bandwidth",
     ask: "a small question", askSize: "≈ 60 bytes",
-    forged: "with the source address FORGED: the victim's",
+    forged1: "with the source address", forged2: "FORGED: the victim's",
     resolvers: "DNS servers that answer anyone",
     answer: "a large answer", answerSize: "≈ 1,700–3,200 bytes",
     victim: "victim", victimNote: "never asked anything",
@@ -67,7 +67,8 @@ const C = {
     <path d="M126 114 L236 114" class="dg-line" stroke-width="1.2" marker-end="url(#am-arrow)" />
     <text x="181" y="104" text-anchor="middle" class="dg-muted" font-size="9">{C.ask}</text>
     <text x="181" y="130" text-anchor="middle" class="dg-mono dg-faint" font-size="9">{C.askSize}</text>
-    <text x="181" y="152" text-anchor="middle" class="dg-fill-warn" font-size="8.5">{C.forged}</text>
+    <text x="181" y="150" text-anchor="middle" class="dg-fill-warn" font-size="8.5">{C.forged1}</text>
+    <text x="181" y="162" text-anchor="middle" class="dg-fill-warn" font-size="8.5" font-weight="700">{C.forged2}</text>
 
     <!-- Os resolvedores abertos -->
     <rect x="240" y="40" width="180" height="150" rx={10} class="dg-box dg-box--dashed" />

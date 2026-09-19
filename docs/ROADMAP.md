@@ -17,6 +17,13 @@ lado a lado só é honesta porque a aplicação é a mesma.
 | 4 | **IaC (Terraform/OpenTofu)** — provisionar o host (ou o cluster) que os módulos 1–2 assumem existir | `iac/` | a definir | reservado |
 | 5 | **Configuração (Ansible)** — preparar um host Fedora real: Docker, SELinux, firewall, usuários — as coisas que o módulo 1 encontrou na marra | `config/` | a definir | reservado |
 | 6 | **Observabilidade avançada** — SLOs, alerting e tracing por cima do profile `obs` já existente | `stack/` (profile) | a definir | reservado |
+| — | **Segurança (transversal)** — a superfície de ataque da MESMA stack, atacada de dentro: portas, credenciais, injeção, exfiltração | `tools/scripts/attack-lab.sh` | `make attack-lab` (11 ataques) | **feito** · [ADR 0013](adr/0013-laboratorio-de-ataque-na-propria-stack.md) · 6 lições bilíngues na trilha `seguranca` |
+
+> **Por que a Segurança não tem número.** Os módulos numerados são *vistas de
+> deploy* da mesma aplicação — Compose, Kubernetes, Jenkins. A trilha de
+> Segurança não porta a stack para lugar nenhum: ela ataca a que já existe, em
+> qualquer das vistas. Por isso ela é transversal, tem portão próprio
+> (`make attack-lab`) e não reivindica um diretório de módulo.
 
 ## Regras que valem para qualquer módulo novo
 
@@ -49,6 +56,12 @@ lado a lado só é honesta porque a aplicação é a mesma.
   (Trivy) e `sign` (cosign). A assinatura é a parte interessante — no GitHub
   Actions ela é keyless pelo OIDC do workflow; num Jenkins self-hosted custa
   uma chave gerenciada, e essa assimetria é o assunto de uma das lições.
+- **Segurança:** as 6 lições estão escritas e o portão está verde (10 ataques
+  repelidos, o passo 6 vazando de propósito). Ficou para depois: um ataque de
+  força bruta com taxa medida (hoje o passo 4 prova a recusa, não a velocidade),
+  e o espelho do laboratório contra o cluster kind — as NetworkPolicies do
+  módulo 2 dizem a mesma coisa que as redes do Compose e ninguém tentou
+  atravessá-las ainda.
 - **Módulo 2:** depois das 3 lições iniciais — Ingress de verdade
   (ingress-nginx), StatefulSets a fundo, HPA, e um job de kind no CI (o nome
   fica reservado aqui até o portão estabilizar localmente).

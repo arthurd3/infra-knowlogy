@@ -1,0 +1,152 @@
+{
+  "note_pt": "Perguntas da lição 6 da trilha de Segurança.",
+  "note_en": "Questions for lesson 6 of the Security track.",
+  "pt": [
+    {
+      "q": "O `read_only: true` e a imagem distroless não impedem ninguém de entrar. Então para que servem?",
+      "options": [
+        {
+          "text": "Para limitar o que é possível fazer DEPOIS de entrar: sem shell para encadear comandos e sem raiz gravável para deixar algo para trás.",
+          "correct": true,
+          "why": "É a camada 7, e ela é a diferença entre 'um invasor teve execução momentânea' e 'um invasor se instalou'. Os passos 9 e 10 do laboratório tentam as duas coisas a cada execução — depositar um webshell e abrir um shell — e as duas falham."
+        },
+        {
+          "text": "Para reduzir o tamanho da imagem e a superfície de CVE.",
+          "why": "É um efeito colateral real e bem-vindo da imagem distroless, e não é o ponto aqui. O `read_only` não reduz tamanho nenhum, e a pergunta é sobre o que as duas coisas têm em comum."
+        },
+        {
+          "text": "Para impedir que a aplicação grave arquivo por engano.",
+          "why": "Acontece, e é útil como higiene — mas é consequência, não objetivo. A stack declara tmpfs exatamente onde a aplicação precisa gravar, então o caminho legítimo continua aberto."
+        }
+      ]
+    },
+    {
+      "q": "No `make attack-lab`, o passo 6 devolve 3 linhas quando deveria devolver 0. Por que o portão não reprova?",
+      "options": [
+        {
+          "text": "Porque ele não testa defesa nenhuma — demonstra o mecanismo, e precisa vazar para ensinar.",
+          "correct": true,
+          "why": "O script marca esse passo como `teaching` em vez de `blocked`, e o resumo o exclui da contagem. Sem o vazamento não há o que comparar com o zero da consulta parametrizada. Um portão que contasse isso como falha estaria medindo a coisa errada."
+        },
+        {
+          "text": "Porque o vazamento acontece numa tabela temporária, e o portão só olha tabelas reais.",
+          "why": "A tabela temporária existe por outro motivo — não deixar nada para trás — e o portão não faz essa distinção sozinho. Quem decide que aquele passo é demonstração é a marcação `teaching` no próprio script."
+        },
+        {
+          "text": "Porque 3 linhas é pouco: o limite do portão é maior.",
+          "why": "Não há limite de linhas em lugar nenhum. A checagem é binária e o resultado desejado ali é justamente o vazamento — o passo seria um problema se a consulta PARAMETRIZADA devolvesse algo diferente de zero."
+        }
+      ]
+    },
+    {
+      "q": "Esta stack não tem WAF, e isso está escrito na lição. Qual é o argumento a favor dessa escolha?",
+      "options": [
+        {
+          "text": "Um WAF é bom como segunda camada e ruim como primeira: ele convida a não consertar a aplicação.",
+          "correct": true,
+          "why": "A defesa contra injeção mora na linha de código que monta a consulta. Um filtro na frente pode barrar padrões conhecidos, e o risco real é o conforto que ele dá — a aplicação continua vulnerável e ninguém sente urgência. Como segunda camada, sobre uma aplicação já correta, ele tem valor."
+        },
+        {
+          "text": "Um WAF só funciona em aplicações grandes.",
+          "why": "Tamanho não tem relação com isso. O argumento da lição é sobre ordem de prioridade entre as camadas, e ele vale igual para uma aplicação de um endpoint só."
+        },
+        {
+          "text": "Porque a stack já usa HTTPS, o que torna o WAF redundante.",
+          "why": "Confunde as camadas exatamente como o cartaz fazia na lição 3. TLS protege o transporte; o WAF olharia o conteúdo depois de decifrado. Os dois respondem a perguntas diferentes e nenhum substitui o outro."
+        }
+      ]
+    },
+    {
+      "q": "O laboratório supõe, em vários passos, que o invasor JÁ está dentro — o proxy comprometido, a execução de código obtida. Por que desenhar as checagens assim?",
+      "options": [
+        {
+          "text": "Porque defesa em profundidade é supor que cada camada vai falhar e desenhar a próxima para que a falha não baste.",
+          "correct": true,
+          "why": "Uma checagem que só pergunta 'o invasor entrou?' mede o perímetro. As do laboratório perguntam 'e se já tiver entrado?' — que é a pergunta que o WannaCry tornou incontornável, quando a infecção entrou por outro caminho e a rede interna plana fez o resto."
+        },
+        {
+          "text": "Porque testar o perímetro exigiria atacar de fora do host, o que o script não pode fazer.",
+          "why": "A trava do script realmente limita o alvo a 127.0.0.1, mas isso é consequência e não causa. Mesmo pudesse atacar de fora, as checagens de camada interna continuariam existindo — elas medem outra coisa."
+        },
+        {
+          "text": "Porque o perímetro desta stack já é provado pelo `make verify`.",
+          "why": "O `verify` checa configuração, e há sobreposição real entre os dois portões — mas a diferença não é essa. O laboratório supõe a derrota da camada anterior por princípio, e é isso que o faz medir profundidade em vez de perímetro."
+        }
+      ]
+    }
+  ],
+  "en": [
+    {
+      "q": "`read_only: true` and the distroless image stop nobody from getting in. So what are they for?",
+      "options": [
+        {
+          "text": "To limit what is possible AFTER entry: no shell to chain commands with and no writable root to leave anything behind in.",
+          "correct": true,
+          "why": "That is layer 7, and it is the difference between 'an intruder had momentary execution' and 'an intruder moved in'. Steps 9 and 10 of the lab attempt both on every run — dropping a webshell and opening a shell — and both fail."
+        },
+        {
+          "text": "To shrink the image and its CVE surface.",
+          "why": "That is a real and welcome side effect of the distroless image, and it is not the point here. `read_only` shrinks nothing, and the question is about what the two have in common."
+        },
+        {
+          "text": "To stop the application from writing files by mistake.",
+          "why": "It does, and it is useful hygiene — but it is a consequence, not the objective. The stack declares tmpfs mounts exactly where the application needs to write, so the legitimate path stays open."
+        }
+      ]
+    },
+    {
+      "q": "In `make attack-lab`, step 6 returns 3 rows where it should return 0. Why does the gate not fail?",
+      "options": [
+        {
+          "text": "Because it tests no defense — it demonstrates the mechanism, and it has to leak in order to teach.",
+          "correct": true,
+          "why": "The script marks that step as `teaching` rather than `blocked`, and the summary excludes it from the count. Without the leak there is nothing to compare against the parameterised query's zero. A gate counting it as a failure would be measuring the wrong thing."
+        },
+        {
+          "text": "Because the leak happens on a temporary table, and the gate only looks at real tables.",
+          "why": "The temporary table exists for a different reason — leaving nothing behind — and the gate does not make that distinction on its own. What decides that the step is a demonstration is the `teaching` marking in the script itself."
+        },
+        {
+          "text": "Because 3 rows is a small number: the gate's threshold is higher.",
+          "why": "There is no row threshold anywhere. The check is binary and the desired outcome there is precisely the leak — the step would be a problem if the PARAMETERISED query returned anything other than zero."
+        }
+      ]
+    },
+    {
+      "q": "This stack has no WAF, and the lesson says so. What is the argument in favour of that choice?",
+      "options": [
+        {
+          "text": "A WAF is good as a second layer and bad as a first: it invites you not to fix the application.",
+          "correct": true,
+          "why": "The defense against injection lives in the line of code that builds the query. A filter in front can block known patterns, and the real risk is the comfort it provides — the application stays vulnerable and nobody feels any urgency. As a second layer, over an already-correct application, it has value."
+        },
+        {
+          "text": "A WAF only works on large applications.",
+          "why": "Size has nothing to do with it. The lesson's argument is about the priority order between layers, and it holds equally for a one-endpoint application."
+        },
+        {
+          "text": "Because the stack already uses HTTPS, which makes a WAF redundant.",
+          "why": "That conflates the layers exactly as the poster did in lesson 3. TLS protects transport; a WAF would look at the content after decryption. The two answer different questions and neither replaces the other."
+        }
+      ]
+    },
+    {
+      "q": "In several steps the lab assumes the intruder is ALREADY inside — the proxy compromised, code execution obtained. Why design the checks that way?",
+      "options": [
+        {
+          "text": "Because defense in depth means assuming each layer will fail and designing the next so that the failure is not enough.",
+          "correct": true,
+          "why": "A check that only asks 'did the intruder get in?' measures the perimeter. The lab's checks ask 'what if they already have?' — the question WannaCry made unavoidable, when the infection arrived by another route and the flat internal network did the rest."
+        },
+        {
+          "text": "Because testing the perimeter would require attacking from outside the host, which the script cannot do.",
+          "why": "The script's lock does limit the target to 127.0.0.1, but that is a consequence rather than a cause. Even if it could attack from outside, the inner-layer checks would still exist — they measure something else."
+        },
+        {
+          "text": "Because this stack's perimeter is already proven by `make verify`.",
+          "why": "`verify` checks configuration, and there is real overlap between the two gates — but that is not the difference. The lab assumes the previous layer is defeated as a matter of principle, and that is what makes it measure depth rather than perimeter."
+        }
+      ]
+    }
+  ]
+}

@@ -23,3 +23,4 @@ não material didático.
 | [0010](0010-imagens-de-terceiros.md) | Imagens de terceiros no site | aceita |
 | [0011](0011-como-o-agente-de-build-constroi-imagens.md) | Como o agente de build constrói imagens | aceita |
 | [0012](0012-jenkins-conteinerizado.md) | Jenkins conteinerizado, ao lado do GitHub Actions | aceita |
+| [0013](0013-laboratorio-de-ataque-na-propria-stack.md) | Ensinar segurança atacando a própria stack | aceita |

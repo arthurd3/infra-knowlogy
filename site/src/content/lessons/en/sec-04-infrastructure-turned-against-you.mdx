@@ -1,0 +1,257 @@
+---
+key: abused-infrastructure-ports
+lang: en
+track: seguranca
+order: 4
+title: "25, 53 and 445: infrastructure turned against you"
+summary: On the poster's three remaining ports, nobody steals a password and nobody exploits a bug in your application. The attack is the service doing exactly what it was designed to do — only for somebody else.
+minutes: 15
+tags: [security, smtp, dns, smb, amplification, wannacry]
+sources:
+  - label: "RFC 5321 — Simple Mail Transfer Protocol"
+    url: "https://www.rfc-editor.org/rfc/rfc5321"
+    kind: spec
+  - label: "RFC 6409 — Message Submission for Mail"
+    url: "https://www.rfc-editor.org/rfc/rfc6409"
+    kind: spec
+  - label: "RFC 7489 — DMARC"
+    url: "https://www.rfc-editor.org/rfc/rfc7489"
+    kind: spec
+  - label: "RFC 7873 — DNS Cookies"
+    url: "https://www.rfc-editor.org/rfc/rfc7873"
+    kind: spec
+  - label: "CISA — UDP-Based Amplification Attacks (TA14-017A)"
+    url: "https://www.cisa.gov/news-events/alerts/2014/01/17/udp-based-amplification-attacks"
+    kind: docs
+  - label: "Microsoft — MS17-010: Security Update for Microsoft Windows SMB Server"
+    url: "https://learn.microsoft.com/en-us/security-updates/securitybulletins/2017/ms17-010"
+    kind: docs
+  - label: "CISA — Indicators Associated With WannaCry Ransomware"
+    url: "https://www.cisa.gov/news-events/alerts/2017/05/12/indicators-associated-wannacry-ransomware"
+    kind: postmortem
+---
+
+import AmplificationLoop from "../../../components/diagrams/AmplificationLoop.astro";
+
+Lessons 2 and 3 covered two kinds of attack. On 22, 23 and 3389, somebody
+**logs in** with a credential. On 80 and 443, somebody exploits a **defect in
+your code**.
+
+The three remaining ports are a third kind, and it is the hardest to see coming:
+the service has no defect and nobody steals anything. **The attack is the
+service working as designed, in somebody else's service.**
+
+## 25: the post office that delivers for anyone
+
+SMTP was born on an internet where all the servers knew each other. On that
+internet, "agree to deliver any message that arrives" was hospitality, not a
+flaw.
+
+<Term word="open relay" alt="relay aberto" open>
+A mail server that agrees to deliver a message **from any sender to any
+recipient**, asking for no authentication.
+
+Whoever finds an open relay starts sending spam with your machine, your
+bandwidth and — the expensive part — your IP address's reputation. The damage is
+not the bandwidth: it is the day your entire domain stops being able to deliver
+mail because it landed on a blocklist, and your sales team finds out before you
+do.
+
+The correct configuration is simple and is the default on any modern server:
+with no authentication, only accept mail **addressed** to one of your domains.
+The real risk today is copying a configuration from an old tutorial.
+</Term>
+
+<Callout type="why" label="Why 25 and 587 are different ports">
+This confuses a lot of people, and the distinction underpins everything else:
+
+- **Port 25** is the conversation between **servers** — one post office handing
+  mail to another. It is not for your mail client.
+- **Port 587** is **submission** (RFC 6409): you handing your message to YOUR
+  server. It always requires authentication.
+
+Separating them is what made it possible to demand a credential from senders
+without breaking server-to-server delivery. And it is why cloud providers block
+outbound 25 by default: a compromised instance becomes a spam source in minutes,
+and almost no legitimate application needs to speak 25 directly.
+</Callout>
+
+**Sender spoofing** is the other half. The `From:` field you read in your client
+is free text — original SMTP proves nothing about who sent it. The three DNS
+records that fix this solve different problems, which is why there are three:
+
+| Record | What it says | What it does not solve |
+|---|---|---|
+| **SPF** | which servers may send for your domain | it breaks when mail is forwarded |
+| **DKIM** | this message was signed by a key of yours | it does not say what to do when the signature fails |
+| **DMARC** | ties both to the `From:` the reader sees, and orders mismatches dropped | nothing, if you sit at `p=none` forever |
+
+## 53: the small question that becomes a flood
+
+<Term word="amplification" alt="amplificação">
+Making an innocent server send **far more data** than you spent provoking it,
+and pointing that data at somebody else.
+
+The mechanism has three parts and all three are required:
+
+1. the protocol is **UDP**, which has no handshake — so the source address can
+   be **forged** with nobody verifying it;
+2. the **answer is much larger than the question**;
+3. there are **many servers** willing to answer strangers.
+
+Remove any one of the three and the attack disappears. Which is why the defense
+is not "block UDP" — it is the server no longer answering anyone outside its own
+network.
+</Term>
+
+<AmplificationLoop />
+
+<FieldNote kind="scale" source="CISA, alert TA14-017A" url="https://www.cisa.gov/news-events/alerts/2014/01/17/udp-based-amplification-attacks" when="2014, revised since">
+CISA publishes a table of measured amplification factors by protocol. DNS
+appears with a factor between **28 and 54 times**.
+
+The arithmetic that enables is the point: an attacker with 1 Gb/s of upstream
+delivers 28 to 54 Gb/s at the victim — and the traffic arrives from legitimate
+DNS servers, from addresses that have nothing to do with him. Filtering by
+source does not help; the source is innocent.
+
+The full table is worth opening. DNS is not the worst on the list, and some far
+less famous protocols amplify a great deal more.
+</FieldNote>
+
+**Cache poisoning** is port 53's second attack, and the sneakiest: convincing a
+resolver to cache a false answer. From then on, everyone using that resolver
+goes to the attacker's server when they type your domain, while your server
+stays up and correct. The flaw Dan Kaminsky demonstrated in 2008 made this
+practical in seconds; the answers were randomising the query's source port, the
+cookies of RFC 7873 and, ultimately, signing answers with DNSSEC.
+
+And there is a third, which returns in lesson 5: **exfiltration over DNS**. When
+everything else is blocked, DNS almost always gets out — it is the last port a
+firewall closes. The intruder encodes the stolen data in the queried name itself
+and reads the result on an authoritative server he controls.
+
+<RunIt title="This stack's resolver serves only its own network — measured">
+
+```bash
+make up
+
+# 1. From INSIDE the data network: the resolver answers and knows the neighbours.
+docker run --rm --network infra-knowlogy_data alpine nslookup db
+# Server: 127.0.0.11 ... Name: db  Address: 172.x.x.x
+
+# 2. From the HOST, that same address is nothing. 127.0.0.11 exists only
+#    INSIDE a container's network namespace.
+nslookup db 127.0.0.11
+# communications error to 127.0.0.11#53: connection refused
+
+# 3. And from ANOTHER network on the same host, the name does not exist.
+docker run --rm --network infra-knowlogy_edge alpine nslookup db
+# ** server can't find db: NXDOMAIN
+```
+
+</RunIt>
+
+The third command is the instructive one. Same resolver address, same machine,
+and the name does not resolve — because its scope is the **network**, not the
+host. That is exactly the shape the anti-amplification advice recommends: a
+resolver serving only its own network amplifies nothing.
+
+## 445: the port that produced a worm
+
+<Term word="worm" alt="verme">
+Malicious software that spreads **without anyone clicking anything**. It finds
+the next machine on its own, gets in on its own and starts over.
+
+The difference from other malware is time. Phishing needs one distracted person
+per machine; a worm needs one reachable vulnerability and grows geometrically.
+The window between "a fix exists" and "it no longer matters" closes in hours.
+</Term>
+
+<FieldNote kind="postmortem" source="CISA, WannaCry alert" url="https://www.cisa.gov/news-events/alerts/2017/05/12/indicators-associated-wannacry-ransomware" when="May 2017">
+The 2017 sequence, by date, because the sequence is the lesson:
+
+- **March**: Microsoft publishes MS17-010, fixing a flaw in SMBv1 that allowed
+  code execution with **no credential at all**;
+- **May**: WannaCry uses that flaw to spread by itself, machine to machine,
+  inside networks.
+
+There were two months of window. The fix existed, was published and was free —
+and the damage was global anyway.
+
+Two details that usually get left out of the summary. First: much of the spread
+was **inside to inside**. The infection arrived by some other route on some
+random machine and, from there, 445 was open between all the others, because the
+internal network was flat. Second: no payment undoes this — what mattered was
+the network not having 445 running through everything.
+</FieldNote>
+
+The other two attacks on 445 exploit no flaw at all and still work today:
+
+- **Pass-the-hash** — Windows authenticates with the password's hash, not the
+  password. Whoever reads that hash from the memory of a machine where they had
+  local administrator presents it on **another** machine and gets in, never
+  learning the password.
+- **Authentication relay (NTLM relay)** — the attacker gets your machine to try
+  authenticating to him (a link to `\\attacker\x` is enough) and forwards that
+  authentication, live, to a third server. He logs in as you without holding
+  your password or your hash. Mandatory SMB signing is what breaks this, because
+  he cannot re-sign what he forwards.
+
+<Callout type="danger" label="The rule with no exception">
+**Port 445 never crosses the network border.** There is no legitimate use case:
+file sharing between offices goes over a VPN.
+
+If somebody asks for the exception, the request is the problem — and it is worth
+treating it as the signal it is. It is the simplest rule in this whole track and
+the one that would have prevented most of WannaCry's spread **between**
+organisations.
+</Callout>
+
+<LabExercise check="11/11 — exfiltrating from the database" file="stack/compose.yaml">
+Exfiltration over DNS exists because DNS almost always has a way out. In this
+stack, can the `db` container resolve names? And can it **get out** to the
+internet? The two answers differ, and the difference is the defense.
+
+<Fragment slot="hint">
+Resolving a name and reaching an address are two things. Look at what
+`internal: true` does to the `data` network.
+</Fragment>
+
+<Fragment slot="answer">
+`db` resolves names **on its own network** — Docker's resolver at `127.0.0.11`
+is there and answers for `api`, `cache` and itself. What it does not have is a
+**route out**: the `data` network is `internal: true`, which removes the
+gateway.
+
+```bash
+# resolving a neighbour: works
+docker compose -f stack/compose.yaml -f stack/compose.prod.yaml \
+  exec db sh -c 'nslookup cache' | tail -3
+
+# reaching the internet: no route
+docker compose -f stack/compose.yaml -f stack/compose.prod.yaml \
+  exec db sh -c 'nc -z -w3 1.1.1.1 443' || echo "no way out — internal: true"
+```
+
+That is step 11 of `make attack-lab`. And it is why exfiltration is hard here:
+an attacker with full access to Postgres still has to compromise a second
+service — one of those sitting on two networks — just to **send** what he took.
+Stealing and carrying away are separate problems, and both are worth defending.
+</Fragment>
+</LabExercise>
+
+## What sticks
+
+- On these three ports the attacker exploits no defect: he uses the service
+  **exactly as it was built to work**.
+- Port 25 is the server-to-server conversation; yours is 587, and it demands a
+  password. An open relay costs your IP's reputation, not your bandwidth.
+- Amplification needs three things at once — UDP, a large answer and a server
+  that serves strangers. Remove one and the attack disappears.
+- Measured here: this stack's resolver answers only inside its own network. It
+  is the correct shape, in miniature.
+- 445 never crosses the border. And the border is not the only surface: WannaCry
+  spread inside to inside.
+
+<Quiz set="abused-infrastructure-ports" />

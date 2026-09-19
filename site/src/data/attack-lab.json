@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-19T15:45:10Z",
+  "generatedAt": "2026-09-19T16:24:03Z",
   "dockerVersion": "29.7.2",
   "target": "127.0.0.1 (stack local deste repositório)",
   "summary": {
@@ -49,7 +49,7 @@
       "n": 5,
       "outcome": "blocked",
       "defense": "pgx manda a entrada como PARÂMETRO, nunca como texto da query",
-      "detail": "tabela intacta (antes=28 depois=29); ?limit= → HTTP 200; /{code} hostil → HTTP 404",
+      "detail": "tabela intacta (antes=32 depois=33); ?limit= → HTTP 200; /{code} hostil → HTTP 404",
       "note_pt": "Três pontos de entrada, uma carga hostil em cada: o corpo do POST, o parâmetro `limit` e o código na URL. A tabela sai intacta porque o `app.go` nunca constrói texto de consulta com entrada de usuário — tudo vai como `$1`. A contagem antes e depois é a prova: nenhuma linha some.",
       "note_en": "Three entry points, one hostile payload in each: the POST body, the `limit` parameter and the code in the URL. The table comes out intact because `app.go` never builds query text from user input — everything goes through as `$1`. The before-and-after count is the proof: no row disappears."
     },
@@ -107,7 +107,5 @@
       "note_pt": "O roubo só se completa quando o dado SAI. A rede `data` é `internal: true`, o que remove o gateway: o banco não tem rota para lugar nenhum fora do Docker. Um atacante com acesso total ao Postgres ainda precisa comprometer um segundo serviço — dos que estão em duas redes — só para conseguir mandar o que roubou.",
       "note_en": "The theft only completes when the data LEAVES. The `data` network is `internal: true`, which removes the gateway: the database has no route anywhere outside Docker. An attacker with full access to Postgres still has to compromise a second service — one of those sitting on two networks — just to send out what he took."
     }
-  ],
-  "note_pt": "Gravado por `tools/scripts/attack-lab.sh`. Cada linha é um ataque DISPARADO contra a stack local, e o resultado desejado é a falha dele. O passo 6 é a exceção: ele vaza de propósito, porque é a demonstração da lição sobre banco de dados.",
-  "note_en": "Written by `tools/scripts/attack-lab.sh`. Every line is an attack FIRED at the local stack, and the desired outcome is its failure. Step 6 is the exception: it leaks on purpose, because it is the demonstration in the database lesson."
+  ]
 }
