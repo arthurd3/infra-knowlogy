@@ -98,13 +98,28 @@ else
 fi
 
 # ─── 2. A porta do banco, a partir do host ──────────────────────────────────
+# Cuidado que o laboratório aprendeu rodando: 5432 é um número popular. Se
+# alguma coisa atender no loopback, é preciso descobrir QUEM antes de acusar
+# esta stack — na primeira execução quem respondia era um Postgres de outro
+# projeto do mesmo host, e o laboratório reprovou a defesa errada.
 step "Conectar direto no Postgres a partir do host"
 attempt "bash -c '< /dev/tcp/127.0.0.1/5432'"
-if printf '%s' "$pub" | grep -q '"TargetPort":5432,"PublishedPort":[1-9]'; then
-  skipped "db-port-from-host" "o overlay de desenvolvimento está no ar" \
-          "compose.dev.yaml publica 5432 em 127.0.0.1 DE PROPÓSITO, para você abrir um cliente"
-elif timeout 2 bash -c "</dev/tcp/${HOSTIP}/5432" 2>/dev/null; then
-  breached "db-port-from-host" "a porta 5432 está publicada no host" "conexão TCP aceita"
+mine="$(printf '%s' "$pub" | grep -c '"TargetPort":5432,"PublishedPort":[1-9]' || true)"
+answers=0; timeout 2 bash -c "</dev/tcp/${HOSTIP}/5432" 2>/dev/null && answers=1
+owner="$(docker ps --format '{{.Names}}\t{{.Ports}}' 2>/dev/null \
+         | awk -F'\t' '$2 ~ /:5432->/ {print $1; exit}')"
+
+if [ "$mine" != "0" ]; then
+  if "${COMPOSE[@]}" config --services 2>/dev/null | grep -q . && \
+     grep -q 'POSTGRES_PORT' stack/compose.dev.yaml 2>/dev/null && [ "$answers" = "1" ]; then
+    skipped "db-port-from-host" "o overlay de desenvolvimento está no ar" \
+            "compose.dev.yaml publica 5432 em 127.0.0.1 DE PROPÓSITO, para você abrir um cliente"
+  else
+    breached "db-port-from-host" "o db DESTA stack publicou a 5432 no host" ""
+  fi
+elif [ "$answers" = "1" ]; then
+  blocked "db-port-from-host" "o db desta stack não publica porta nenhuma" \
+          "algo mais responde em ${HOSTIP}:5432 — ${owner:-um processo do host}, alheio a esta stack. Vale olhar: é assim que se descobre um banco esquecido."
 else
   blocked "db-port-from-host" "o banco não publica porta nenhuma" \
           "connection refused em ${HOSTIP}:5432 — não há o que atacar"
@@ -129,7 +144,7 @@ PGDB_="$(grep -E '^POSTGRES_DB=' stack/.env 2>/dev/null | cut -d= -f2)"; PGDB_="
 
 psql_in() { # $1=senha  $2...=args do psql
   local pw="$1"; shift
-  docker run --rm --network "$DATA_NET" -e "PGPASSWORD=$pw" "$PGIMAGE" \
+  docker run --rm -i --network "$DATA_NET" -e "PGPASSWORD=$pw" "$PGIMAGE" \
     psql -h db -U "$PGUSER_" -d "$PGDB_" -v ON_ERROR_STOP=1 "$@" 2>&1
 }
 

@@ -37,10 +37,6 @@ pipeline {
         BUILDKIT_HOST = 'unix:///run/buildkit/buildkitd.sock'
         OUT = 'out'
         REGISTRY = 'registry:5000'
-        // A senha vazia é deliberada e está explicada em cicd-up.sh: guardar
-        // uma senha ao lado da chave não protege de nada. Num ambiente de
-        // verdade a chave vive num KMS.
-        COSIGN_PASSWORD = ''
     }
 
     stages {
@@ -130,6 +126,17 @@ pipeline {
             steps {
                 sh '''
                     set -eu
+                    # A senha vazia precisa ser exportada AQUI. Declarada como
+                    # string vazia no bloco `environment` do Jenkins ela não
+                    # chega ao processo, e o cosign cai no prompt interativo —
+                    # que num agente sem TTY vira
+                    # `reading key: inappropriate ioctl for device`.
+                    #
+                    # Vazia é deliberado, e está explicado em cicd-up.sh:
+                    # guardar uma senha ao lado da chave não protege de nada.
+                    # Num ambiente de verdade a chave vive num KMS.
+                    export COSIGN_PASSWORD=""
+
                     # Lê `containerimage.digest` do metadata do buildctl.
                     #
                     # Sem jq e sem python no agente de propósito: o único
@@ -169,6 +176,17 @@ pipeline {
             steps {
                 sh '''
                     set -eu
+                    # A senha vazia precisa ser exportada AQUI. Declarada como
+                    # string vazia no bloco `environment` do Jenkins ela não
+                    # chega ao processo, e o cosign cai no prompt interativo —
+                    # que num agente sem TTY vira
+                    # `reading key: inappropriate ioctl for device`.
+                    #
+                    # Vazia é deliberado, e está explicado em cicd-up.sh:
+                    # guardar uma senha ao lado da chave não protege de nada.
+                    # Num ambiente de verdade a chave vive num KMS.
+                    export COSIGN_PASSWORD=""
+
                     # Lê `containerimage.digest` do metadata do buildctl.
                     #
                     # Sem jq e sem python no agente de propósito: o único
