@@ -197,6 +197,47 @@ delete it in a later `RUN` — for the same reason a layer never shrinks. Whoeve
 has the image has the secret. The only remedy is rotating the credential.
 </Callout>
 
+<LabExercise check="no secret in any image history" file="tools/scripts/verify.sh">
+
+Before running anything: you build **two** images with the same secret. The
+first takes the value through `ARG`; the second through
+`--mount=type=secret`. In which one does `docker history --no-trunc` show the
+secret, and **why** does the other one escape?
+
+<Fragment slot="hint">
+The question is not "where is the file now", it is "what got recorded along the
+way". One of the two forms creates a layer; the other exists only for the
+duration of the `RUN` and becomes no layer at all.
+</Fragment>
+
+<Fragment slot="answer">
+
+Only the `ARG` one. The value lands in the image's **metadata**, not in its
+filesystem — and `docker history` is precisely the tool that reads that metadata:
+
+```bash
+printf 'FROM alpine:3.22\nARG TOKEN\nRUN echo "$TOKEN" > /dev/null\n' \
+  | docker build -t demo/arg --build-arg TOKEN=secret-123 -f - .
+docker history --no-trunc demo/arg | grep -c 'secret-123'   # 1  ⚠️
+
+printf 'FROM alpine:3.22\nRUN --mount=type=secret,id=t cat /run/secrets/t >/dev/null\n' \
+  | TOK=secret-123 docker build -t demo/sec --secret id=t,env=TOK -f - .
+docker history --no-trunc demo/sec | grep -c 'secret-123'   # 0  ✅
+
+docker rmi demo/arg demo/sec
+```
+
+The secret mount sets up a `tmpfs` that lives **for that one `RUN` and no
+longer**. Nothing is written to a layer, and the history line records the
+command without the value.
+
+Note what this does NOT fix: if your `RUN` copies the secret into the
+filesystem, it becomes a layer and leaks all the same. The mount protects the
+transport, not your carelessness.
+
+</Fragment>
+</LabExercise>
+
 ## EXPOSE exposes nothing
 
 ```dockerfile
@@ -315,3 +356,5 @@ docker rm t1 t2 >/dev/null && docker rmi demo/leaked demo/safe demo/no-handler
 ```
 
 </RunIt>
+
+<Quiz set="dockerfile-instruction-by-instruction" />

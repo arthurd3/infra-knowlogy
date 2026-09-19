@@ -198,6 +198,46 @@ Um segredo que passou por `ARG` ou `ENV` **já vazou**, mesmo que você o remova
 imagem tem o segredo. O único caminho é rotacionar a credencial.
 </Callout>
 
+<LabExercise check="nenhum segredo no histórico das imagens" file="tools/scripts/verify.sh">
+
+Antes de rodar qualquer coisa: você constrói **duas** imagens com o mesmo
+segredo. A primeira recebe o valor por `ARG`; a segunda, por
+`--mount=type=secret`. Em qual delas `docker history --no-trunc` mostra o
+segredo, e **por quê** a outra escapa?
+
+<Fragment slot="hint">
+A pergunta não é "onde o arquivo está agora", é "o que ficou gravado no caminho
+até aqui". Uma das duas formas cria uma camada; a outra existe só durante o
+`RUN` e não vira camada nenhuma.
+</Fragment>
+
+<Fragment slot="answer">
+
+Só a do `ARG`. O valor fica no **metadado da imagem**, não no sistema de
+arquivos — e o `docker history` é exatamente a ferramenta que lê esse metadado:
+
+```bash
+printf 'FROM alpine:3.22\nARG TOKEN\nRUN echo "$TOKEN" > /dev/null\n' \
+  | docker build -t demo/arg --build-arg TOKEN=segredo-123 -f - .
+docker history --no-trunc demo/arg | grep -c 'segredo-123'   # 1  ⚠️
+
+printf 'FROM alpine:3.22\nRUN --mount=type=secret,id=t cat /run/secrets/t >/dev/null\n' \
+  | TOK=segredo-123 docker build -t demo/sec --secret id=t,env=TOK -f - .
+docker history --no-trunc demo/sec | grep -c 'segredo-123'   # 0  ✅
+
+docker rmi demo/arg demo/sec
+```
+
+O secret mount monta um `tmpfs` que existe **durante aquele `RUN` e só ele**.
+Nada é escrito em camada, e a linha do histórico registra o comando sem o valor.
+
+Repare no que isso NÃO conserta: se o seu `RUN` copiar o segredo para dentro do
+sistema de arquivos, ele vira camada e vaza igual. O mount protege o transporte,
+não o seu descuido.
+
+</Fragment>
+</LabExercise>
+
 ## EXPOSE não expõe nada
 
 ```dockerfile
@@ -319,3 +359,5 @@ docker rm t1 t2 >/dev/null && docker rmi demo/vazou demo/seguro demo/sem-handler
 ```
 
 </RunIt>
+
+<Quiz set="dockerfile-instruction-by-instruction" />

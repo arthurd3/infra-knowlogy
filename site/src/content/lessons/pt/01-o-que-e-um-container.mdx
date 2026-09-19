@@ -16,6 +16,10 @@ sources:
     url: "https://man7.org/linux/man-pages/man7/namespaces.7.html"
   - label: "Linux man page — cgroups(7)"
     url: "https://man7.org/linux/man-pages/man7/cgroups.7.html"
+  - label: "Wiz — Leaky Vessels: container escape vulnerabilities"
+    url: "https://www.wiz.io/blog/leaky-vessels-container-escape-vulnerabilities"
+    kind: postmortem
+    accessed: "2026-09-19"
 ---
 
 import ContainerVsVm from "../../../components/diagrams/ContainerVsVm.astro";
@@ -184,6 +188,35 @@ Não há boot. **Já existe um kernel rodando** — o do host. Por isso o custo 
 subir um container é o custo de subir um processo, e por isso o overhead de
 memória é medido em megabytes, não em gigabytes.
 
+## Então quando você quer mesmo uma VM?
+
+A pergunta não é qual dos dois é melhor. É onde fica a fronteira de segurança em
+cada um — e o que acontece quando ela falha.
+
+<Tradeoff
+  a="Container"
+  b="Máquina virtual"
+  whenA="Você confia no código que vai rodar: sua aplicação, suas dependências, seu time. Quer partida em milissegundos, densidade alta na mesma máquina e a mesma imagem do laptop até produção."
+  whenB="Você vai rodar código de <b>terceiros não confiáveis</b> — build de pull request aberto, plugin de cliente, execução de código submetido por usuário. Ou precisa de outro kernel: driver específico, versão antiga, outro sistema operacional."
+  chose="a"
+  verdict="esta stack roda só código próprio, num host de estudo. A escolha muda na hora em que alguém de fora puder submeter um <code>RUN</code>."
+  adr="0001-compose-em-vez-de-kubernetes"
+/>
+
+A frase "o kernel é a fronteira de segurança" soa abstrata até alguém atravessá-la.
+
+<FieldNote kind="postmortem" source="Snyk / Wiz — Leaky Vessels (CVE-2024-21626)" url="https://www.wiz.io/blog/leaky-vessels-container-escape-vulnerabilities" when="2024">
+Um descritor de arquivo vazado pelo `runc` antes do `pivot_root` deixava um
+`Dockerfile` apontar `process.cwd` para `/proc/self/fd/7` e alcançar o sistema de
+arquivos do **host**. Bastava construir uma imagem — não era preciso
+`--privileged`, nem socket do Docker, nem capability nenhuma.
+
+Vale reparar em quando a falha acontece: **antes** de o filtro seccomp entrar em
+vigor. Endurecer o container não ajudaria. É a diferença entre uma parede e uma
+porta com fechadura boa: a VM tem parede; o container tem a mesma porta do host,
+com uma fechadura melhor.
+</FieldNote>
+
 ## O que fica
 
 - Container **não** é VM: é processo + namespaces + cgroups + camadas.
@@ -218,3 +251,5 @@ docker rm -f prova
 ```
 
 </RunIt>
+
+<Quiz set="what-is-a-container" />

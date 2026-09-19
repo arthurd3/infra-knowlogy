@@ -1,0 +1,116 @@
+{
+  "note_pt": "Perguntas da lição 8.",
+  "note_en": "Questions for lesson 8.",
+  "pt": [
+    {
+      "q": "A api tem `depends_on: [db]`. O `docker compose up` garante que o banco aceita conexão quando a api sobe?",
+      "options": [
+        {
+          "text": "Não. O `depends_on` simples espera o CONTAINER começar, não o serviço ficar pronto.",
+          "correct": true,
+          "why": "O Postgres leva segundos entre o processo existir e aceitar conexão. Para esperar de verdade é preciso `condition: service_healthy`, e aí o `depends_on` passa a olhar o healthcheck em vez do processo."
+        },
+        {
+          "text": "Garante: é exatamente para isso que o `depends_on` existe.",
+          "why": "É o que o nome promete e não o que ele faz. Esta é provavelmente a expectativa frustrada mais comum do Compose — e a causa de metade dos 'funciona na segunda tentativa'."
+        },
+        {
+          "text": "Garante se o db tiver `HEALTHCHECK` no Dockerfile.",
+          "why": "O healthcheck passa a existir e a ser avaliado, mas o `depends_on` simples continua sem consultá-lo. Quem faz a ligação é o `condition: service_healthy`, do lado de quem depende."
+        }
+      ]
+    },
+    {
+      "q": "Uma aplicação leva 20 s para subir e o healthcheck é `interval=10s retries=3`, sem `start_period`. O que acontece?",
+      "options": [
+        {
+          "text": "Ela é marcada `unhealthy` antes de terminar de iniciar, e pode ser reiniciada em laço.",
+          "correct": true,
+          "why": "Sem `start_period`, as falhas da fase de boot contam para o `retries`: três falhas em 30 s e o container é declarado doente enquanto ainda está subindo. O `start_period` é uma janela de graça — falhas dentro dela não contam."
+        },
+        {
+          "text": "Nada: o Docker só começa a contar depois do primeiro sucesso.",
+          "why": "Seria conveniente e não é assim. A contagem começa com o container, e é justamente por isso que o `start_period` precisou existir como parâmetro separado."
+        },
+        {
+          "text": "O healthcheck só roda depois que o `CMD` termina de executar.",
+          "why": "O `CMD` é o processo principal e não termina — se terminasse, o container morria. O healthcheck roda em paralelo, periodicamente, com o serviço de pé."
+        }
+      ]
+    },
+    {
+      "q": "Uma probe de liveness que checa se o banco responde. Por que isso é perigoso?",
+      "options": [
+        {
+          "text": "Porque uma queda do banco passa a matar todas as réplicas da aplicação ao mesmo tempo.",
+          "correct": true,
+          "why": "Liveness responde 'preciso ser reiniciado?'; readiness responde 'posso receber tráfego agora?'. Reiniciar a aplicação não conserta o banco — e derruba de uma vez quem poderia ter voltado sozinho quando ele voltasse. Dependência externa é assunto de readiness."
+        },
+        {
+          "text": "Porque a probe fica lenta e consome conexões do pool.",
+          "why": "É um custo real e secundário. O estrago grande é de comportamento: transformar uma falha de dependência numa reinicialização em massa amplifica o incidente em vez de conter."
+        },
+        {
+          "text": "Porque liveness não pode fazer chamada de rede.",
+          "why": "Pode, e frequentemente faz — chamar a própria porta HTTP é uma chamada de rede. O problema não é a rede, é checar uma coisa que reiniciar não resolve."
+        }
+      ]
+    }
+  ],
+  "en": [
+    {
+      "q": "The api declares `depends_on: [db]`. Does `docker compose up` guarantee the database accepts connections when the api starts?",
+      "options": [
+        {
+          "text": "No. Plain `depends_on` waits for the CONTAINER to start, not for the service to be ready.",
+          "correct": true,
+          "why": "Postgres takes seconds between the process existing and accepting connections. Waiting for real needs `condition: service_healthy`, at which point `depends_on` starts watching the healthcheck instead of the process."
+        },
+        {
+          "text": "It does: that is exactly what `depends_on` is for.",
+          "why": "That is what the name promises and not what it does. This is probably Compose's most commonly disappointed expectation — and the cause of half the 'it works on the second try' reports."
+        },
+        {
+          "text": "It does if db has a `HEALTHCHECK` in its Dockerfile.",
+          "why": "The healthcheck then exists and is evaluated, but plain `depends_on` still never consults it. The wiring is `condition: service_healthy`, declared by the dependent side."
+        }
+      ]
+    },
+    {
+      "q": "An application takes 20 s to start and its healthcheck is `interval=10s retries=3` with no `start_period`. What happens?",
+      "options": [
+        {
+          "text": "It is marked `unhealthy` before it has finished starting, and may restart in a loop.",
+          "correct": true,
+          "why": "Without `start_period`, boot-phase failures count towards `retries`: three failures in 30 s and the container is declared sick while it is still coming up. `start_period` is a grace window — failures inside it do not count."
+        },
+        {
+          "text": "Nothing: Docker only starts counting after the first success.",
+          "why": "That would be convenient and it is not the case. Counting begins with the container, which is exactly why `start_period` had to exist as a separate knob."
+        },
+        {
+          "text": "The healthcheck only runs once `CMD` has finished executing.",
+          "why": "`CMD` is the main process and never finishes — if it did, the container would die. The healthcheck runs alongside it, periodically, with the service up."
+        }
+      ]
+    },
+    {
+      "q": "A liveness probe that checks whether the database answers. Why is that dangerous?",
+      "options": [
+        {
+          "text": "Because a database outage now kills every replica of the application at once.",
+          "correct": true,
+          "why": "Liveness answers 'do I need restarting?'; readiness answers 'can I take traffic right now?'. Restarting the application does not fix the database — and it takes down, all at once, the instances that would have recovered on their own when it came back. External dependencies are readiness's business."
+        },
+        {
+          "text": "Because the probe gets slow and eats connections from the pool.",
+          "why": "A real cost, and the secondary one. The big damage is behavioural: turning a dependency failure into a mass restart amplifies the incident instead of containing it."
+        },
+        {
+          "text": "Because liveness probes cannot make network calls.",
+          "why": "They can, and usually do — hitting your own HTTP port is a network call. The problem is not the network, it is checking something a restart cannot fix."
+        }
+      ]
+    }
+  ]
+}

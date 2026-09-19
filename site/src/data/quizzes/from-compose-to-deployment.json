@@ -1,0 +1,116 @@
+{
+  "note_pt": "Perguntas da lição k8s-02.",
+  "note_en": "Questions for lesson k8s-02.",
+  "pt": [
+    {
+      "q": "Por que o `HEALTHCHECK` que você escreveu no Dockerfile não protege nada no Kubernetes?",
+      "options": [
+        {
+          "text": "Porque o kubelet o ignora. Toda saúde no k8s vem das probes declaradas no manifest.",
+          "correct": true,
+          "why": "O `HEALTHCHECK` é metadado de imagem lido pelo dockerd; o kubelet não fala com o dockerd e não o consulta. Sem `livenessProbe`/`readinessProbe` no Deployment, um pod com o processo travado fica 'Ready' recebendo tráfego — e o sintoma é 502 sem nenhum alerta."
+        },
+        {
+          "text": "Porque ele protege, mas só depois que o pod fica Ready.",
+          "why": "Ele não é executado em momento nenhum. Dá para confirmar num cluster: pare de responder no endpoint do `HEALTHCHECK` e observe o pod continuar Ready indefinidamente."
+        },
+        {
+          "text": "Porque o containerd não implementa `HEALTHCHECK`.",
+          "why": "Chega perto da mecânica e erra a conclusão: o ponto não é qual runtime implementa o quê, é que a decisão de saúde no Kubernetes é do kubelet, e o kubelet só conhece o que está no spec do pod."
+        }
+      ]
+    },
+    {
+      "q": "Um PersistentVolume novo é montado e o entrypoint do Redis morre em `chown /data`. Por quê?",
+      "options": [
+        {
+          "text": "O volume nasce pertencendo ao root, e o container sem a capability CHOWN não consegue mudar o dono.",
+          "correct": true,
+          "why": "É o primo Kubernetes da armadilha do volume nomeado. A correção certa não é devolver CHOWN: é `runAsUser` mais `fsGroup` no pod, e aí o kubelet ajusta o dono do volume na montagem — o cache fica com `drop: [ALL]` sem nenhuma capability de volta."
+        },
+        {
+          "text": "O PV foi criado com `ReadOnlyMany` e não aceita escrita.",
+          "why": "Daria erro de escrita em tudo, não especificamente no `chown`, e o sintoma apareceria também nos arquivos de dados. O modo de acesso aqui é de leitura e escrita."
+        },
+        {
+          "text": "O SELinux bloqueou, e falta `:z` no volume.",
+          "why": "`:z` é sufixo de bind mount do Docker e não existe em manifest do Kubernetes. Quem cuida de rótulo SELinux no pod é o `seLinuxOptions` do `securityContext` — e não é essa a causa aqui."
+        }
+      ]
+    },
+    {
+      "q": "As duas réplicas da api estão `Ready`, e mesmo assim o edge responde 502. O que mais provavelmente falta?",
+      "options": [
+        {
+          "text": "Uma NetworkPolicy de ingresso permitindo o tráfego do edge até a api.",
+          "correct": true,
+          "why": "A probe parte do NÓ e não atravessa NetworkPolicy — ela diz que o pod responde ao kubelet, não que o vizinho o alcança. Com `default-deny` no namespace, a api fica verde e incomunicável até a policy que faltava existir."
+        },
+        {
+          "text": "A probe está mal configurada e o pod não deveria estar Ready.",
+          "why": "O pod está saudável de verdade: ele responde a quem consegue chegar nele. O problema não está dentro do pod, está no caminho entre dois pods."
+        },
+        {
+          "text": "O Service está com o selector errado.",
+          "why": "É uma causa clássica de 502 e dá outro sintoma: com selector errado o Service fica sem endpoint nenhum, e `kubectl get endpoints` mostra a lista vazia. Vale checar — é um `kubectl` de distância."
+        }
+      ]
+    }
+  ],
+  "en": [
+    {
+      "q": "Why does the `HEALTHCHECK` you wrote in the Dockerfile protect nothing on Kubernetes?",
+      "options": [
+        {
+          "text": "Because the kubelet ignores it. All health on k8s comes from probes declared in the manifest.",
+          "correct": true,
+          "why": "`HEALTHCHECK` is image metadata read by dockerd; the kubelet does not talk to dockerd and never consults it. With no `livenessProbe`/`readinessProbe` in the Deployment, a pod with a wedged process stays 'Ready' taking traffic — and the symptom is 502s with no alert at all."
+        },
+        {
+          "text": "Because it does protect, but only once the pod is Ready.",
+          "why": "It is never executed at any point. You can confirm it on a cluster: stop answering on the `HEALTHCHECK` endpoint and watch the pod stay Ready indefinitely."
+        },
+        {
+          "text": "Because containerd does not implement `HEALTHCHECK`.",
+          "why": "Close on mechanics, wrong on conclusion: the point is not which runtime implements what, it is that the health decision on Kubernetes belongs to the kubelet, and the kubelet only knows what is in the pod spec."
+        }
+      ]
+    },
+    {
+      "q": "A fresh PersistentVolume is mounted and the Redis entrypoint dies on `chown /data`. Why?",
+      "options": [
+        {
+          "text": "The volume is born owned by root, and a container without the CHOWN capability cannot change the owner.",
+          "correct": true,
+          "why": "It is the Kubernetes cousin of the named-volume trap. The right fix is not handing CHOWN back: it is `runAsUser` plus `fsGroup` on the pod, so the kubelet adjusts volume ownership at mount time — the cache keeps `drop: [ALL]` with no capability returned."
+        },
+        {
+          "text": "The PV was created `ReadOnlyMany` and rejects writes.",
+          "why": "That would error on every write, not specifically on `chown`, and the symptom would also show on data files. The access mode here is read-write."
+        },
+        {
+          "text": "SELinux blocked it and the volume is missing `:z`.",
+          "why": "`:z` is a Docker bind-mount suffix and does not exist in a Kubernetes manifest. SELinux labelling for a pod is handled by `seLinuxOptions` under `securityContext` — and that is not the cause here."
+        }
+      ]
+    },
+    {
+      "q": "Both api replicas are `Ready`, and the edge still answers 502. What is most likely missing?",
+      "options": [
+        {
+          "text": "An ingress NetworkPolicy allowing traffic from the edge to the api.",
+          "correct": true,
+          "why": "The probe originates on the NODE and does not traverse NetworkPolicy — it says the pod answers the kubelet, not that its neighbour can reach it. With `default-deny` in the namespace, the api stays green and unreachable until the missing policy exists."
+        },
+        {
+          "text": "The probe is misconfigured and the pod should not be Ready.",
+          "why": "The pod is genuinely healthy: it answers whoever can get to it. The problem is not inside the pod, it is on the path between two pods."
+        },
+        {
+          "text": "The Service has the wrong selector.",
+          "why": "A classic cause of 502s, with a different symptom: a wrong selector leaves the Service with no endpoints at all, and `kubectl get endpoints` shows an empty list. Worth checking — it is one `kubectl` away."
+        }
+      ]
+    }
+  ]
+}

@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { basename, join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { TRACKS } from "../src/i18n/ui";
 
 /**
  * As invariantes do conteúdo bilíngue.
@@ -27,6 +28,8 @@ interface Lesson {
   order: number;
   minutes: number;
   tags: string[];
+  /** O bloco YAML entre os dois `---`. */
+  frontmatter: string;
   body: string;
   components: string[];
 }
@@ -56,6 +59,7 @@ function load(): Lesson[] {
         order: Number(field(fm, "order")),
         minutes: Number(field(fm, "minutes") ?? 10),
         tags: (field(fm, "tags") ?? "[]").replace(/[[\]]/g, "").split(",").map((t) => t.trim()).filter(Boolean),
+        frontmatter: fm,
         body,
         // Componentes de fato usados no corpo, não só importados. O texto
         // passa antes por um filtro que apaga blocos e trechos de código:
@@ -81,9 +85,13 @@ for (const dir of ["", "diagrams", "islands"]) {
     if (/\.(astro|tsx)$/.test(f)) available.add(basename(f).replace(/\.(astro|tsx)$/, ""));
   }
 }
-// Injetados pela página da lição, sem import no MDX.
-available.add("Callout");
-available.add("RunIt");
+// Injetados pela página da lição ([slug].astro), sem import no MDX. Eles
+// pegam o idioma da URL; passá-los como prop em cada arquivo era o que fazia
+// a lição inglesa herdar rótulo em português quando alguém esquecia.
+const INJETADOS = ["Callout", "RunIt", "Tradeoff", "FieldNote", "LabExercise", "Quiz", "Figure"];
+for (const c of INJETADOS) available.add(c);
+// `Fragment` é do próprio Astro e é como o MDX preenche um slot nomeado.
+available.add("Fragment");
 
 describe("paridade entre os idiomas", () => {
   it("toda lição existe em pt e en, com a mesma chave", () => {
@@ -121,7 +129,12 @@ describe("paridade entre os idiomas", () => {
     const diffs: string[] = [];
     for (const [key, pair] of byKey) {
       const [a, b] = pair;
-      for (const [label, re] of [["```", /```/g], ["<Callout", /<Callout/g], ["<RunIt", /<RunIt/g]] as const) {
+      const PARES = [
+        ["```", /```/g], ["<Callout", /<Callout/g], ["<RunIt", /<RunIt/g],
+        ["<Tradeoff", /<Tradeoff/g], ["<FieldNote", /<FieldNote/g],
+        ["<LabExercise", /<LabExercise/g], ["<Quiz", /<Quiz/g],
+      ] as const;
+      for (const [label, re] of PARES) {
         if (count(a.body, re) !== count(b.body, re)) {
           diffs.push(`${key}: ${label} ${count(a.body, re)} em ${a.lang} vs ${count(b.body, re)} em ${b.lang}`);
         }
@@ -143,7 +156,7 @@ describe("integridade do frontmatter", () => {
 
   it("trilha, minutos e tags estão preenchidos e plausíveis", () => {
     for (const l of lessons) {
-      expect(["fundamentos", "producao", "kubernetes"], l.file).toContain(l.track);
+      expect(TRACKS as readonly string[], l.file).toContain(l.track);
       expect(l.order, l.file).toBeGreaterThan(0);
       expect(l.minutes, l.file).toBeGreaterThan(0);
       expect(l.minutes, `${l.file}: tempo de leitura implausível`).toBeLessThan(60);
@@ -165,8 +178,8 @@ describe("componentes citados nas lições", () => {
     expect([...faltando]).toEqual([]);
   });
 
-  it("todo componente usado está importado (fora Callout e RunIt)", () => {
-    const injetados = new Set(["Callout", "RunIt"]);
+  it("todo componente usado está importado (fora os injetados pela página)", () => {
+    const injetados = new Set([...INJETADOS, "Fragment"]);
     const faltando: string[] = [];
     for (const l of lessons) {
       for (const c of l.components) {
@@ -198,9 +211,75 @@ describe("cobertura visual", () => {
   it("toda lição tem ao menos um diagrama ou widget", () => {
     // O déficit que motivou este trabalho: 22 lições, zero imagens. Se uma
     // lição nova nascer só com texto, este teste avisa.
+    //
+    // Componentes de moldura não contam: uma lição feita só de Callout e Quiz
+    // continua sendo uma lição sem desenho nenhum.
+    const MOLDURA = new Set(["Callout", "RunIt", "Tradeoff", "FieldNote", "LabExercise", "Quiz", "Fragment"]);
     const semNada = lessons
-      .filter((l) => !l.components.some((c) => c !== "Callout" && c !== "RunIt"))
+      .filter((l) => !l.components.some((c) => !MOLDURA.has(c)))
       .map((l) => l.file);
     expect(semNada).toEqual([]);
+  });
+});
+
+describe("cobertura de exercício", () => {
+  it("toda lição pergunta alguma coisa ao leitor", () => {
+    // O irmão do teste acima. Uma lição pode estar impecável e ainda deixar o
+    // leitor sem nenhum jeito de saber se entendeu — ler não é o mesmo que
+    // aprender. `Quiz` checa o entendimento; `LabExercise` manda provar no
+    // terminal. Uma das duas, no mínimo.
+    const semExercicio = lessons
+      .filter((l) => !l.components.includes("Quiz") && !l.components.includes("LabExercise"))
+      .map((l) => l.file);
+    expect(semExercicio).toEqual([]);
+  });
+});
+
+describe("procedência do que não foi medido aqui", () => {
+  it("todo FieldNote nomeia a fonte e linka para ela", () => {
+    // O componente inteiro existe para marcar a fronteira entre o que esta
+    // máquina mediu e o que alguém relatou (ADR 0009). Um FieldNote sem `url`
+    // é exatamente o que ele foi criado para impedir: uma afirmação sem origem
+    // com a aparência de uma afirmação verificada.
+    const erros: string[] = [];
+    for (const l of lessons) {
+      for (const m of prose(l.body).matchAll(/<FieldNote([^>]*)>/g)) {
+        const attrs = m[1];
+        if (!/\ssource="[^"]+"/.test(attrs)) erros.push(`${l.file}: <FieldNote> sem source`);
+        if (!/\surl="https?:\/\/[^"]+"/.test(attrs)) erros.push(`${l.file}: <FieldNote> sem url`);
+      }
+    }
+    expect(erros).toEqual([]);
+  });
+
+  it("todo Tradeoff diz quando cada lado ganha", () => {
+    // Sem `whenA`/`whenB` isto é uma tabela comparativa, e tabela comparativa
+    // devolve a decisão para quem não tem repertório de tomá-la. O critério é
+    // o conteúdo; as duas colunas são só a moldura dele.
+    const erros: string[] = [];
+    for (const l of lessons) {
+      for (const m of prose(l.body).matchAll(/<Tradeoff([\s\S]*?)\/>/g)) {
+        const attrs = m[1];
+        for (const req of ["a", "b", "whenA", "whenB"]) {
+          if (!new RegExp(`\\s${req}="[^"]+"`).test(attrs)) {
+            erros.push(`${l.file}: <Tradeoff> sem ${req}`);
+          }
+        }
+      }
+    }
+    expect(erros).toEqual([]);
+  });
+
+  it("toda lição com FieldNote cita a fonte no frontmatter também", () => {
+    // O relato precisa sobreviver ao fim da leitura: a seção "Fontes" é o que
+    // o leitor revisita, e ela é montada só a partir do frontmatter.
+    const erros: string[] = [];
+    for (const l of lessons) {
+      const urls = [...prose(l.body).matchAll(/<FieldNote[^>]*\surl="([^"]+)"/g)].map((m) => m[1]);
+      for (const url of urls) {
+        if (!l.frontmatter.includes(url)) erros.push(`${l.file}: ${url} não está em sources:`);
+      }
+    }
+    expect(erros).toEqual([]);
   });
 });

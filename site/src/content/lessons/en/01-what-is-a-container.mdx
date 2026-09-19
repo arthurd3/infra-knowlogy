@@ -16,6 +16,10 @@ sources:
     url: "https://man7.org/linux/man-pages/man7/namespaces.7.html"
   - label: "Linux man page — cgroups(7)"
     url: "https://man7.org/linux/man-pages/man7/cgroups.7.html"
+  - label: "Wiz — Leaky Vessels: container escape vulnerabilities"
+    url: "https://www.wiz.io/blog/leaky-vessels-container-escape-vulnerabilities"
+    kind: postmortem
+    accessed: "2026-09-19"
 ---
 
 import ContainerVsVm from "../../../components/diagrams/ContainerVsVm.astro";
@@ -183,6 +187,35 @@ There is no boot. **A kernel is already running** — the host's. That is why
 starting a container costs what starting a process costs, and why the memory
 overhead is measured in megabytes rather than gigabytes.
 
+## So when do you actually want a VM?
+
+The question is not which of the two is better. It is where the security boundary
+sits in each — and what happens when it gives way.
+
+<Tradeoff
+  a="Container"
+  b="Virtual machine"
+  whenA="You trust the code about to run: your application, your dependencies, your team. You want millisecond startup, high density on one machine, and the same image from laptop to production."
+  whenB="You are about to run <b>untrusted third-party code</b> — builds from open pull requests, customer plugins, user-submitted code execution. Or you need a different kernel: a specific driver, an older version, another operating system."
+  chose="a"
+  verdict="this stack runs its own code only, on a study host. The choice flips the moment an outsider can submit a <code>RUN</code> line."
+  adr="0001-compose-em-vez-de-kubernetes"
+/>
+
+"The kernel is the security boundary" reads as an abstraction until somebody
+walks through it.
+
+<FieldNote kind="postmortem" source="Snyk / Wiz — Leaky Vessels (CVE-2024-21626)" url="https://www.wiz.io/blog/leaky-vessels-container-escape-vulnerabilities" when="2024">
+A file descriptor leaked by `runc` before `pivot_root` let a `Dockerfile` point
+`process.cwd` at `/proc/self/fd/7` and reach the **host** filesystem. Building an
+image was enough — no `--privileged`, no Docker socket, no capability required.
+
+Note when the flaw fires: **before** the seccomp filter takes effect. Hardening
+the container would not have helped. That is the difference between a wall and a
+well-locked door: a VM gives you a wall; a container gives you the host's own
+door, with a better lock on it.
+</FieldNote>
+
 ## What to take away
 
 - A container is **not** a VM: it is process + namespaces + cgroups + layers.
@@ -217,3 +250,5 @@ docker rm -f proof
 ```
 
 </RunIt>
+
+<Quiz set="what-is-a-container" />

@@ -196,5 +196,45 @@ console.log(`\n\x1b[1m── HTML gerado (${pages.length} páginas em ${relative
   else bad("a raiz não redireciona para um idioma");
 }
 
+// ─── 9. Toda lição pergunta alguma coisa ao leitor ───────────────────────────
+{
+  // A contraparte, no produto final, do teste de cobertura de exercício. O
+  // teste unitário olha a tag no MDX; aqui a pergunta é se ela sobreviveu à
+  // renderização — uma ilha que falha em hidratar ainda deixa o HTML servidor,
+  // e é esse HTML que prova que o widget chegou na página.
+  const lessons = pages.filter((p) => /\/(pt|en)\/lessons\//.test(page(p)));
+  const semExercicio = lessons
+    .filter((f) => { const h = read(f); return !/class="qz/.test(h) && !/class="lab/.test(h); })
+    .map((f) => page(f));
+  if (semExercicio.length === 0) ok(`as ${lessons.length} lições saem com quiz ou exercício`);
+  else bad("lições sem nenhum exercício no HTML gerado", semExercicio);
+}
+
+// ─── 10. Imagem de terceiro sai com procedência ──────────────────────────────
+{
+  // Um SVG daqui pinta por classe e segue o tema; uma imagem de fora não faz
+  // nem uma coisa nem outra, e por isso ela paga um pedágio: alt de verdade,
+  // crédito visível e um arquivo que existe no dist. Sem isso, o leitor recebe
+  // uma figura de origem desconhecida — e este repositório não publica isso.
+  const problemas = [];
+  for (const f of pages) {
+    const html = read(f);
+    for (const fig of html.matchAll(/<figure class="figure[\s\S]*?<\/figure>/g)) {
+      const bloco = fig[0];
+      const img = bloco.match(/<img\b[^>]*>/);
+      if (!img) continue;                       // figura de SVG: não se aplica
+      const alt = img[0].match(/\salt="([^"]*)"/);
+      if (!alt || !alt[1].trim()) problemas.push(`${page(f)}: <img> sem alt`);
+      if (!/class="figure__credit"/.test(bloco)) problemas.push(`${page(f)}: <img> sem crédito`);
+      const src = img[0].match(/\ssrc="([^"]+)"/)?.[1] ?? "";
+      if (src.startsWith("/") && !urls.has(src)) problemas.push(`${page(f)}: src inexistente ${src}`);
+      if (/^https?:/.test(src)) problemas.push(`${page(f)}: imagem carregada de fora (${src})`);
+    }
+  }
+  const comImagem = pages.filter((f) => /<figure class="figure[\s\S]*?<img/.test(read(f))).length;
+  if (problemas.length === 0) ok(`imagens com procedência (${comImagem} página(s) com figura raster)`);
+  else bad("imagem sem procedência ou quebrada", [...new Set(problemas)]);
+}
+
 console.log(`\n   \x1b[32m${pass} passaram\x1b[0m · \x1b[31m${failures.length} falharam\x1b[0m`);
 process.exit(failures.length > 0 ? 1 : 0);

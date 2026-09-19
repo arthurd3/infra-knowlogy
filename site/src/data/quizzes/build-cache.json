@@ -1,0 +1,116 @@
+{
+  "note_pt": "Perguntas da lição 4.",
+  "note_en": "Questions for lesson 4.",
+  "pt": [
+    {
+      "q": "Seu Dockerfile faz `COPY . .` antes de `RUN npm ci`. Você muda o README. O que acontece no próximo build?",
+      "options": [
+        {
+          "text": "O `npm ci` roda de novo, inteiro — e tudo abaixo dele também.",
+          "correct": true,
+          "why": "A regra é uma só: invalidou uma camada, invalidam todas as de baixo. O `COPY . .` incluiu o README na chave de cache, então qualquer arquivo do projeto derruba a instalação de dependências. A correção é copiar `package*.json` primeiro, instalar, e só então copiar o resto."
+        },
+        {
+          "text": "Nada: o `npm ci` só olha para `package.json` e `package-lock.json`.",
+          "why": "O `npm` olha, o BuildKit não. A chave de cache do `COPY` é o checksum do que foi copiado — e você copiou o projeto inteiro. O builder não sabe o que o comando seguinte vai ler."
+        },
+        {
+          "text": "Nada, porque o conteúdo de `node_modules` não mudou.",
+          "why": "O cache é decidido ANTES de executar, a partir da entrada. Ele não compara o resultado: se comparasse, teria que executar para descobrir — e aí não haveria economia nenhuma."
+        }
+      ]
+    },
+    {
+      "q": "Qual a diferença entre `--mount=type=cache` e uma camada de cache comum?",
+      "options": [
+        {
+          "text": "O `type=cache` sobrevive à invalidação e não vira camada da imagem.",
+          "correct": true,
+          "why": "É um diretório que o BuildKit mantém fora da imagem, entre builds. O cache do npm, do apt ou do Go ficam lá: mesmo quando a camada é reconstruída, o download não se repete — e nada daquilo pesa na imagem final."
+        },
+        {
+          "text": "Nenhuma prática: os dois guardam o resultado do `RUN`.",
+          "why": "A camada guarda o resultado inteiro e morre junto com a invalidação. O mount de cache guarda um diretório que ATRAVESSA a invalidação — é a diferença entre 'não preciso rodar' e 'vou rodar, mas rápido'."
+        },
+        {
+          "text": "O `type=cache` é compartilhado entre máquinas por padrão.",
+          "why": "É local ao builder. Compartilhar entre máquinas é outro problema, e no CI se resolve com `cache-to`/`cache-from` apontando para um backend externo — no GitHub Actions, `type=gha`."
+        }
+      ]
+    },
+    {
+      "q": "Por que o `ci.yml` deste repositório usa `cache-to: type=gha,mode=max` em vez do padrão?",
+      "options": [
+        {
+          "text": "Porque `min` só guarda as camadas da imagem final, e num multi-stage as caras são as intermediárias.",
+          "correct": true,
+          "why": "O `min` exporta só o que sobrou na imagem final. Num Dockerfile multi-stage, o compilador, as dependências de build e os testes ficam em estágios que NÃO viajam para a imagem final — exatamente as camadas caras. Com `min`, elas são reconstruídas sempre."
+        },
+        {
+          "text": "Porque `mode=max` comprime mais e ocupa menos espaço no cache.",
+          "why": "É o contrário: `max` guarda mais coisa e ocupa mais espaço. Esse é o preço consciente — troca-se armazenamento de cache por tempo de build."
+        },
+        {
+          "text": "Porque sem ele o runner do GitHub perde o cache entre jobs do mesmo workflow.",
+          "why": "O runner é descartado a cada job de qualquer jeito, e é por isso que existe um backend externo de cache. O `mode` não decide se o cache sobrevive — decide QUANTO dele é exportado."
+        }
+      ]
+    }
+  ],
+  "en": [
+    {
+      "q": "Your Dockerfile runs `COPY . .` before `RUN npm ci`. You edit the README. What happens on the next build?",
+      "options": [
+        {
+          "text": "`npm ci` runs again, in full — and so does everything below it.",
+          "correct": true,
+          "why": "There is one rule: invalidate a layer and every layer beneath it goes too. `COPY . .` put the README into the cache key, so any project file knocks out dependency installation. The fix is copying `package*.json` first, installing, and only then copying the rest."
+        },
+        {
+          "text": "Nothing: `npm ci` only looks at `package.json` and `package-lock.json`.",
+          "why": "npm looks; BuildKit does not. The `COPY` cache key is the checksum of what was copied — and you copied the whole project. The builder has no idea what the next command will read."
+        },
+        {
+          "text": "Nothing, because the contents of `node_modules` did not change.",
+          "why": "The cache decision happens BEFORE execution, from the input. It never compares the result: comparing would require running it first — at which point there would be no saving left."
+        }
+      ]
+    },
+    {
+      "q": "What sets `--mount=type=cache` apart from an ordinary cached layer?",
+      "options": [
+        {
+          "text": "A `type=cache` mount survives invalidation and never becomes an image layer.",
+          "correct": true,
+          "why": "It is a directory BuildKit keeps outside the image, across builds. The npm, apt or Go caches live there: even when the layer is rebuilt, the download does not repeat — and none of it weighs on the final image."
+        },
+        {
+          "text": "No practical difference: both store the result of the `RUN`.",
+          "why": "A layer stores the whole result and dies with the invalidation. A cache mount holds a directory that OUTLIVES invalidation — the difference between 'I need not run' and 'I will run, but fast'."
+        },
+        {
+          "text": "`type=cache` is shared across machines by default.",
+          "why": "It is local to the builder. Sharing across machines is a separate problem, solved in CI with `cache-to`/`cache-from` pointing at an external backend — on GitHub Actions, `type=gha`."
+        }
+      ]
+    },
+    {
+      "q": "Why does this repository's `ci.yml` use `cache-to: type=gha,mode=max` instead of the default?",
+      "options": [
+        {
+          "text": "Because `min` only keeps the final image's layers, and in a multi-stage build the expensive ones are intermediate.",
+          "correct": true,
+          "why": "`min` exports only what survived into the final image. In a multi-stage Dockerfile the compiler, the build dependencies and the tests live in stages that never travel to the final image — precisely the expensive layers. With `min` they are rebuilt every time."
+        },
+        {
+          "text": "Because `mode=max` compresses harder and uses less cache storage.",
+          "why": "The opposite: `max` stores more and uses more space. That is the deliberate price — cache storage traded for build time."
+        },
+        {
+          "text": "Because without it the GitHub runner loses its cache between jobs of the same workflow.",
+          "why": "The runner is thrown away after every job regardless, which is exactly why an external cache backend exists. `mode` does not decide whether the cache survives — it decides HOW MUCH of it is exported."
+        }
+      ]
+    }
+  ]
+}

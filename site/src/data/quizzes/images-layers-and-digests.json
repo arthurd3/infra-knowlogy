@@ -1,0 +1,116 @@
+{
+  "note_pt": "Perguntas da lição 2.",
+  "note_en": "Questions for lesson 2.",
+  "pt": [
+    {
+      "q": "Seu Dockerfile termina com `RUN rm -rf /tmp/build-cache`, que apaga 300 MB gerados no `RUN` anterior. Quanto a imagem final encolhe?",
+      "options": [
+        {
+          "text": "Nada. Ela fica maior — a camada do `rm` também ocupa espaço.",
+          "correct": true,
+          "why": "Camada é diff, e diff só acrescenta. A camada nova registra 'estes arquivos foram apagados'; os 300 MB continuam na camada anterior, intactos, porque quem tem a imagem tem todas as camadas. Para não carregar o peso, ele não pode nascer — mesmo `RUN`, ou multi-stage."
+        },
+        {
+          "text": "Encolhe 300 MB: o `rm` remove os arquivos do sistema de arquivos final.",
+          "why": "Remove do sistema de arquivos que o container VÊ, e é só isso. O OverlayFS marca o arquivo como apagado com um whiteout; a camada de baixo não é reescrita, porque camadas são imutáveis e endereçadas pelo próprio conteúdo."
+        },
+        {
+          "text": "Depende: encolhe se você rodar `docker image prune` depois.",
+          "why": "O `prune` remove imagens e camadas que ninguém referencia. Ele não reescreve uma imagem existente — as camadas dela estão todas em uso, por ela mesma."
+        }
+      ]
+    },
+    {
+      "q": "Por que `FROM node:22-alpine` não garante um build reprodutível, e `FROM node:22-alpine@sha256:…` garante?",
+      "options": [
+        {
+          "text": "Porque tag é um ponteiro mutável e digest é o endereço do conteúdo.",
+          "correct": true,
+          "why": "A mesma tag aponta para imagens diferentes ao longo do tempo — é isso que faz a atualização de segurança chegar. O digest é o sha256 do manifesto: o mesmo digest devolve exatamente os mesmos bytes, hoje e daqui a um ano, ou o registry falha."
+        },
+        {
+          "text": "Porque a tag baixa da rede e o digest usa o cache local.",
+          "why": "As duas formas consultam o registry e as duas usam o cache local quando as camadas já estão lá. A diferença é o que se está pedindo, não de onde vem."
+        },
+        {
+          "text": "Porque `22-alpine` é uma tag móvel; `22.3.1-alpine` já seria reprodutível.",
+          "why": "Melhora bastante e ainda não fecha: uma tag de patch continua sendo um ponteiro, e é regravada quando a base Alpine recebe correção. Menos móvel não é imóvel."
+        }
+      ]
+    },
+    {
+      "q": "Uma aplicação escreve 2 GB num arquivo que veio da imagem. O que acontece no disco?",
+      "options": [
+        {
+          "text": "O arquivo inteiro é copiado para a camada gravável antes da escrita.",
+          "correct": true,
+          "why": "É o copy-on-write do OverlayFS: alterar um byte de um arquivo que mora numa camada somente-leitura copia o arquivo INTEIRO para cima primeiro. Por isso banco de dados em camada gravável é lento e caro — o lugar dele é um volume, fora da pilha."
+        },
+        {
+          "text": "Só os blocos alterados são copiados, como num snapshot de sistema de arquivos.",
+          "why": "É assim em btrfs, ZFS e device-mapper. O OverlayFS trabalha no nível de ARQUIVO, não de bloco — esse é precisamente o custo escondido dele."
+        },
+        {
+          "text": "A escrita falha: camadas de imagem são somente-leitura.",
+          "why": "A camada de imagem é somente-leitura; o rootfs do container não é. A união empilha uma camada gravável por cima, e é ela que recebe a escrita."
+        }
+      ]
+    }
+  ],
+  "en": [
+    {
+      "q": "Your Dockerfile ends with `RUN rm -rf /tmp/build-cache`, deleting 300 MB created by the previous `RUN`. How much smaller is the final image?",
+      "options": [
+        {
+          "text": "Not at all. It grows — the `rm` layer takes up space too.",
+          "correct": true,
+          "why": "A layer is a diff, and a diff only adds. The new layer records 'these files were deleted'; the 300 MB sit untouched in the earlier layer, because whoever has the image has every layer. To avoid the weight, it must never be created — same `RUN`, or multi-stage."
+        },
+        {
+          "text": "300 MB smaller: `rm` removes the files from the final filesystem.",
+          "why": "From the filesystem the container SEES, and that is all. OverlayFS marks the file deleted with a whiteout; the layer beneath is not rewritten, because layers are immutable and addressed by their own content."
+        },
+        {
+          "text": "It depends: it shrinks if you run `docker image prune` afterwards.",
+          "why": "`prune` removes images and layers nothing references. It does not rewrite an existing image — every layer of it is in use, by that very image."
+        }
+      ]
+    },
+    {
+      "q": "Why does `FROM node:22-alpine` not give you a reproducible build while `FROM node:22-alpine@sha256:…` does?",
+      "options": [
+        {
+          "text": "Because a tag is a mutable pointer and a digest is a content address.",
+          "correct": true,
+          "why": "The same tag points at different images over time — that is exactly how security updates reach you. A digest is the sha256 of the manifest: the same digest returns the same bytes today and a year from now, or the registry errors out."
+        },
+        {
+          "text": "Because the tag pulls from the network while the digest uses the local cache.",
+          "why": "Both forms ask the registry, and both reuse the local cache when the layers are already there. What differs is what you are asking for, not where it comes from."
+        },
+        {
+          "text": "Because `22-alpine` is a floating tag; `22.3.1-alpine` would already be reproducible.",
+          "why": "Much better, and still not closed: a patch tag is still a pointer, and it gets rewritten when the Alpine base is patched. Less floating is not fixed."
+        }
+      ]
+    },
+    {
+      "q": "An application writes 2 GB into a file that came from the image. What happens on disk?",
+      "options": [
+        {
+          "text": "The whole file is copied up into the writable layer before the write lands.",
+          "correct": true,
+          "why": "That is OverlayFS copy-on-write: changing one byte of a file living in a read-only layer copies the ENTIRE file upwards first. Which is why a database on the writable layer is slow and expensive — its home is a volume, outside the stack."
+        },
+        {
+          "text": "Only the changed blocks are copied, like a filesystem snapshot.",
+          "why": "That is how btrfs, ZFS and device-mapper behave. OverlayFS works at FILE granularity, not block — and that is precisely its hidden cost."
+        },
+        {
+          "text": "The write fails: image layers are read-only.",
+          "why": "The image layer is read-only; the container's rootfs is not. The union stacks a writable layer on top, and that is what takes the write."
+        }
+      ]
+    }
+  ]
+}

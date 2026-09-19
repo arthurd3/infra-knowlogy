@@ -1,0 +1,116 @@
+{
+  "note_pt": "Perguntas da lição 5.",
+  "note_en": "Questions for lesson 5.",
+  "pt": [
+    {
+      "q": "Seu entrypoint faz `nginx &` e depois `tail -f /dev/null`. Você remove o `tail`. O que acontece?",
+      "options": [
+        {
+          "text": "O container morre na hora — o PID 1 terminou, e o container vive enquanto ele viver.",
+          "correct": true,
+          "why": "O container não é uma máquina que fica ligada: ele é exatamente o processo 1 dele. Quando o script termina, o kernel derruba o namespace de PID inteiro, e os filhos em background vão junto. Serviço em background é container morto."
+        },
+        {
+          "text": "O nginx continua servindo em background e o container fica de pé.",
+          "why": "É a expectativa que vem de administrar servidores, e ela não vale aqui. Sem o PID 1 não há namespace; sem namespace não há nginx. O nginx precisa ser o processo em primeiro plano."
+        },
+        {
+          "text": "O container fica em `paused` até alguém dar `docker start`.",
+          "why": "`paused` é um estado que só o `docker pause` produz, congelando os processos no cgroup freezer. Quem termina vai para `exited`, e o código de saída é o do PID 1."
+        }
+      ]
+    },
+    {
+      "q": "Um container saiu com 143. O que isso diz?",
+      "options": [
+        {
+          "text": "Morreu de SIGTERM (128 + 15) — provavelmente um desligamento limpo.",
+          "correct": true,
+          "why": "128 + 15 = 143. É o par bom do 137: o processo recebeu SIGTERM e saiu por causa dele, dentro do período de graça. Um serviço que trata o sinal e sai de propósito costuma devolver 0; 143 é 'o sinal me derrubou, e eu não briguei'."
+        },
+        {
+          "text": "Ficou sem memória e foi morto pelo OOM killer.",
+          "why": "Esse é o 137 (128 + 9, SIGKILL). E nem todo 137 é OOM — o `docker inspect` tem o campo `OOMKilled` justamente porque o código de saída sozinho não distingue."
+        },
+        {
+          "text": "Faltou uma biblioteca compartilhada no momento de executar o binário.",
+          "why": "Esse é o 127, 'command not found' — o clássico de copiar um binário dinâmico para uma imagem `scratch` sem as bibliotecas que ele precisa."
+        }
+      ]
+    },
+    {
+      "q": "Qual a diferença prática entre `restart: always` e `restart: unless-stopped` depois de um reboot?",
+      "options": [
+        {
+          "text": "O `always` sobe o container mesmo que você o tivesse parado à mão; o `unless-stopped` respeita a sua decisão.",
+          "correct": true,
+          "why": "O `unless-stopped` lembra que você parou de propósito e não desfaz isso no boot. O `always` não lembra de nada — e é assim que um container que você derrubou para depurar reaparece sozinho de madrugada."
+        },
+        {
+          "text": "Nenhuma no reboot; eles só diferem quando o processo morre sozinho.",
+          "why": "Quando o processo morre sozinho os dois reiniciam igual. A diferença existe exatamente no reboot, e é a de lembrar ou não de uma parada manual."
+        },
+        {
+          "text": "O `unless-stopped` tem limite de tentativas e o `always` não.",
+          "why": "Quem tem limite é o `on-failure:N`. Os dois aqui reiniciam indefinidamente, com backoff crescente do daemon."
+        }
+      ]
+    }
+  ],
+  "en": [
+    {
+      "q": "Your entrypoint runs `nginx &` and then `tail -f /dev/null`. You drop the `tail`. What happens?",
+      "options": [
+        {
+          "text": "The container dies immediately — PID 1 finished, and the container lives exactly as long as it does.",
+          "correct": true,
+          "why": "A container is not a machine that stays powered on: it IS its process 1. When the script ends, the kernel tears down the whole PID namespace and the background children go with it. A backgrounded service is a dead container."
+        },
+        {
+          "text": "nginx keeps serving in the background and the container stays up.",
+          "why": "That expectation comes from administering servers, and it does not hold here. No PID 1, no namespace; no namespace, no nginx. nginx has to be the foreground process."
+        },
+        {
+          "text": "The container goes to `paused` until someone runs `docker start`.",
+          "why": "`paused` is a state only `docker pause` produces, freezing the processes in the cgroup freezer. A container that finishes goes to `exited`, carrying PID 1's exit code."
+        }
+      ]
+    },
+    {
+      "q": "A container exited with 143. What does that tell you?",
+      "options": [
+        {
+          "text": "It died of SIGTERM (128 + 15) — most likely a clean shutdown.",
+          "correct": true,
+          "why": "128 + 15 = 143. It is 137's well-behaved sibling: the process got SIGTERM and exited because of it, inside the grace period. A service that handles the signal and exits deliberately usually returns 0; 143 means 'the signal took me down, and I did not fight it'."
+        },
+        {
+          "text": "It ran out of memory and the OOM killer got it.",
+          "why": "That is 137 (128 + 9, SIGKILL). And not every 137 is an OOM — `docker inspect` carries an `OOMKilled` field precisely because the exit code alone cannot tell."
+        },
+        {
+          "text": "A shared library was missing when the binary was executed.",
+          "why": "That is 127, 'command not found' — the classic of copying a dynamically linked binary into a `scratch` image without the libraries it needs."
+        }
+      ]
+    },
+    {
+      "q": "What is the practical difference between `restart: always` and `restart: unless-stopped` after a reboot?",
+      "options": [
+        {
+          "text": "`always` brings the container back even if you had stopped it by hand; `unless-stopped` honours your decision.",
+          "correct": true,
+          "why": "`unless-stopped` remembers that you stopped it on purpose and does not undo that at boot. `always` remembers nothing — and that is how a container you took down to debug reappears on its own at 3 a.m."
+        },
+        {
+          "text": "None at reboot; they only differ when the process dies on its own.",
+          "why": "When the process dies on its own both restart identically. The difference exists precisely at reboot, and it is whether a manual stop is remembered."
+        },
+        {
+          "text": "`unless-stopped` caps the number of retries and `always` does not.",
+          "why": "The one with a cap is `on-failure:N`. Both of these restart indefinitely, with the daemon's growing backoff."
+        }
+      ]
+    }
+  ]
+}

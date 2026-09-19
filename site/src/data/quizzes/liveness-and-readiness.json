@@ -1,0 +1,116 @@
+{
+  "note_pt": "Perguntas da lição k8s-03.",
+  "note_en": "Questions for lesson k8s-03.",
+  "pt": [
+    {
+      "q": "Com `periodSeconds: 5` e `failureThreshold: 3` na readiness, em quanto tempo o endpoint some depois que o banco cai?",
+      "options": [
+        {
+          "text": "Em até 15 s — e o portão mediu 11 s nesta máquina.",
+          "correct": true,
+          "why": "A aritmética é 5 × 3 = 15 s de pior caso, e a medição real fica abaixo porque a primeira falha raramente coincide com o início do período. `readinessReactSeconds: 11` está em `k8s-measured.json`; a previsão e a medição concordam, que é o que dá confiança na conta."
+        },
+        {
+          "text": "Instantaneamente: o kubelet observa a conexão cair.",
+          "why": "O kubelet não observa nada — ele pergunta, de 5 em 5 segundos. Nenhuma probe é um evento; todas são uma amostragem, e o intervalo é o atraso mínimo que você aceita."
+        },
+        {
+          "text": "Em 5 s: basta uma falha para o endpoint ser removido.",
+          "why": "Bastaria com `failureThreshold: 1`. Com 3, são necessárias três falhas consecutivas — e esse número existe para um soluço de rede não tirar um pod saudável de rotação."
+        }
+      ]
+    },
+    {
+      "q": "Por que o worker desta stack não tem probe nenhuma?",
+      "options": [
+        {
+          "text": "Porque um consumidor de fila sem porta não tem endpoint honesto para responder — probe de mentira é pior que probe nenhuma.",
+          "correct": true,
+          "why": "Uma probe que sempre devolve 200 não mede saúde; ela só faz o painel ficar verde. O sinal real de que o worker vive é a fila andando, e quem prova isso é o smoke test do portão, de fora — o mesmo `lib/smoke.sh` que os outros módulos usam."
+        },
+        {
+          "text": "Porque o worker não é crítico e pode ficar fora do ar.",
+          "why": "Ele é bem crítico: é quem enriquece o link. A ausência de probe não é descaso, é a recusa de fingir uma medição que não existe."
+        },
+        {
+          "text": "Porque o Deployment dele tem uma só réplica.",
+          "why": "Número de réplicas não tem relação com ter probe. Com uma réplica, aliás, uma liveness bem escrita seria ainda mais útil — se houvesse o que checar honestamente."
+        }
+      ]
+    },
+    {
+      "q": "O teste de restart do `k8s-verify` usa SIGTERM e não SIGKILL. Por quê?",
+      "options": [
+        {
+          "text": "Porque o kernel ignora SIGKILL enviado ao PID 1 de dentro do próprio namespace.",
+          "correct": true,
+          "why": "É a mesma física da lição 3 do módulo Docker: o PID 1 tem tratamento especial e não recebe as ações padrão de sinal de dentro. O SIGTERM funciona porque o worker INSTALOU um handler para ele — o teste exercita o caminho que existe de verdade."
+        },
+        {
+          "text": "Porque SIGKILL marcaria o pod como `Error` e o teste quer `Completed`.",
+          "why": "Inverte a causa: se o SIGKILL funcionasse de dentro, o estado resultante seria só um detalhe de asserção. O motivo é que ele simplesmente não chega."
+        },
+        {
+          "text": "Porque o SIGKILL exige a capability KILL, que o container não tem.",
+          "why": "Sinalizar o próprio processo não depende de KILL — essa capability serve para sinalizar processos de OUTRO usuário. Aqui a barreira é do kernel e vale mesmo para o root."
+        }
+      ]
+    }
+  ],
+  "en": [
+    {
+      "q": "With `periodSeconds: 5` and `failureThreshold: 3` on readiness, how long until the endpoint disappears after the database drops?",
+      "options": [
+        {
+          "text": "Up to 15 s — and the gate measured 11 s on this machine.",
+          "correct": true,
+          "why": "The arithmetic is 5 × 3 = 15 s worst case, and the real measurement lands lower because the first failure rarely coincides with the start of a period. `readinessReactSeconds: 11` sits in `k8s-measured.json`; prediction and measurement agree, which is what makes the arithmetic trustworthy."
+        },
+        {
+          "text": "Instantly: the kubelet observes the connection drop.",
+          "why": "The kubelet observes nothing — it asks, every five seconds. No probe is an event; every probe is a sampling, and the interval is the minimum delay you are agreeing to."
+        },
+        {
+          "text": "In 5 s: one failure is enough to pull the endpoint.",
+          "why": "It would be, with `failureThreshold: 1`. At 3 it takes three consecutive failures — and that number exists so a network hiccup does not pull a healthy pod out of rotation."
+        }
+      ]
+    },
+    {
+      "q": "Why does this stack's worker have no probes at all?",
+      "options": [
+        {
+          "text": "Because a portless queue consumer has no honest endpoint to answer with — a fake probe is worse than none.",
+          "correct": true,
+          "why": "A probe that always returns 200 measures no health; it only turns the dashboard green. The real signal that the worker lives is the queue moving, and what proves that is the gate's smoke test, from outside — the same `lib/smoke.sh` the other modules use."
+        },
+        {
+          "text": "Because the worker is not critical and can be down.",
+          "why": "It is quite critical: it is what enriches the link. The absence of a probe is not neglect, it is a refusal to fake a measurement that does not exist."
+        },
+        {
+          "text": "Because its Deployment has a single replica.",
+          "why": "Replica count has no bearing on having probes. With one replica a well-written liveness probe would be more useful still — if there were anything honest to check."
+        }
+      ]
+    },
+    {
+      "q": "The `k8s-verify` restart test uses SIGTERM rather than SIGKILL. Why?",
+      "options": [
+        {
+          "text": "Because the kernel ignores a SIGKILL sent to PID 1 from inside its own namespace.",
+          "correct": true,
+          "why": "Same physics as lesson 3 of the Docker module: PID 1 gets special treatment and receives no default signal dispositions from within. SIGTERM works because the worker INSTALLED a handler for it — the test exercises the path that genuinely exists."
+        },
+        {
+          "text": "Because SIGKILL would mark the pod `Error` and the test wants `Completed`.",
+          "why": "That inverts the cause: if SIGKILL worked from inside, the resulting state would be a mere assertion detail. The reason is that it simply never arrives."
+        },
+        {
+          "text": "Because SIGKILL needs the KILL capability, which the container lacks.",
+          "why": "Signalling your own process does not depend on KILL — that capability is for signalling ANOTHER user's processes. The barrier here is the kernel's, and it applies even to root."
+        }
+      ]
+    }
+  ]
+}

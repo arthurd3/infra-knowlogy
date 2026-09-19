@@ -1,0 +1,116 @@
+{
+  "note_pt": "Perguntas da lição 3. As duas primeiras saem da tabela medida nesta máquina.",
+  "note_en": "Questions for lesson 3. The first two come from the table measured on this machine.",
+  "pt": [
+    {
+      "q": "`CMD [\"sleep\", \"300\"]` — exec form, sem shell nenhum no meio. Quanto tempo o `docker stop` leva?",
+      "options": [
+        {
+          "text": "Os 10 segundos inteiros do período de graça, e depois SIGKILL.",
+          "correct": true,
+          "why": "Medido nesta máquina: 10,3 s. A exec form sozinha não resolve nada. O `sleep` é o PID 1, e o kernel **não aplica as ações padrão de sinal ao PID 1** — SIGTERM sem handler é descartado em silêncio."
+        },
+        {
+          "text": "Milissegundos: com exec form o sinal chega direto ao processo.",
+          "why": "O sinal CHEGA direto — e é ignorado. Essa é a surpresa que a medição revelou: o problema nunca foi a entrega do sinal, foi o tratamento especial que o kernel dá ao PID 1."
+        },
+        {
+          "text": "Depende do shell da imagem base.",
+          "why": "Com exec form não existe shell no caminho — o `sleep` é executado diretamente. O shell só entra na história na shell form, e mesmo lá o BusyBox costuma fazer `exec` e desaparecer."
+        }
+      ]
+    },
+    {
+      "q": "Você passou um token por `ARG` e o removeu com `RUN unset` na instrução seguinte. O segredo está seguro?",
+      "options": [
+        {
+          "text": "Não. Ele já vazou, e a única saída é rotacionar a credencial.",
+          "correct": true,
+          "why": "`ARG` fica gravado no histórico da imagem — `docker history --no-trunc` o mostra. Vale a mesma física da camada que não encolhe: apagar numa etapa seguinte não reescreve a anterior. Para o segredo não existir na imagem, use `--mount=type=secret`."
+        },
+        {
+          "text": "Está, desde que o `unset` esteja no mesmo estágio do build.",
+          "why": "O `unset` afeta o ambiente daquele processo de shell, que morre no fim do `RUN`. Ele não toca o metadado do histórico, que é onde o valor do `ARG` ficou registrado."
+        },
+        {
+          "text": "Está, se a imagem nunca for publicada num registry público.",
+          "why": "Reduz quem alcança, não o fato. Quem tiver a imagem — colega, runner de CI, quem baixar do registry interno — tem o segredo. Modelo de ameaça não é quem você espera, é quem consegue."
+        }
+      ]
+    },
+    {
+      "q": "Uma imagem distroless não tem `curl`, nem `wget`, nem shell. Como escrever o `HEALTHCHECK` dela?",
+      "options": [
+        {
+          "text": "Dando ao próprio binário um segundo modo: `CMD [\"/api-go\", \"healthcheck\"]`.",
+          "correct": true,
+          "why": "É o que esta stack faz em `healthcheck.go`, e o worker Python faz com `python -c`. Instalar curl só para o health check anexaria um gerenciador de pacotes — e a superfície de ataque que a distroless existe para remover."
+        },
+        {
+          "text": "Instalando `curl` num estágio de build e copiando o binário para a imagem final.",
+          "why": "Funciona e é pior negócio: você ganha um binário a mais para escanear, atualizar e explicar, para fazer o que o seu próprio processo já sabe fazer melhor — ele conhece o estado interno, o curl só vê um código HTTP."
+        },
+        {
+          "text": "Não escrever `HEALTHCHECK` e deixar o Compose checar a porta TCP.",
+          "why": "Porta aberta não é saúde: um processo travado com o listener de pé aceita a conexão e não responde nada. É a mesma armadilha que no Kubernetes deixa um pod 'Ready' devolvendo 502."
+        }
+      ]
+    }
+  ],
+  "en": [
+    {
+      "q": "`CMD [\"sleep\", \"300\"]` — exec form, no shell in the middle. How long does `docker stop` take?",
+      "options": [
+        {
+          "text": "The full 10-second grace period, then SIGKILL.",
+          "correct": true,
+          "why": "Measured on this machine: 10.3 s. Exec form on its own fixes nothing. `sleep` is PID 1, and the kernel **does not apply default signal dispositions to PID 1** — an unhandled SIGTERM is silently discarded."
+        },
+        {
+          "text": "Milliseconds: with exec form the signal reaches the process directly.",
+          "why": "It DOES reach it directly — and gets ignored. That is the surprise the measurement turned up: the problem was never signal delivery, it was the special treatment the kernel gives PID 1."
+        },
+        {
+          "text": "It depends on the base image's shell.",
+          "why": "With exec form there is no shell in the path — `sleep` is executed directly. A shell only enters the story in shell form, and even there BusyBox usually `exec`s and vanishes."
+        }
+      ]
+    },
+    {
+      "q": "You passed a token through `ARG` and cleared it with `RUN unset` in the next instruction. Is the secret safe?",
+      "options": [
+        {
+          "text": "No. It already leaked, and the only way out is rotating the credential.",
+          "correct": true,
+          "why": "`ARG` is recorded in the image history — `docker history --no-trunc` prints it. Same physics as the layer that never shrinks: deleting in a later step does not rewrite the earlier one. For the secret to not exist in the image, use `--mount=type=secret`."
+        },
+        {
+          "text": "It is, as long as the `unset` is in the same build stage.",
+          "why": "`unset` affects the environment of that shell process, which dies at the end of the `RUN`. It never touches the history metadata, which is where the `ARG` value was written down."
+        },
+        {
+          "text": "It is, if the image is never pushed to a public registry.",
+          "why": "That shrinks who can reach it, not the fact. Whoever holds the image — a colleague, a CI runner, anyone pulling from the internal registry — holds the secret. A threat model is not who you expect, it is who can."
+        }
+      ]
+    },
+    {
+      "q": "A distroless image has no `curl`, no `wget` and no shell. How do you write its `HEALTHCHECK`?",
+      "options": [
+        {
+          "text": "Give the binary itself a second mode: `CMD [\"/api-go\", \"healthcheck\"]`.",
+          "correct": true,
+          "why": "That is what this stack does in `healthcheck.go`, and what the Python worker does with `python -c`. Installing curl just for the health check would bolt on a package manager — and the attack surface distroless exists to remove."
+        },
+        {
+          "text": "Install `curl` in a build stage and copy the binary into the final image.",
+          "why": "It works, and it is a poor trade: you gain one more binary to scan, patch and justify, in order to do what your own process already does better — it knows the internal state, curl only sees an HTTP code."
+        },
+        {
+          "text": "Skip `HEALTHCHECK` and let Compose check the TCP port.",
+          "why": "An open port is not health: a wedged process with a live listener accepts the connection and answers nothing. It is the same trap that leaves a Kubernetes pod 'Ready' while it serves 502s."
+        }
+      ]
+    }
+  ]
+}

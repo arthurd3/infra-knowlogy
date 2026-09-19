@@ -1,0 +1,116 @@
+{
+  "note_pt": "Perguntas da lição 6.",
+  "note_en": "Questions for lesson 6.",
+  "pt": [
+    {
+      "q": "Num Fedora com SELinux enforcing, `docker run -v ./config:/etc/app` dá `permission denied` num arquivo 644. Por quê?",
+      "options": [
+        {
+          "text": "O rótulo SELinux do arquivo não permite acesso a um processo `container_t`. Falta o sufixo `:z`.",
+          "correct": true,
+          "why": "A permissão POSIX está certa e é a segunda barreira, não a primeira. O SELinux decide antes, pelo rótulo: o arquivo do host é `user_home_t` e o container é `container_t`. O `:z` faz o Docker reetiquetar para `container_file_t` — `:z` compartilha o rótulo, `:Z` o torna privado daquele container."
+        },
+        {
+          "text": "O caminho relativo `./config` não é suportado em bind mount.",
+          "why": "É suportado no Compose e no `docker run` de versões atuais. Se o caminho estivesse errado, o Docker criaria um diretório vazio em vez de negar a leitura — sintoma bem diferente."
+        },
+        {
+          "text": "O processo dentro do container roda com um UID que não é dono do arquivo.",
+          "why": "É uma causa real de `permission denied` em bind mount, e não esta: 644 dá leitura para todo mundo, então o UID não importa para ler. A negação veio de uma camada acima da permissão POSIX."
+        }
+      ]
+    },
+    {
+      "q": "Você aponta um volume nomeado novo para `/var/lib/postgresql/data`, que já tem conteúdo na imagem. O que acontece?",
+      "options": [
+        {
+          "text": "O Docker copia o conteúdo da imagem para dentro do volume, porque ele está vazio.",
+          "correct": true,
+          "why": "É a regra de população: o volume nomeado herda o conteúdo do caminho na imagem **apenas quando está vazio**. Na segunda subida ele já tem dados e nada é copiado — que é exatamente o que você quer, e também por que mudar a imagem não atualiza o que está no volume."
+        },
+        {
+          "text": "O conteúdo da imagem é escondido pelo volume vazio, como num bind mount.",
+          "why": "É o comportamento do bind mount, que sempre cobre o que havia embaixo. O volume nomeado é diferente de propósito, e essa assimetria entre os dois é uma das coisas mais confusas do Docker."
+        },
+        {
+          "text": "O container falha ao subir porque o ponto de montagem não está vazio.",
+          "why": "Montar sobre um diretório com conteúdo é normal em Linux — é o que uma montagem faz. Ninguém falha por isso."
+        }
+      ]
+    },
+    {
+      "q": "A aplicação roda com `read_only: true` mas precisa escrever em `/tmp`. Qual a saída certa?",
+      "options": [
+        {
+          "text": "Montar um `tmpfs` em `/tmp`: escrita em RAM, que some quando o container morre.",
+          "correct": true,
+          "why": "É a combinação que torna `read_only` viável de verdade: o rootfs fica imutável e só os caminhos que a aplicação realmente escreve ganham uma área efêmera. Como é RAM, nada sobrevive ao container — bom para arquivo temporário e ótimo para dado sensível."
+        },
+        {
+          "text": "Desligar o `read_only`, já que a aplicação precisa escrever.",
+          "why": "Joga fora a proteção inteira por causa de um diretório. O `read_only` existe justamente para que um invasor não consiga gravar um binário no rootfs — e `/tmp` em tmpfs não abre essa porta."
+        },
+        {
+          "text": "Criar um volume nomeado para `/tmp`.",
+          "why": "Funciona e guarda o que deveria ser descartável: o volume persiste entre execuções, acumula lixo e ainda pode carregar um arquivo temporário sensível para além da vida do container."
+        }
+      ]
+    }
+  ],
+  "en": [
+    {
+      "q": "On a Fedora box with SELinux enforcing, `docker run -v ./config:/etc/app` gives `permission denied` on a 644 file. Why?",
+      "options": [
+        {
+          "text": "The file's SELinux label denies a `container_t` process. The `:z` suffix is missing.",
+          "correct": true,
+          "why": "The POSIX permission is fine, and it is the second gate, not the first. SELinux decides earlier, by label: the host file is `user_home_t` and the container is `container_t`. `:z` makes Docker relabel to `container_file_t` — `:z` shares the label, `:Z` makes it private to that container."
+        },
+        {
+          "text": "The relative path `./config` is not supported for bind mounts.",
+          "why": "It is supported in Compose and in current `docker run`. If the path were wrong, Docker would create an empty directory rather than deny the read — a very different symptom."
+        },
+        {
+          "text": "The process inside the container runs as a UID that does not own the file.",
+          "why": "That is a real cause of bind-mount `permission denied`, just not this one: 644 grants read to everybody, so the UID is irrelevant for reading. This denial came from a layer above POSIX permissions."
+        }
+      ]
+    },
+    {
+      "q": "You point a fresh named volume at `/var/lib/postgresql/data`, which already has content in the image. What happens?",
+      "options": [
+        {
+          "text": "Docker copies the image's content into the volume, because the volume is empty.",
+          "correct": true,
+          "why": "That is the population rule: a named volume inherits the image path's content **only while it is empty**. On the second boot it already holds data and nothing is copied — which is exactly what you want, and also why changing the image does not update what lives in the volume."
+        },
+        {
+          "text": "The image content is hidden by the empty volume, as with a bind mount.",
+          "why": "That is bind-mount behaviour, which always covers whatever was underneath. Named volumes differ on purpose, and that asymmetry between the two is among Docker's most confusing corners."
+        },
+        {
+          "text": "The container fails to start because the mount point is not empty.",
+          "why": "Mounting over a non-empty directory is ordinary Linux — it is what a mount does. Nobody fails over it."
+        }
+      ]
+    },
+    {
+      "q": "The application runs with `read_only: true` but needs to write to `/tmp`. What is the right answer?",
+      "options": [
+        {
+          "text": "Mount a `tmpfs` at `/tmp`: writes land in RAM and vanish with the container.",
+          "correct": true,
+          "why": "It is the combination that makes `read_only` genuinely workable: the rootfs stays immutable and only the paths the application really writes get an ephemeral area. Being RAM, nothing outlives the container — good for scratch files and excellent for sensitive ones."
+        },
+        {
+          "text": "Turn `read_only` off, since the application needs to write.",
+          "why": "That throws away the whole protection over one directory. `read_only` exists precisely so an intruder cannot drop a binary onto the rootfs — and `/tmp` on tmpfs does not open that door."
+        },
+        {
+          "text": "Create a named volume for `/tmp`.",
+          "why": "It works, and it persists what was meant to be disposable: the volume survives restarts, accumulates junk, and can carry a sensitive scratch file well past the container's life."
+        }
+      ]
+    }
+  ]
+}

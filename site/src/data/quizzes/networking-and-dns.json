@@ -1,0 +1,116 @@
+{
+  "note_pt": "Perguntas da lição 7.",
+  "note_en": "Questions for lesson 7.",
+  "pt": [
+    {
+      "q": "Você publica a porta do banco com `ports: [\"5432:5432\"]` e tem firewalld bloqueando a 5432. O banco está protegido?",
+      "options": [
+        {
+          "text": "Não: o Docker escreve regras de NAT que passam antes, e a porta fica aberta na internet.",
+          "correct": true,
+          "why": "O Docker insere as próprias regras na cadeia `DOCKER` do nftables/iptables, avaliada antes das suas. É a pegadinha que já expôs muito banco de dados. A correção é publicar em loopback — `127.0.0.1:5432:5432` — ou não publicar."
+        },
+        {
+          "text": "Está: o firewalld filtra antes de qualquer coisa chegar ao container.",
+          "why": "É a suposição razoável, e ela não se confirma no Docker rootful. Vale conferir com `sudo nft list ruleset` em vez de confiar: a cadeia do Docker aparece antes."
+        },
+        {
+          "text": "Está, desde que a rede do Compose seja `internal: true`.",
+          "why": "`internal: true` e `ports:` se contradizem — a rede interna não tem rota de saída, mas a publicação de porta acontece na interface do host. Escolha um: ou o serviço é interno, ou ele é publicado."
+        }
+      ]
+    },
+    {
+      "q": "O `api` fala com o `db` numa rede bridge do Compose. Por qual endereço?",
+      "options": [
+        {
+          "text": "Pelo nome `db` e pela porta do CONTAINER — o `ports:` não entra nessa conversa.",
+          "correct": true,
+          "why": "Toda rede bridge definida por você ganha um resolvedor em `127.0.0.11` que traduz nome de serviço para IP. A comunicação é dentro da rede, na porta que o processo escuta. O `ports:` só existe para o mundo de fora do Docker."
+        },
+        {
+          "text": "Por `localhost` e a porta publicada no host.",
+          "why": "`localhost` dentro do container é o próprio container — o namespace de rede é dele. Apontar para `localhost:5432` procura um Postgres dentro da api, que não existe."
+        },
+        {
+          "text": "Pelo IP do container, que precisa ser fixado no Compose.",
+          "why": "Funciona e envelhece mal: o IP muda a cada recriação. O DNS embutido existe exatamente para você não ter que fixar nada."
+        }
+      ]
+    },
+    {
+      "q": "Por que a rede dos serviços de dados desta stack é `internal: true`?",
+      "options": [
+        {
+          "text": "Para tirar a rota de saída: banco e cache comprometidos não conseguem falar com a internet.",
+          "correct": true,
+          "why": "`internal: true` remove o gateway da rede. Isso limita o raio de explosão de um jeito concreto — exfiltrar dado ou baixar um segundo estágio exige uma rota que não existe. É a mesma ideia que no Kubernetes se escreve como NetworkPolicy de egresso."
+        },
+        {
+          "text": "Para impedir que o edge alcance a api.",
+          "why": "Não é isso: serviços na mesma rede interna continuam se falando normalmente. O `internal` corta o tráfego para FORA do Docker, não entre os containers."
+        },
+        {
+          "text": "Para o DNS interno funcionar.",
+          "why": "O DNS em `127.0.0.11` funciona em qualquer rede bridge definida por você, interna ou não. O que falta é o DNS da rede padrão `bridge`, onde ele simplesmente não existe."
+        }
+      ]
+    }
+  ],
+  "en": [
+    {
+      "q": "You publish the database port with `ports: [\"5432:5432\"]` and firewalld blocks 5432. Is the database protected?",
+      "options": [
+        {
+          "text": "No: Docker writes NAT rules that are evaluated first, and the port is open to the internet.",
+          "correct": true,
+          "why": "Docker inserts its own rules into the nftables/iptables `DOCKER` chain, evaluated ahead of yours. It is the trap that has exposed a great many databases. The fix is publishing on loopback — `127.0.0.1:5432:5432` — or not publishing at all."
+        },
+        {
+          "text": "Yes: firewalld filters before anything reaches the container.",
+          "why": "That is the reasonable assumption, and it does not hold for rootful Docker. Check with `sudo nft list ruleset` instead of trusting it: Docker's chain shows up first."
+        },
+        {
+          "text": "Yes, as long as the Compose network is `internal: true`.",
+          "why": "`internal: true` and `ports:` contradict each other — an internal network has no egress route, but port publishing happens on the host interface. Pick one: either the service is internal, or it is published."
+        }
+      ]
+    },
+    {
+      "q": "`api` talks to `db` over a Compose bridge network. At which address?",
+      "options": [
+        {
+          "text": "By the name `db` and the CONTAINER's port — `ports:` has nothing to do with it.",
+          "correct": true,
+          "why": "Every user-defined bridge network gets a resolver at `127.0.0.11` that turns service names into IPs. The conversation happens inside the network, on the port the process listens on. `ports:` exists only for the world outside Docker."
+        },
+        {
+          "text": "Via `localhost` and the port published on the host.",
+          "why": "`localhost` inside the container is that container — the network namespace is its own. Pointing at `localhost:5432` looks for a Postgres inside the api, and there is none."
+        },
+        {
+          "text": "By the container's IP, which has to be pinned in Compose.",
+          "why": "It works and ages badly: the IP changes on every recreate. The built-in DNS exists precisely so you never have to pin anything."
+        }
+      ]
+    },
+    {
+      "q": "Why is this stack's data-service network `internal: true`?",
+      "options": [
+        {
+          "text": "To remove the egress route: a compromised database or cache cannot reach the internet.",
+          "correct": true,
+          "why": "`internal: true` strips the network's gateway. That caps the blast radius concretely — exfiltrating data or pulling a second stage needs a route that does not exist. It is the same idea Kubernetes spells as an egress NetworkPolicy."
+        },
+        {
+          "text": "To stop the edge from reaching the api.",
+          "why": "Not that: services on the same internal network still talk to each other normally. `internal` cuts traffic OUT of Docker, not between containers."
+        },
+        {
+          "text": "To make internal DNS work.",
+          "why": "DNS at `127.0.0.11` works on any user-defined bridge network, internal or not. What lacks DNS is the default `bridge` network, where it simply does not exist."
+        }
+      ]
+    }
+  ]
+}

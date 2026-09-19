@@ -8,6 +8,9 @@ summary: O ADR 0001 escolheu Compose e listou o preço da escolha. Este módulo 
 minutes: 12
 tags: [kubernetes, kind, orchestration, self-healing, rolling-update]
 sources:
+  - label: "Kubernetes Docs — Components of Kubernetes"
+    url: "https://kubernetes.io/docs/concepts/overview/components/"
+    kind: docs
   - label: "Kubernetes Docs — Deployments"
     url: "https://kubernetes.io/docs/concepts/workloads/controllers/deployment/"
   - label: "kind — Quick Start"
@@ -61,6 +64,34 @@ NetworkPolicy era aceita pela API e ignorada em silêncio. A partir da 0.23 o CN
 embutido aplica as policies — e o portão do módulo prova isso na prática.
 Ver docs/adr/0007.
 </Callout>
+
+### O que está dentro desse container
+
+Este é o desenho canônico da documentação do Kubernetes — o mesmo que você vai
+reencontrar em toda a literatura. Vale ler peça por peça, porque o módulo
+inteiro conversa com ele.
+
+<Figure
+  src="/images/kubernetes-components.svg"
+  plate="light"
+  alt="Os componentes de um cluster Kubernetes: control plane com api, etcd, scheduler e controller managers, e nós com kubelet e kube-proxy."
+  credit="Kubernetes Documentation — Components of Kubernetes"
+  creditUrl="https://kubernetes.io/docs/concepts/overview/components/"
+  license="CC BY 4.0"
+  caption="No <b>kind</b>, tudo o que este desenho mostra — control plane e nó — cabe num único container Docker. Em produção o control plane tem máquinas próprias, e é só essa a diferença."
+>
+  <Fragment slot="legend">
+  <ol class="figure__notes">
+    <li><b>api</b> (kube-apiserver) — a única porta de entrada. Todo <code>kubectl</code>, todo controller e todo kubelet falam com ele, e com mais ninguém.</li>
+    <li><b>etcd</b> — onde o estado <i>desejado</i> mora. É o banco do cluster, e o único componente com estado.</li>
+    <li><b>sched</b> (kube-scheduler) — decide em qual nó um pod novo cabe. Só decide; não inicia nada.</li>
+    <li><b>c-m</b> (kube-controller-manager) — o laço de reconciliação em pessoa. É ele que percebe que faltou um pod e cria outro — os <b>2 s</b> de auto-cura que o portão mediu saem daqui.</li>
+    <li><b>c-c-m</b> (cloud-controller-manager) — fala com a API do provedor de nuvem: balanceador, disco, rota. Num cluster kind ele não faz nada, e é por isso que este módulo não tem Ingress de verdade.</li>
+    <li><b>kubelet</b> — o agente do nó. É <b>ele</b> quem executa as probes, e é por isso que o <code>HEALTHCHECK</code> do Dockerfile não vale nada aqui: o kubelet não lê o metadado da imagem, lê o spec do pod.</li>
+    <li><b>k-proxy</b> (kube-proxy) — programa as regras que fazem o nome de um Service virar um pod real. Ele é o motivo de o rolling update precisar de cooperação: o SIGTERM chega antes de ele parar de mandar conexões novas.</li>
+  </ol>
+  </Fragment>
+</Figure>
 
 <ReconcileLoop />
 
@@ -205,3 +236,5 @@ make k8s-verify
 ```
 
 </RunIt>
+
+<Quiz set="why-an-orchestrator" />

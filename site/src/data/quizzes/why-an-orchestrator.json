@@ -1,0 +1,116 @@
+{
+  "note_pt": "Perguntas da lição k8s-01. Os números saem de site/src/data/k8s-measured.json.",
+  "note_en": "Questions for lesson k8s-01. Numbers come from site/src/data/k8s-measured.json.",
+  "pt": [
+    {
+      "q": "Segundo os números medidos pelo `make k8s-verify`, quanto tempo o cluster levou para recolocar no ar um pod morto à força?",
+      "options": [
+        {
+          "text": "Cerca de 2 segundos.",
+          "correct": true,
+          "why": "`selfHealSeconds: 2` em `k8s-measured.json`, gravado durante uma execução real do portão. O controller não 'reinicia o container': ele observa que a contagem de réplicas desejada não bate com a observada e cria um pod NOVO."
+        },
+        {
+          "text": "Cerca de 22 segundos — o mesmo tempo que a stack inteira leva para ficar pronta.",
+          "why": "22 s é `stackReadySeconds`, a stack inteira do zero. Recriar um pod isolado, com a imagem já no nó, é uma ordem de grandeza mais rápido."
+        },
+        {
+          "text": "Depende da `restartPolicy`; com `Never` o pod não volta.",
+          "why": "Confunde dois níveis. `restartPolicy` age sobre o container DENTRO do pod; quem recria o pod inteiro é o controller do Deployment, e ele não consulta esse campo."
+        }
+      ]
+    },
+    {
+      "q": "Qual é a única ideia genuinamente nova que um orquestrador traz, em relação ao Compose?",
+      "options": [
+        {
+          "text": "O laço de reconciliação: você declara o estado desejado e um controller trabalha continuamente para alcançá-lo.",
+          "correct": true,
+          "why": "Tudo o mais — rede, volume, healthcheck, limite de recurso — o Compose já fazia de forma reconhecível. O que muda é que o `apply` não é um comando que termina: ele grava uma intenção, e um laço fica comparando desejado com observado para sempre."
+        },
+        {
+          "text": "Containers, que no Kubernetes são gerenciados pelo kubelet em vez do dockerd.",
+          "why": "Troca de runtime, não de ideia. O container continua sendo processo + namespaces + cgroups; quem o inicia mudou de nome."
+        },
+        {
+          "text": "Healthchecks, que no Compose não existem.",
+          "why": "Existem no Compose e este repositório os usa. Elas até se PARECEM com probes, e as diferenças — o kubelet ignorar o `HEALTHCHECK` do Dockerfile, liveness contra readiness — são assunto da lição 3."
+        }
+      ]
+    },
+    {
+      "q": "Durante o rolling update medido pelo portão, 27 requisições foram disparadas. Quantas falharam?",
+      "options": [
+        {
+          "text": "Nenhuma — mas só porque a aplicação coopera com o desligamento.",
+          "correct": true,
+          "why": "`rollingRequestsFailed: 0`, e o mérito não é do Kubernetes sozinho. O SIGTERM chega ao pod ANTES de o kube-proxy parar de mandar conexões novas; a api espera `SHUTDOWN_DELAY` (2 s no Deployment) antes de fechar o listener. Sem essa espera, o zero viraria outro número."
+        },
+        {
+          "text": "Algumas: rolling update sempre derruba conexões em trânsito.",
+          "why": "Não sempre — mas derruba por padrão, se a aplicação não cooperar. O ponto da lição é exatamente que 'zero falhas' é uma conquista de engenharia, não um presente do orquestrador."
+        },
+        {
+          "text": "Nenhuma, porque o Kubernetes drena as conexões antes de mandar SIGTERM.",
+          "why": "A ordem real é a contrária, e é justamente isso que torna o problema difícil: a remoção do endpoint e o SIGTERM são assíncronos, e o sinal costuma ganhar a corrida."
+        }
+      ]
+    }
+  ],
+  "en": [
+    {
+      "q": "According to the numbers measured by `make k8s-verify`, how long did the cluster take to bring back a forcibly killed pod?",
+      "options": [
+        {
+          "text": "About 2 seconds.",
+          "correct": true,
+          "why": "`selfHealSeconds: 2` in `k8s-measured.json`, written during a real run of the gate. The controller does not 'restart the container': it observes that the desired replica count differs from the observed one and creates a NEW pod."
+        },
+        {
+          "text": "About 22 seconds — the same time the whole stack takes to become ready.",
+          "why": "22 s is `stackReadySeconds`, the entire stack from scratch. Recreating a single pod, with the image already on the node, is an order of magnitude faster."
+        },
+        {
+          "text": "It depends on `restartPolicy`; with `Never` the pod does not come back.",
+          "why": "That conflates two levels. `restartPolicy` governs the container INSIDE the pod; recreating the whole pod is the Deployment controller's job, and it never consults that field."
+        }
+      ]
+    },
+    {
+      "q": "What is the one genuinely new idea an orchestrator brings, compared with Compose?",
+      "options": [
+        {
+          "text": "The reconciliation loop: you declare desired state and a controller works continuously to reach it.",
+          "correct": true,
+          "why": "Everything else — networking, volumes, healthchecks, resource limits — Compose already did recognisably. What changes is that `apply` is not a command that finishes: it records an intent, and a loop keeps comparing desired against observed, forever."
+        },
+        {
+          "text": "Containers, which in Kubernetes are managed by the kubelet instead of dockerd.",
+          "why": "A change of runtime, not of idea. A container is still process + namespaces + cgroups; what starts it merely changed name."
+        },
+        {
+          "text": "Healthchecks, which Compose does not have.",
+          "why": "Compose has them and this repository uses them. They even LOOK like probes, and the differences — the kubelet ignoring the Dockerfile `HEALTHCHECK`, liveness versus readiness — are lesson 3's subject."
+        }
+      ]
+    },
+    {
+      "q": "During the rolling update the gate measured, 27 requests were fired. How many failed?",
+      "options": [
+        {
+          "text": "None — but only because the application cooperates with shutdown.",
+          "correct": true,
+          "why": "`rollingRequestsFailed: 0`, and the credit is not Kubernetes' alone. SIGTERM reaches the pod BEFORE kube-proxy stops sending it new connections; the api waits out `SHUTDOWN_DELAY` (2 s in the Deployment) before closing the listener. Drop that wait and the zero becomes some other number."
+        },
+        {
+          "text": "Some: a rolling update always drops in-flight connections.",
+          "why": "Not always — but it does by default, when the application does not cooperate. The lesson's point is precisely that 'zero failures' is an engineering achievement, not a gift from the orchestrator."
+        },
+        {
+          "text": "None, because Kubernetes drains connections before sending SIGTERM.",
+          "why": "The real order is the reverse, and that is exactly what makes the problem hard: endpoint removal and SIGTERM are asynchronous, and the signal usually wins the race."
+        }
+      ]
+    }
+  ]
+}

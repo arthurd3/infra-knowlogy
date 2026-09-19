@@ -1,0 +1,152 @@
+{
+  "note_pt": "Perguntas da lição 1. Cada alternativa explica por que está certa OU errada — é na errada que o entendimento acontece.",
+  "note_en": "Questions for lesson 1. Every option explains why it is right OR wrong — the wrong ones are where understanding happens.",
+  "pt": [
+    {
+      "q": "Você roda `ps aux` no host, com um container de pé. O processo do container aparece na lista?",
+      "options": [
+        {
+          "text": "Aparece. É um processo comum do host, como qualquer outro.",
+          "correct": true,
+          "why": "O container não tem kernel próprio nem hipervisor. O PID que ele vê como 1 é outro número no host, e os dois se referem ao mesmo processo."
+        },
+        {
+          "text": "Não aparece: o container roda num kernel convidado, isolado do host.",
+          "why": "Isso descreve uma máquina virtual. Container não emula hardware nem carrega um segundo kernel — `uname -r` devolve a mesma versão dos dois lados."
+        },
+        {
+          "text": "Só aparece se o container tiver sido criado com `--pid=host`.",
+          "why": "Ao contrário: `--pid=host` faz o CONTAINER enxergar os processos do host. O host sempre enxergou os do container — o namespace de PID recorta a visão de dentro para fora, não o contrário."
+        }
+      ]
+    },
+    {
+      "q": "Um container morre com código de saída 137. O que aconteceu?",
+      "options": [
+        {
+          "text": "Recebeu SIGKILL — 128 + 9. Quase sempre é o cgroup de memória estourando.",
+          "correct": true,
+          "why": "A convenção do shell é 128 + número do sinal. O 9 é SIGKILL, e quem manda SIGKILL sem pedir licença é o OOM killer do kernel quando o limite de memória do cgroup é ultrapassado."
+        },
+        {
+          "text": "A aplicação retornou 137 no `exit()` dela.",
+          "why": "Possível em teoria, e quase nunca é o caso. Código de saída acima de 128 é a assinatura de morte por sinal; uma aplicação que quisesse sinalizar erro usaria 1 ou 2."
+        },
+        {
+          "text": "O `docker stop` esgotou o período de graça.",
+          "why": "Chega perto, mas o caminho é outro: o `stop` manda SIGTERM primeiro e só depois SIGKILL. O resultado final também é 137, então o 137 sozinho não distingue os dois — quem distingue é o `docker inspect` com o campo `OOMKilled`."
+        }
+      ]
+    },
+    {
+      "q": "Qual dos três mecanismos abaixo é o responsável por um container NÃO conseguir usar mais de 64 MB de memória?",
+      "options": [
+        {
+          "text": "cgroups.",
+          "correct": true,
+          "why": "Namespaces recortam o que o processo VÊ; cgroups limitam o que ele CONSOME. Memória, CPU, PIDs e I/O são contabilidade de cgroup — dá para ler o limite em `/sys/fs/cgroup/memory.max`."
+        },
+        {
+          "text": "Namespaces.",
+          "why": "Namespace não limita quantidade de nada. Ele isola visibilidade: o container vê a própria árvore de PIDs, os próprios pontos de montagem, a própria interface de rede — e veria a memória do host inteira se pudesse usá-la."
+        },
+        {
+          "text": "O sistema de arquivos em união (OverlayFS).",
+          "why": "OverlayFS monta o rootfs empilhando camadas somente-leitura sob uma camada gravável. Ele decide de onde um arquivo vem, não quanta RAM o processo pode alocar."
+        }
+      ]
+    },
+    {
+      "q": "Por que um container sobe em milissegundos e uma máquina virtual não?",
+      "options": [
+        {
+          "text": "Porque não há kernel para inicializar: é um `fork`/`exec` com alguns `unshare` antes.",
+          "correct": true,
+          "why": "A VM precisa de firmware, bootloader e boot de kernel antes de o primeiro processo útil existir. O container pula tudo isso — o kernel já está rodando, e o que resta é criar namespaces, aplicar o cgroup e executar o binário."
+        },
+        {
+          "text": "Porque a imagem do container é menor que a imagem do disco da VM.",
+          "why": "O tamanho ajuda no download inicial e não explica a partida. Uma VM com disco de 200 MB ainda leva segundos para bootar; um container de 1 GB já cacheado sobe instantâneo."
+        },
+        {
+          "text": "Porque o container roda direto na CPU, sem virtualização.",
+          "why": "A VM moderna também executa instruções direto na CPU, com aceleração de hardware (VT-x/AMD-V). A diferença de partida não está na execução das instruções, está no boot que não acontece."
+        }
+      ]
+    }
+  ],
+  "en": [
+    {
+      "q": "You run `ps aux` on the host while a container is up. Does the container's process show up in the list?",
+      "options": [
+        {
+          "text": "It does. It is an ordinary host process, like any other.",
+          "correct": true,
+          "why": "A container has no kernel of its own and no hypervisor. The PID it sees as 1 is a different number on the host, and both refer to the very same process."
+        },
+        {
+          "text": "No: the container runs on a guest kernel, isolated from the host.",
+          "why": "That describes a virtual machine. Containers emulate no hardware and carry no second kernel — `uname -r` returns the same version on both sides."
+        },
+        {
+          "text": "Only if the container was started with `--pid=host`.",
+          "why": "The other way round: `--pid=host` lets the CONTAINER see the host's processes. The host could always see the container's — the PID namespace crops the view from the inside out, not the reverse."
+        }
+      ]
+    },
+    {
+      "q": "A container dies with exit code 137. What happened?",
+      "options": [
+        {
+          "text": "It got SIGKILL — 128 + 9. Almost always the memory cgroup being blown.",
+          "correct": true,
+          "why": "The shell convention is 128 + signal number. 9 is SIGKILL, and what sends SIGKILL without asking is the kernel's OOM killer once the cgroup's memory limit is crossed."
+        },
+        {
+          "text": "The application returned 137 from its own `exit()`.",
+          "why": "Possible in theory and almost never the case. An exit code above 128 is the signature of death by signal; an application signalling an error would use 1 or 2."
+        },
+        {
+          "text": "`docker stop` ran out of grace period.",
+          "why": "Close, but a different path: `stop` sends SIGTERM first and only then SIGKILL. The final code is also 137, so 137 alone does not tell the two apart — `docker inspect` and its `OOMKilled` field do."
+        }
+      ]
+    },
+    {
+      "q": "Which of the three mechanisms below is what stops a container from using more than 64 MB of memory?",
+      "options": [
+        {
+          "text": "cgroups.",
+          "correct": true,
+          "why": "Namespaces crop what a process SEES; cgroups cap what it CONSUMES. Memory, CPU, PIDs and I/O are cgroup accounting — you can read the limit straight out of `/sys/fs/cgroup/memory.max`."
+        },
+        {
+          "text": "Namespaces.",
+          "why": "A namespace caps no quantity of anything. It isolates visibility: the container gets its own PID tree, its own mount points, its own network interface — and it would happily use the host's entire memory if nothing stopped it."
+        },
+        {
+          "text": "The union filesystem (OverlayFS).",
+          "why": "OverlayFS assembles the rootfs by stacking read-only layers under a writable one. It decides where a file comes from, not how much RAM the process may allocate."
+        }
+      ]
+    },
+    {
+      "q": "Why does a container start in milliseconds when a virtual machine does not?",
+      "options": [
+        {
+          "text": "Because there is no kernel to boot: it is a `fork`/`exec` with a few `unshare` calls first.",
+          "correct": true,
+          "why": "A VM needs firmware, a bootloader and a kernel boot before the first useful process exists. A container skips all of it — the kernel is already running, and what is left is creating namespaces, applying the cgroup and executing the binary."
+        },
+        {
+          "text": "Because a container image is smaller than a VM disk image.",
+          "why": "Size helps the first download and explains nothing about startup. A VM with a 200 MB disk still takes seconds to boot; an already-cached 1 GB container starts instantly."
+        },
+        {
+          "text": "Because containers run straight on the CPU, with no virtualisation.",
+          "why": "Modern VMs also execute instructions straight on the CPU, with hardware acceleration (VT-x/AMD-V). The startup gap is not in executing instructions — it is in the boot that never happens."
+        }
+      ]
+    }
+  ]
+}

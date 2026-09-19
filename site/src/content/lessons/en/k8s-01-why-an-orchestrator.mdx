@@ -8,6 +8,9 @@ summary: ADR 0001 picked Compose and listed the price of that choice. This modul
 minutes: 12
 tags: [kubernetes, kind, orchestration, self-healing, rolling-update]
 sources:
+  - label: "Kubernetes Docs — Components of Kubernetes"
+    url: "https://kubernetes.io/docs/concepts/overview/components/"
+    kind: docs
   - label: "Kubernetes Docs — Deployments"
     url: "https://kubernetes.io/docs/concepts/workloads/controllers/deployment/"
   - label: "kind — Quick Start"
@@ -62,6 +65,34 @@ because before that NetworkPolicy was accepted by the API and silently ignored.
 From 0.23 on, the built-in CNI enforces the policies — and the module's gate
 proves it in practice. See docs/adr/0007.
 </Callout>
+
+### What is inside that container
+
+This is the canonical diagram from the Kubernetes documentation — the same one
+you will meet again across the whole literature. It is worth reading piece by
+piece, because the entire module talks back to it.
+
+<Figure
+  src="/images/kubernetes-components.svg"
+  plate="light"
+  alt="The components of a Kubernetes cluster: a control plane with api, etcd, scheduler and controller managers, and nodes with kubelet and kube-proxy."
+  credit="Kubernetes Documentation — Components of Kubernetes"
+  creditUrl="https://kubernetes.io/docs/concepts/overview/components/"
+  license="CC BY 4.0"
+  caption="Under <b>kind</b>, everything this diagram shows — control plane and node — fits in a single Docker container. In production the control plane gets machines of its own, and that is the whole difference."
+>
+  <Fragment slot="legend">
+  <ol class="figure__notes">
+    <li><b>api</b> (kube-apiserver) — the only front door. Every <code>kubectl</code>, every controller and every kubelet talks to it, and to nothing else.</li>
+    <li><b>etcd</b> — where the <i>desired</i> state lives. It is the cluster's database, and the only stateful component.</li>
+    <li><b>sched</b> (kube-scheduler) — decides which node a new pod fits on. It only decides; it starts nothing.</li>
+    <li><b>c-m</b> (kube-controller-manager) — the reconciliation loop in person. It is what notices a pod went missing and creates another — the <b>2 s</b> of self-healing the gate measured come from here.</li>
+    <li><b>c-c-m</b> (cloud-controller-manager) — talks to the cloud provider's API: load balancers, disks, routes. On a kind cluster it does nothing, which is why this module has no real Ingress.</li>
+    <li><b>kubelet</b> — the node's agent. <b>It</b> is what runs the probes, and that is why the Dockerfile `HEALTHCHECK` is worth nothing here: the kubelet does not read image metadata, it reads the pod spec.</li>
+    <li><b>k-proxy</b> (kube-proxy) — programs the rules that turn a Service name into a real pod. It is the reason a rolling update needs cooperation: SIGTERM arrives before it stops sending new connections.</li>
+  </ol>
+  </Fragment>
+</Figure>
 
 <ReconcileLoop />
 
@@ -208,3 +239,5 @@ make k8s-verify
 ```
 
 </RunIt>
+
+<Quiz set="why-an-orchestrator" />
