@@ -1,11 +1,11 @@
 {
-  "generatedAt": "2026-09-19T15:44:16Z",
+  "generatedAt": "2026-09-19T15:45:10Z",
   "dockerVersion": "29.7.2",
   "target": "127.0.0.1 (stack local deste repositório)",
   "summary": {
-    "blocked": 9,
-    "breached": 1,
-    "skipped": 1
+    "blocked": 10,
+    "breached": 0,
+    "skipped": 0
   },
   "attacks": [
     {
@@ -13,77 +13,101 @@
       "n": 1,
       "outcome": "blocked",
       "defense": "toda porta publicada está presa a 127.0.0.1",
-      "detail": "a única do projeto no host é 127.0.0.1:8080 (1 socket)"
+      "detail": "a única do projeto no host é 127.0.0.1:8080 (1 socket)",
+      "note_pt": "O primeiro movimento de qualquer invasor: descobrir o que atende. Dos seis serviços da stack, exatamente um chega ao host, e preso ao loopback. O prefixo `127.0.0.1:` no `ports:` é o que separa 'meu proxy' de 'meu proxy e a internet inteira' — sem ele, o Docker escreve uma regra de NAT avaliada ANTES do seu firewall.",
+      "note_en": "Any intruder's first move: find out what answers. Of the stack's six services, exactly one reaches the host, and it is pinned to loopback. The `127.0.0.1:` prefix in `ports:` is what separates 'my proxy' from 'my proxy and the entire internet' — without it, Docker writes a NAT rule evaluated BEFORE your firewall."
     },
     {
       "id": "db-port-from-host",
       "n": 2,
-      "outcome": "breached",
-      "defense": "a porta 5432 está publicada no host",
-      "detail": "conexão TCP aceita"
+      "outcome": "blocked",
+      "defense": "o db desta stack não publica porta nenhuma",
+      "detail": "outra coisa do host responde em 127.0.0.1:5432, alheia a esta stack — o nome fica no terminal de quem roda, e não neste arquivo",
+      "note_pt": "A porta 5432 não é publicada em produção, então não há sequer um socket para atacar. Este passo também costuma render uma surpresa: se alguma coisa responder no seu loopback, o laboratório avisa que ela NÃO é desta stack — e foi assim, na primeira execução, que a máquina de desenvolvimento revelou um Postgres de outro projeto esquecido no ar.",
+      "note_en": "Port 5432 is not published in production, so there is not even a socket to attack. This step also tends to produce a surprise: if something does answer on your loopback, the lab says it is NOT from this stack — which is how, on the very first run, the development machine revealed a Postgres from another project left running."
     },
     {
       "id": "edge-to-db",
       "n": 3,
       "outcome": "blocked",
       "defense": "não há rota: edge e db não dividem rede",
-      "detail": "o edge está só na rede edge; o db, só na data (internal: true)"
+      "detail": "o edge está só na rede edge; o db, só na data (internal: true)",
+      "note_pt": "O ataque que assume a derrota: o proxy JÁ foi comprometido. E mesmo assim o banco continua fora de alcance, porque `edge` e `data` são redes que não se tocam. Não é uma regra de firewall que pode ser contornada — é a ausência de rota, que não pode.",
+      "note_en": "The attack that assumes defeat: the proxy has ALREADY been compromised. And the database is still out of reach, because `edge` and `data` are networks that do not touch. It is not a firewall rule that could be bypassed — it is the absence of a route, which cannot be."
     },
     {
       "id": "db-wrong-password",
       "n": 4,
       "outcome": "blocked",
       "defense": "scram-sha-256 recusou a senha errada",
-      "detail": "e o controle positivo passou: com a senha certa, SELECT 1 → 1"
+      "detail": "e o controle positivo passou: com a senha certa, SELECT 1 → 1",
+      "note_pt": "Força bruta em miniatura, e com um detalhe que a torna honesta: o laboratório testa a senha ERRADA e depois a CERTA. Sem esse controle positivo, uma falha de rede ou um nome de host trocado pareceriam 'defesa funcionando' — e o portão estaria mentindo a favor da própria stack.",
+      "note_en": "Brute force in miniature, with one detail that makes it honest: the lab tries the WRONG password and then the RIGHT one. Without that positive control, a network glitch or a mistyped hostname would look like 'the defense working' — and the gate would be lying in the stack's own favour."
     },
     {
       "id": "sql-injection-api",
       "n": 5,
       "outcome": "blocked",
       "defense": "pgx manda a entrada como PARÂMETRO, nunca como texto da query",
-      "detail": "tabela intacta (antes=26 depois=27); ?limit= → HTTP 200; /{code} hostil → HTTP 404"
+      "detail": "tabela intacta (antes=28 depois=29); ?limit= → HTTP 200; /{code} hostil → HTTP 404",
+      "note_pt": "Três pontos de entrada, uma carga hostil em cada: o corpo do POST, o parâmetro `limit` e o código na URL. A tabela sai intacta porque o `app.go` nunca constrói texto de consulta com entrada de usuário — tudo vai como `$1`. A contagem antes e depois é a prova: nenhuma linha some.",
+      "note_en": "Three entry points, one hostile payload in each: the POST body, the `limit` parameter and the code in the URL. The table comes out intact because `app.go` never builds query text from user input — everything goes through as `$1`. The before-and-after count is the proof: no row disappears."
     },
     {
       "id": "sql-concat-vs-param",
       "n": 6,
-      "outcome": "skipped",
-      "defense": "a demonstração não produziu os dois números",
-      "detail": ""
+      "outcome": "teaching",
+      "defense": "concatenada devolveu 3 linhas; parametrizada devolveu 0",
+      "detail": "mesma tabela, mesma entrada hostil — a diferença é onde o valor entra na consulta",
+      "note_pt": "A demonstração da lição 5, e o único ataque que funciona neste laboratório — porque precisa funcionar para ensinar. A MESMA entrada hostil, na MESMA tabela: concatenada no texto da consulta, ela devolveu a tabela inteira; passada como parâmetro, devolveu zero. Roda numa tabela temporária dentro de uma transação que termina em ROLLBACK, e nenhum endpoint vulnerável entra na aplicação.",
+      "note_en": "The demonstration from lesson 5, and the only attack that works in this lab — because it has to work in order to teach. The SAME hostile input, on the SAME table: concatenated into the query text it returned the whole table; passed as a parameter it returned zero. It runs on a temporary table inside a transaction that ends in ROLLBACK, and no vulnerable endpoint ever enters the application."
     },
     {
       "id": "ssrf-metadata",
       "n": 7,
       "outcome": "blocked",
       "defense": "assert_public() resolveu o nome e recusou o endereço interno",
-      "detail": "bloqueado: 169.254.169.254 resolve para endereço interno 169.254.169.254"
+      "detail": "bloqueado: 169.254.169.254 resolve para endereço interno 169.254.169.254",
+      "note_pt": "O clássico: fazer o servidor buscar um endereço que só ele alcança. O `169.254.169.254` é o serviço de metadados das nuvens, e quem o lê costuma sair com credenciais. O `assert_public()` resolve o nome ANTES de buscar e recusa qualquer endereço privado — resolver antes é o detalhe, porque um nome público pode apontar para um IP interno.",
+      "note_en": "The classic: make the server fetch an address only it can reach. `169.254.169.254` is the cloud metadata service, and whoever reads it usually walks away with credentials. `assert_public()` resolves the name BEFORE fetching and refuses any private address — resolving first is the detail that matters, because a public name can point at an internal IP."
     },
     {
       "id": "read-secret",
       "n": 8,
       "outcome": "blocked",
       "defense": "a convenção _FILE mantém só o CAMINHO no ambiente",
-      "detail": "env, docker inspect e docker history não contêm a senha"
+      "detail": "env, docker inspect e docker history não contêm a senha",
+      "note_pt": "O invasor que já está dentro procura a senha onde ela costuma estar: no ambiente do processo, no `docker inspect` e no histórico da imagem. Ela não está em nenhum dos três, porque o que viaja pelo ambiente é o CAMINHO (`POSTGRES_PASSWORD_FILE`), e o conteúdo vive num tmpfs.",
+      "note_en": "An intruder already inside looks for the password where it usually is: in the process environment, in `docker inspect` and in the image history. It is in none of the three, because what travels through the environment is the PATH (`POSTGRES_PASSWORD_FILE`), and the contents live on a tmpfs."
     },
     {
       "id": "write-webshell",
       "n": 9,
       "outcome": "blocked",
       "defense": "read_only: true — a raiz é imutável",
-      "detail": "só os tmpfs declarados aceitam escrita, e eles são noexec"
+      "detail": "só os tmpfs declarados aceitam escrita, e eles são noexec",
+      "note_pt": "Execução de código só vale muito se o invasor conseguir deixar alguma coisa para trás — um webshell, um binário, uma tarefa agendada. Com `read_only: true` a raiz é imutável, e os únicos lugares graváveis são tmpfs declarados com `noexec`: dá para escrever, não dá para executar.",
+      "note_en": "Code execution is only worth much if the intruder can leave something behind — a webshell, a binary, a scheduled task. With `read_only: true` the root is immutable, and the only writable places are tmpfs mounts declared `noexec`: you can write, you cannot run."
     },
     {
       "id": "shell-in-api",
       "n": 10,
       "outcome": "blocked",
       "defense": "imagem distroless: não existe /bin/sh para usar",
-      "detail": "a imagem tem o binário, os certificados e nada mais"
+      "detail": "a imagem tem o binário, os certificados e nada mais",
+      "note_pt": "Quase toda cadeia de pós-exploração começa com `sh -c`. A imagem da api é distroless: tem o binário estático, os certificados e mais nada. Não é uma permissão negada — é a ausência do programa, e a ausência não pode ser contornada com privilégio.",
+      "note_en": "Almost every post-exploitation chain starts with `sh -c`. The api image is distroless: it holds the static binary, the certificates and nothing else. It is not a denied permission — it is the absence of the program, and absence cannot be worked around with privilege."
     },
     {
       "id": "db-egress",
       "n": 11,
       "outcome": "blocked",
       "defense": "internal: true — a rede data não tem gateway",
-      "detail": "mesmo comprometido, o Postgres não tem por onde mandar os dados"
+      "detail": "mesmo comprometido, o Postgres não tem por onde mandar os dados",
+      "note_pt": "O roubo só se completa quando o dado SAI. A rede `data` é `internal: true`, o que remove o gateway: o banco não tem rota para lugar nenhum fora do Docker. Um atacante com acesso total ao Postgres ainda precisa comprometer um segundo serviço — dos que estão em duas redes — só para conseguir mandar o que roubou.",
+      "note_en": "The theft only completes when the data LEAVES. The `data` network is `internal: true`, which removes the gateway: the database has no route anywhere outside Docker. An attacker with full access to Postgres still has to compromise a second service — one of those sitting on two networks — just to send out what he took."
     }
-  ]
+  ],
+  "note_pt": "Gravado por `tools/scripts/attack-lab.sh`. Cada linha é um ataque DISPARADO contra a stack local, e o resultado desejado é a falha dele. O passo 6 é a exceção: ele vaza de propósito, porque é a demonstração da lição sobre banco de dados.",
+  "note_en": "Written by `tools/scripts/attack-lab.sh`. Every line is an attack FIRED at the local stack, and the desired outcome is its failure. Step 6 is the exception: it leaks on purpose, because it is the demonstration in the database lesson."
 }

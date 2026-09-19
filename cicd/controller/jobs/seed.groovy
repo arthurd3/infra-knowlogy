@@ -51,3 +51,24 @@ pipelineJob('stack-negative-lint') {
         }
     }
 }
+
+// A sonda de credencial. Ela não é um teste de "o mascaramento funciona": é a
+// demonstração de que ele é SUBSTITUIÇÃO DE STRING NO LOG, e não uma fronteira
+// de segurança. O portão exige as duas coisas — que `echo $TOK` saia mascarado
+// E que `echo $TOK | base64` saia inteiro.
+pipelineJob('credential-probe') {
+    description('Mostra o que o mascaramento de credencial faz e o que NAO faz. Criado pelo seed.')
+    definition {
+        cpsScm {
+            scm {
+                git {
+                    remote { url('git://scm/repo') }
+                    branch('*/main')
+                    extensions {}
+                }
+            }
+            scriptPath('cicd/Jenkinsfile.credential')
+            lightweight(false)
+        }
+    }
+}

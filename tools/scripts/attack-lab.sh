@@ -118,8 +118,10 @@ if [ "$mine" != "0" ]; then
     breached "db-port-from-host" "o db DESTA stack publicou a 5432 no host" ""
   fi
 elif [ "$answers" = "1" ]; then
+  printf '     \033[33m↳ nota:\033[0m algo responde em %s:5432 e não é desta stack: %s\n' \
+    "$HOSTIP" "${owner:-um processo do host}"
   blocked "db-port-from-host" "o db desta stack não publica porta nenhuma" \
-          "algo mais responde em ${HOSTIP}:5432 — ${owner:-um processo do host}, alheio a esta stack. Vale olhar: é assim que se descobre um banco esquecido."
+          "outra coisa do host responde em ${HOSTIP}:5432, alheia a esta stack — o nome fica no terminal de quem roda, e não neste arquivo"
 else
   blocked "db-port-from-host" "o banco não publica porta nenhuma" \
           "connection refused em ${HOSTIP}:5432 — não há o que atacar"

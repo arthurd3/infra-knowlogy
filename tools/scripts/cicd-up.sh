@@ -41,6 +41,14 @@ else
   ok "senha do admin já existe"
 fi
 
+# O token de exemplo da lição sobre credenciais. Valor conhecido e sem valor
+# nenhum: ele existe para o portão poder procurá-lo (mascarado) no log.
+if [ ! -s "$SECRETS/registry_token" ]; then
+  printf 'token-de-exemplo-sem-valor-nenhum' > "$SECRETS/registry_token"
+  chmod 444 "$SECRETS/registry_token"
+  ok "token de exemplo gerado"
+fi
+
 # A chave do cosign. Aqui mora a assimetria que a lição sobre cadeia de
 # suprimentos mede: no GitHub Actions a assinatura é KEYLESS — a identidade é
 # o token OIDC do próprio workflow, e não existe chave privada para guardar
