@@ -166,26 +166,38 @@ else
 fi
 
 # ─── 8. Site ─────────────────────────────────────────────────────────────────
-step "8/9  Build do site e paridade PT/EN"
+# Quatro checagens em camadas: tipos, lógica, build e o HTML que sai dele.
+# A paridade PT/EN, que antes era um heredoc Python aqui dentro (duplicado no
+# ci.yml), virou teste de verdade em site/tests/content.test.ts — junto das
+# checagens que ela sozinha não fazia: os dois idiomas usam os MESMOS widgets
+# e diagramas, e nenhuma lição nasce só com texto.
+step "8/9  Site: tipos, testes, build e HTML gerado"
+
+if (cd site && npm run check >/tmp/site-check.txt 2>&1); then
+  ok "astro check (tipos do site)"
+else
+  bad "astro check"; grep -E 'error|Result' /tmp/site-check.txt | tail -12 | sed 's/^/       /'
+fi
+
+if (cd site && npm test >/tmp/site-test.txt 2>&1); then
+  ok "testes do site ($(grep -oE 'Tests +[0-9]+ passed' /tmp/site-test.txt | grep -oE '[0-9]+' | head -1) casos)"
+else
+  bad "testes do site"; grep -E 'FAIL|AssertionError|Tests ' /tmp/site-test.txt | head -12 | sed 's/^/       /'
+fi
+
 if (cd site && npm run build >/tmp/site.txt 2>&1); then
   ok "astro build"
 else
   bad "astro build"; tail -15 /tmp/site.txt | sed 's/^/       /'
 fi
 
-if python3 - <<'PY'
-import pathlib, re, collections, sys
-langs = collections.defaultdict(set)
-for f in pathlib.Path("site/src/content/lessons").rglob("*.mdx"):
-    fm = f.read_text().split("---")[1]
-    key = re.search(r"^key: (.+)$", fm, re.M).group(1).strip()
-    langs[key].add(re.search(r"^lang: (.+)$", fm, re.M).group(1).strip())
-missing = {k: v for k, v in langs.items() if v != {"pt", "en"}}
-if missing:
-    print("  lições sem par:", missing); sys.exit(1)
-print(f"  {len(langs)} lições, todas em pt e en")
-PY
-then ok "paridade PT/EN"; else bad "há lição em um idioma só"; fi
+# O HTML gerado é o único artefato que o leitor de fato recebe. Um link interno
+# quebrado não reprova build nenhum — só reprova aqui.
+if node tools/scripts/site-check.mjs >/tmp/site-html.txt 2>&1; then
+  ok "HTML gerado ($(grep -oE '[0-9]+ passaram' /tmp/site-html.txt | head -1))"
+else
+  bad "HTML gerado"; grep -E '✗|       ' /tmp/site-html.txt | head -12 | sed 's/^/       /'
+fi
 
 # ─── 9. Observabilidade ──────────────────────────────────────────────────────
 step "9/9  Profile de observabilidade"

@@ -148,20 +148,19 @@ jobs:
       # divergirem, em vez de atualizar o lockfile silenciosamente.
       - run: npm ci
         working-directory: site
-      - run: npm run build
-        working-directory: site
 
-      - name: paridade PT/EN das lições
-        run: |
-          python3 - <<'PY'
-          import pathlib, re, collections, sys
-          langs = collections.defaultdict(set)
-          for f in pathlib.Path("site/src/content/lessons").rglob("*.mdx"):
-              fm = f.read_text().split("---")[1]
-              key = re.search(r"^key: (.+)$", fm, re.M).group(1).strip()
-              langs[key].add(re.search(r"^lang: (.+)$", fm, re.M).group(1).strip())
-          missing = {k: sorted(v) for k, v in langs.items() if v != {"pt", "en"}}
-          if missing:
-              print("lições sem par:", missing); sys.exit(1)
-          print(f"{len(langs)} lições, todas em pt e en")
-          PY
+      # As mesmas quatro camadas da etapa 8 do verify.sh, na mesma ordem.
+      # A paridade PT/EN era um heredoc Python duplicado aqui e lá; agora é
+      # teste de verdade em site/tests/content.test.ts, e o CI e o portão
+      # local rodam exatamente o mesmo código.
+      - name: tipos
+        run: npm run check
+        working-directory: site
+      - name: testes
+        run: npm test
+        working-directory: site
+      - name: build
+        run: npm run build
+        working-directory: site
+      - name: HTML gerado
+        run: node tools/scripts/site-check.mjs

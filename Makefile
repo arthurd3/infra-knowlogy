@@ -139,6 +139,19 @@ site-dev: ## Roda o site de lições localmente (sem Docker)
 site-build: ## Builda o site estático
 	cd site && npm run build
 
+.PHONY: site-test
+site-test: ## Roda os testes do site (lógica dos widgets, paridade PT/EN)
+	cd site && npm test
+
+.PHONY: record-gate
+record-gate: ## Regrava as respostas do modo demonstração do site (precisa da stack no ar)
+	@bash tools/scripts/record-gate.sh
+
+.PHONY: site-verify
+site-verify: ## O portão só do site: tipos, testes, build e HTML gerado
+	cd site && npm run check && npm test && npm run build
+	@node tools/scripts/site-check.mjs
+
 .PHONY: index
 index: ## Indexa as lições na coleção Qdrant `infra-knowlogy`
 	@uv run tools/scripts/index-qdrant.py
