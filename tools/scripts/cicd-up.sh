@@ -41,6 +41,32 @@ else
   ok "senha do admin já existe"
 fi
 
+# A chave do cosign. Aqui mora a assimetria que a lição sobre cadeia de
+# suprimentos mede: no GitHub Actions a assinatura é KEYLESS — a identidade é
+# o token OIDC do próprio workflow, e não existe chave privada para guardar
+# nem vazar. Num Jenkins self-hosted isso custa exatamente isto: um par de
+# chaves que alguém precisa gerar, proteger e rotacionar.
+if [ ! -s "$SECRETS/cosign.key" ]; then
+  # Senha vazia de propósito: a proteção real é o `chmod 700` do diretório, e
+  # uma senha guardada ao lado da chave não protege de nada. Num ambiente de
+  # verdade a chave vive num KMS, e é isso que a lição diz.
+  # `--user` com o UID de quem chamou: o diretório de segredos é 700 do dono,
+  # e a imagem do cosign roda como outro usuário. Sem isto o erro é
+  # `failed checking if cosign.key exists: permission denied`, que parece
+  # problema do cosign e é do diretório.
+  if docker run --rm --user "$(id -u):$(id -g)" \
+       -e COSIGN_PASSWORD="" -v "$SECRETS":/keys:z -w /keys \
+       ghcr.io/sigstore/cosign/cosign@sha256:9e5c2f2edc34351160407ca3416c61855bdf9403c3c5936e0f0be7fc261611b8 \
+       generate-key-pair >/dev/null 2>&1; then
+    chmod 444 "$SECRETS/cosign.key" "$SECRETS/cosign.pub" 2>/dev/null || true
+    ok "par de chaves do cosign gerado"
+  else
+    printf '   \033[33m!\033[0m não consegui gerar a chave do cosign (o estágio sign vai pular)\n'
+  fi
+else
+  ok "chave do cosign já existe"
+fi
+
 # SELinux: os segredos do Compose não aceitam `:z` (armadilha 7 do CLAUDE.md),
 # então o rótulo vai à mão.
 if command -v chcon >/dev/null 2>&1; then

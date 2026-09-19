@@ -36,6 +36,11 @@ pipeline {
     environment {
         BUILDKIT_HOST = 'unix:///run/buildkit/buildkitd.sock'
         OUT = 'out'
+        REGISTRY = 'registry:5000'
+        // A senha vazia é deliberada e está explicada em cicd-up.sh: guardar
+        // uma senha ao lado da chave não protege de nada. Num ambiente de
+        // verdade a chave vive num KMS.
+        COSIGN_PASSWORD = ''
     }
 
     stages {
@@ -62,6 +67,16 @@ pipeline {
                     # mesmo `target`. A saída é um tarball por imagem — o
                     # mesmo padrão do scan.sh, que escaneia um `docker save`
                     # em vez de falar com o socket.
+                    # Duas saídas na MESMA build: um tarball para escanear e
+                    # arquivar, e um push para o registry. Construir duas vezes
+                    # produziria dois artefatos diferentes — e aí "o que foi
+                    # escaneado" e "o que foi publicado" deixariam de ser a
+                    # mesma coisa, que é o buraco que a cadeia de suprimentos
+                    # existe para fechar.
+                    #
+                    # `registry.insecure=true` porque o registry local é HTTP.
+                    # Num registry de verdade isso sai, e é a única linha aqui
+                    # que muda.
                     build_one() {
                         svc="$1"; ctx="$2"
                         echo "── $svc  (contexto: $ctx)"
@@ -70,7 +85,8 @@ pipeline {
                           --local context="$ctx" \
                           --local dockerfile="$ctx" \
                           --opt target=dist \
-                          --output type=docker,name=infra-knowlogy/$svc:ci,dest="$OUT/$svc.tar"
+                          --output type=docker,name=infra-knowlogy/$svc:ci,dest="$OUT/$svc.tar" \
+                          --output type=image,name=$REGISTRY/infra-knowlogy/$svc:ci,push=true,registry.insecure=true
                     }
 
                     build_one api-go    stack/services/api-go
@@ -78,6 +94,70 @@ pipeline {
                     build_one web       site
 
                     ls -la "$OUT"
+                '''
+            }
+        }
+
+        stage('scan') {
+            steps {
+                sh '''
+                    set -eu
+                    # `--input` escaneia o TARBALL, sem falar com daemon nenhum
+                    # — é o mesmo padrão do tools/scripts/scan.sh do módulo 1,
+                    # que evita o socket de propósito.
+                    #
+                    # A distinção que o scan.sh faz e que vale aqui: "o scanner
+                    # quebrou" e "o scanner achou CVE" são coisas diferentes.
+                    # O --exit-code 1 só vale para o segundo caso; erro de
+                    # execução sai com outro código e o `set -e` o propaga.
+                    for tar in "$OUT"/*.tar; do
+                        echo "── trivy $(basename "$tar")"
+                        trivy image \
+                          --input "$tar" \
+                          --severity HIGH,CRITICAL \
+                          --ignore-unfixed \
+                          --ignorefile tools/trivyignore.yaml \
+                          --exit-code 1 \
+                          --no-progress \
+                          --scanners vuln
+                    done
+                '''
+            }
+        }
+
+        stage('sign') {
+            steps {
+                sh '''
+                    set -eu
+                    # Assina POR DIGEST, nunca por tag: tag é ponteiro mutável
+                    # (lição 2), e assinar um ponteiro assina o que ele apontar
+                    # amanhã. O digest é o conteúdo.
+                    for svc in api-go worker-py web; do
+                        ref="$REGISTRY/infra-knowlogy/$svc:ci"
+                        digest=$(cosign triangulate --allow-insecure-registry --type digest "$ref" 2>/dev/null || true)
+                        [ -n "$digest" ] || digest="$ref"
+                        echo "── cosign sign $digest"
+                        cosign sign --yes --allow-insecure-registry \
+                          --key /run/secrets/cosign.key "$digest"
+                    done
+                '''
+            }
+        }
+
+        stage('verify') {
+            steps {
+                sh '''
+                    set -eu
+                    # Assinar sem verificar é fé. Este estágio existe para o
+                    # pipeline provar a própria assinatura antes de chamar o
+                    # artefato de confiável.
+                    for svc in api-go worker-py web; do
+                        ref="$REGISTRY/infra-knowlogy/$svc:ci"
+                        echo "── cosign verify $ref"
+                        cosign verify --allow-insecure-registry \
+                          --key /run/secrets/cosign.pub "$ref" >/dev/null
+                        echo "   assinatura confere"
+                    done
                 '''
             }
         }

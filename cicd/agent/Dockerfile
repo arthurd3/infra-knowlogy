@@ -26,6 +26,14 @@ COPY --from=moby/buildkit:rootless@sha256:80b15f0735e87bab7bf59ec4d695dfb4a7cfb2
 RUN git config --system --add safe.directory '*' \
     && buildctl --version
 
+# O scanner e o assinador vêm das imagens oficiais deles, pinadas por digest.
+# Copiar o binário em vez de instalar por gerenciador de pacotes mantém o
+# agente sem apt/apk — menos superfície, e a versão fica evidente no diff.
+COPY --from=aquasec/trivy@sha256:7cced7cae583819fc7806d4cbc0dbbc7cad18b99f7d3e235192e6da8c091045c \
+     /usr/local/bin/trivy /usr/local/bin/trivy
+COPY --from=ghcr.io/sigstore/cosign/cosign@sha256:9e5c2f2edc34351160407ca3416c61855bdf9403c3c5936e0f0be7fc261611b8 \
+     /ko-app/cosign /usr/local/bin/cosign
+
 # O segredo entra por ARQUIVO, como em todo o resto do repositório. O
 # entrypoint de cima só aceita a variável com o valor; este wrapper faz a
 # ponte sem abrir exceção à convenção.
