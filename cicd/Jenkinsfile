@@ -139,8 +139,7 @@ pipeline {
                     # o `set -eu` e o `[ -n ]` abaixo transformam isso em falha
                     # em vez de numa assinatura de referência errada.
                     meta_digest() {
-                        d=$(grep -o '"containerimage.digest"[[:space:]]*:[[:space:]]*"[^"]*"' "$1" \
-                            | sed 's/.*"\(sha256:[a-f0-9]*\)".*/\1/')
+                        d=$(grep -o '"containerimage.digest": *"sha256:[a-f0-9]*"' "$1" | grep -o 'sha256:[a-f0-9]*')
                         [ -n "$d" ] || { echo "sem digest em $1" >&2; exit 1; }
                         printf '%s' "$d"
                     }
@@ -179,8 +178,7 @@ pipeline {
                     # o `set -eu` e o `[ -n ]` abaixo transformam isso em falha
                     # em vez de numa assinatura de referência errada.
                     meta_digest() {
-                        d=$(grep -o '"containerimage.digest"[[:space:]]*:[[:space:]]*"[^"]*"' "$1" \
-                            | sed 's/.*"\(sha256:[a-f0-9]*\)".*/\1/')
+                        d=$(grep -o '"containerimage.digest": *"sha256:[a-f0-9]*"' "$1" | grep -o 'sha256:[a-f0-9]*')
                         [ -n "$d" ] || { echo "sem digest em $1" >&2; exit 1; }
                         printf '%s' "$d"
                     }

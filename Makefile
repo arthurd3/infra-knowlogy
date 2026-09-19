@@ -97,6 +97,10 @@ sizes: ## Mede o tamanho real das imagens -> site/src/data/measured.json
 shutdown-test: ## Prova que todo serviço para graciosamente em menos de 3s
 	@bash tools/scripts/shutdown-test.sh
 
+.PHONY: attack-lab
+attack-lab: ## Dispara 11 ataques reais contra a stack local e prova cada um falhando
+	@bash tools/scripts/attack-lab.sh
+
 .PHONY: pins
 pins: ## Atualiza os digests sha256 das imagens base
 	@bash tools/scripts/update-pins.sh

@@ -1,0 +1,89 @@
+{
+  "generatedAt": "2026-09-19T15:44:16Z",
+  "dockerVersion": "29.7.2",
+  "target": "127.0.0.1 (stack local deste repositório)",
+  "summary": {
+    "blocked": 9,
+    "breached": 1,
+    "skipped": 1
+  },
+  "attacks": [
+    {
+      "id": "host-port-scan",
+      "n": 1,
+      "outcome": "blocked",
+      "defense": "toda porta publicada está presa a 127.0.0.1",
+      "detail": "a única do projeto no host é 127.0.0.1:8080 (1 socket)"
+    },
+    {
+      "id": "db-port-from-host",
+      "n": 2,
+      "outcome": "breached",
+      "defense": "a porta 5432 está publicada no host",
+      "detail": "conexão TCP aceita"
+    },
+    {
+      "id": "edge-to-db",
+      "n": 3,
+      "outcome": "blocked",
+      "defense": "não há rota: edge e db não dividem rede",
+      "detail": "o edge está só na rede edge; o db, só na data (internal: true)"
+    },
+    {
+      "id": "db-wrong-password",
+      "n": 4,
+      "outcome": "blocked",
+      "defense": "scram-sha-256 recusou a senha errada",
+      "detail": "e o controle positivo passou: com a senha certa, SELECT 1 → 1"
+    },
+    {
+      "id": "sql-injection-api",
+      "n": 5,
+      "outcome": "blocked",
+      "defense": "pgx manda a entrada como PARÂMETRO, nunca como texto da query",
+      "detail": "tabela intacta (antes=26 depois=27); ?limit= → HTTP 200; /{code} hostil → HTTP 404"
+    },
+    {
+      "id": "sql-concat-vs-param",
+      "n": 6,
+      "outcome": "skipped",
+      "defense": "a demonstração não produziu os dois números",
+      "detail": ""
+    },
+    {
+      "id": "ssrf-metadata",
+      "n": 7,
+      "outcome": "blocked",
+      "defense": "assert_public() resolveu o nome e recusou o endereço interno",
+      "detail": "bloqueado: 169.254.169.254 resolve para endereço interno 169.254.169.254"
+    },
+    {
+      "id": "read-secret",
+      "n": 8,
+      "outcome": "blocked",
+      "defense": "a convenção _FILE mantém só o CAMINHO no ambiente",
+      "detail": "env, docker inspect e docker history não contêm a senha"
+    },
+    {
+      "id": "write-webshell",
+      "n": 9,
+      "outcome": "blocked",
+      "defense": "read_only: true — a raiz é imutável",
+      "detail": "só os tmpfs declarados aceitam escrita, e eles são noexec"
+    },
+    {
+      "id": "shell-in-api",
+      "n": 10,
+      "outcome": "blocked",
+      "defense": "imagem distroless: não existe /bin/sh para usar",
+      "detail": "a imagem tem o binário, os certificados e nada mais"
+    },
+    {
+      "id": "db-egress",
+      "n": 11,
+      "outcome": "blocked",
+      "defense": "internal: true — a rede data não tem gateway",
+      "detail": "mesmo comprometido, o Postgres não tem por onde mandar os dados"
+    }
+  ]
+}

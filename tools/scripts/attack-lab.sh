@@ -175,14 +175,16 @@ BEGIN;
 CREATE TEMP TABLE demo(nome text, segredo text);
 INSERT INTO demo VALUES ('alice','a1'), ('bob','b2'), ('admin','root-token');
 
--- (a) A entrada hostil CONCATENADA no texto da consulta. O banco recebe uma
---     query em que o OR faz parte do comando, e não do dado.
+-- (a) A entrada hostil CONCATENADA no texto da consulta. O que chega ao banco
+--     é uma frase em que o OR faz parte do COMANDO, e não do dado: o parser lê
+--     "nome = '' OU verdade", e verdade casa com toda linha da tabela.
 SELECT 'concatenada=' || count(*) FROM demo WHERE nome = '' OR '1'='1';
 
--- (b) A MESMA entrada, agora como parâmetro. O banco recebe a consulta e o
---     dado separados; o texto vira um literal e não casa com nome nenhum.
-PREPARE q(text) AS SELECT count(*) FROM demo WHERE nome = $1;
-SELECT 'parametrizada=' || (EXECUTE_RESULT).count FROM (SELECT (SELECT count(*) FROM demo WHERE nome = ''' OR ''1''=''1')) AS EXECUTE_RESULT(count);
+-- (b) A MESMA entrada, agora como PARÂMETRO. A consulta e o dado viajam
+--     separados; o texto inteiro vira um literal procurado na coluna, e não
+--     existe ninguém chamado "' OR '1'='1".
+PREPARE q(text) AS SELECT 'parametrizada=' || count(*) FROM demo WHERE nome = $1;
+EXECUTE q(''' OR ''1''=''1');
 ROLLBACK;
 SQL
 )"
