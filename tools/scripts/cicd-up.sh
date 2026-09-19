@@ -57,8 +57,8 @@ export JK_PASS
 export JK_TOKEN=""
 
 # ─── Fase 1 ──────────────────────────────────────────────────────────────────
-step "2/4  Fase 1 — controller, buildkitd e registry"
-"${COMPOSE[@]}" up -d --build --wait controller buildkitd registry \
+step "2/4  Fase 1 — controller, buildkitd, scm e registry"
+"${COMPOSE[@]}" up -d --build --wait controller buildkitd scm registry \
   || die "a fase 1 não subiu — veja 'docker compose -f cicd/compose.yaml logs'"
 
 secs=$(jk_wait_ready 180) || die "o controller não ficou pronto em 180s"

@@ -4,9 +4,13 @@
 // que o portão consegue exigir que o conjunto de jobs seja EXATAMENTE este:
 // um job criado à mão na UI sobrevive ao reload e aparece na diferença.
 //
-// O `scriptPath` aponta para o Jenkinsfile do próprio repositório, montado em
-// /repo. O pipeline não vive aqui — vive versionado ao lado do código que ele
-// constrói, que é o ponto de "pipeline como código".
+// O `scriptPath` aponta para o Jenkinsfile do próprio repositório, servido
+// pelo `git daemon` do serviço scm. O pipeline não vive aqui — vive versionado
+// ao lado do código que ele constrói, que é o ponto de "pipeline como código".
+//
+// O remote é git:// e não um caminho local de propósito: o plugin git recusa
+// diretório local por segurança, e a resposta certa é um remote de verdade,
+// não desligar o controle.
 
 pipelineJob('stack-pipeline') {
     description('Constroi as imagens da stack deste repositorio. Criado pelo seed em cicd/controller/jobs/seed.groovy — nao edite pela UI.')
@@ -14,7 +18,7 @@ pipelineJob('stack-pipeline') {
         cpsScm {
             scm {
                 git {
-                    remote { url('/repo') }
+                    remote { url('git://scm/repo') }
                     // O CI testa o que está COMMITADO, não o working tree. Uma
                     // alteração não commitada não é construída — comportamento
                     // correto, e surpresa garantida na primeira hora.

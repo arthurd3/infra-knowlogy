@@ -110,10 +110,40 @@ services:
       # `permission denied` — que parece problema de dono ou de SELinux e não é.
       - buildkit-sock:/run/buildkit:z
       - ./secrets:/run/secrets:ro
-      # O repositório, somente leitura: o pipeline clona dele para o workspace.
-      # `:ro` porque um build não tem por que escrever no seu código-fonte.
-      - ../:/repo:ro
       - agent-work:/home/jenkins/agent
+    restart: unless-stopped
+
+  # ── O SCM ──────────────────────────────────────────────────────────────────
+  # Um `git daemon` servindo este repositório em git://scm/repo.
+  #
+  # Por que não apontar o job direto para /repo: o plugin git do Jenkins RECUSA
+  # remote que seja diretório local, com
+  # `references a local directory, which may be insecure`. E ele está certo —
+  # um job capaz de escolher um caminho local lê qualquer coisa que o
+  # controller enxergue. A saída não é ligar ALLOW_LOCAL_CHECKOUT e desligar o
+  # controle: é dar ao pipeline um remote de verdade, que também é o que
+  # acontece em produção.
+  #
+  # Somente leitura, sem autenticação e sem sair do loopback — é o repositório
+  # do próprio leitor, servido para o Jenkins do próprio leitor.
+  scm:
+    image: alpine/git:latest
+    entrypoint: ["git"]
+    command:
+      - daemon
+      - --reuseaddr
+      - --export-all
+      - --base-path=/srv
+      - --verbose
+      - /srv
+    volumes:
+      - ../:/srv/repo:ro
+    healthcheck:
+      test: ["CMD-SHELL", "git ls-remote git://localhost/repo HEAD >/dev/null 2>&1"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 5s
     restart: unless-stopped
 
   # ── O registry local ───────────────────────────────────────────────────────
