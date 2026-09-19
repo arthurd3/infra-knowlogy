@@ -13,6 +13,12 @@
 //      pelo buildctl, que fala com um buildkitd rootless (ADR 0011).
 //   3. O checkout vem do SCM do job: o CI constrói o que está COMMITADO, não
 //      o seu working tree.
+//
+// E uma pegadinha que só aparece medindo: o campo `builtOn` de um build de
+// Pipeline é STRING VAZIA mesmo quando todos os estágios rodaram no agente.
+// Ele reporta onde o executor "flyweight" do pipeline ficou — no controller —
+// e não onde o trabalho aconteceu. Quem prova que o build saiu do controller é
+// a linha `Running on builder` do console.
 
 pipeline {
     agent { label 'builder' }
@@ -41,7 +47,7 @@ pipeline {
                       --frontend dockerfile.v0 \
                       --local context=. \
                       --local dockerfile=cicd/lint \
-                      --output type=cacheonly
+                      --output type=tar,dest=/dev/null
                 '''
             }
         }

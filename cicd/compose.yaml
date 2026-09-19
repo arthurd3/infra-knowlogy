@@ -127,17 +127,22 @@ services:
   # Somente leitura, sem autenticação e sem sair do loopback — é o repositório
   # do próprio leitor, servido para o Jenkins do próprio leitor.
   scm:
-    image: alpine/git:latest
-    entrypoint: ["git"]
-    command:
-      - daemon
-      - --reuseaddr
-      - --export-all
-      - --base-path=/srv
-      - --verbose
-      - /srv
+    build:
+      context: ./scm
+    image: infra-knowlogy/git-daemon:dev
     volumes:
-      - ../:/srv/repo:ro
+      # O `.git` servido como caminho bare. O `git daemon` procura o
+      # repositório em <caminho> e em <caminho>.git; apontado para a raiz de um
+      # repositório NÃO-bare ele responde
+      # `'/srv/repo' does not appear to be a git repository`, porque a árvore
+      # de trabalho não é o repositório. Somente leitura: o daemon só serve.
+      #
+      # `:z` porque SELinux: sem o sufixo o container recebe `permission
+      # denied` num diretório 755 — armadilha 2 do CLAUDE.md, e o sintoma não
+      # menciona SELinux em lugar nenhum. O daemon reporta o erro como
+      # "does not appear to be a git repository", que manda você procurar no
+      # lugar errado.
+      - ../.git:/srv/repo.git:ro,z
     healthcheck:
       test: ["CMD-SHELL", "git ls-remote git://localhost/repo HEAD >/dev/null 2>&1"]
       interval: 5s
