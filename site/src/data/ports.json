@@ -1,0 +1,1580 @@
+{
+  "note_pt": "As portas mais visadas, com o que o cartaz que originou esta trilha acerta e o que ele confunde. As oito primeiras são as do cartaz; as seis seguintes são as portas de banco de dados que ele NÃO tem — e que são exatamente as que respondem à segunda pergunta da trilha, 'como se ataca uma base de dados'. Cada porta traz o que o serviço faz, os ataques com o MECANISMO explicado, as defesas com o custo de cada uma, e o mito que parece defesa e não é.",
+  "note_en": "The most targeted ports, with what the poster this track came from gets right and what it confuses. The first eight are the poster's; the next six are the database ports it does NOT have — and they are exactly the ones that answer the track's second question, 'how is a database attacked'. Every port carries what the service does, the attacks with their MECHANISM spelled out, the defenses with what each one costs, and the myth that looks like a defense and is not.",
+  "poster": {
+    "credit": "LinuxVisual",
+    "url": "https://linuxvisual.com/kit",
+    "note_pt": "O cartaz que deu origem a esta trilha. As oito portas do grupo `poster` são as dele.",
+    "note_en": "The poster this track came from. The eight ports in the `poster` group are its own."
+  },
+  "legend": {
+    "inThisStack": {
+      "absent": {
+        "pt": "não existe nesta stack",
+        "en": "not present in this stack"
+      },
+      "internal": {
+        "pt": "existe, só na rede interna",
+        "en": "present, internal network only"
+      },
+      "loopback": {
+        "pt": "publicada apenas em 127.0.0.1",
+        "en": "published on 127.0.0.1 only"
+      }
+    }
+  },
+  "ports": [
+    {
+      "port": 22,
+      "service": "SSH",
+      "transport": "TCP",
+      "group": "poster",
+      "inThisStack": "absent",
+      "pt": {
+        "use": "Abrir um terminal numa máquina que está longe. Tudo o que você digita e tudo o que volta viaja cifrado — é o substituto direto do Telnet, e a razão de o Telnet ter morrido.",
+        "stackNote": "Nenhum container desta stack roda um servidor SSH. Para entrar num container aqui usa-se `docker exec`, que fala com o daemon local e não abre porta nenhuma.",
+        "attacks": [
+          {
+            "name": "força bruta e credential stuffing",
+            "how": "O atacante abre conexão atrás de conexão tentando pares de usuário e senha de uma lista. Ele não precisa acertar a SUA senha: ele varre milhões de endereços e precisa que uma das máquinas tenha ficado com `admin/admin`. A economia do ataque é essa — o custo por tentativa é quase zero e o alvo é a estatística, não você.",
+            "tell": "`journalctl -u sshd` cheio de `Failed password for invalid user` vindo de endereços que você nunca viu, em rajadas."
+          },
+          {
+            "name": "falha no próprio servidor SSH",
+            "how": "A minoria dos casos, e a que assusta: um erro no código do sshd que dá acesso sem credencial nenhuma. O regreSSHion (CVE-2024-6387, 2024) era uma corrida de sinal que dava root sem autenticar, e era uma REGRESSÃO — a mesma falha tinha sido corrigida em 2006 e voltou num commit de 2020. Afetava OpenSSH de 8.5p1 a 9.7p1 em Linux com glibc.",
+            "tell": "A versão do seu OpenSSH. `ssh -V` responde em uma linha."
+          },
+          {
+            "name": "a chave privada roubada",
+            "how": "A chave no laptop do desenvolvedor vale mais que a senha: ela não expira, costuma não ter frase-secreta e abre tudo de uma vez. Um malware que leia `~/.ssh/id_ed25519` entrega o acesso inteiro sem disparar nenhum alerta de senha errada.",
+            "tell": "Login bem-sucedido, de uma chave legítima, num horário improvável e de um endereço novo. É por isso que o log de sucesso importa tanto quanto o de falha."
+          }
+        ],
+        "defenses": [
+          {
+            "name": "não publicar a porta",
+            "how": "O SSH atende só na rede interna, e quem precisa entrar passa antes por uma VPN ou por um bastião. A força bruta deixa de existir porque o atacante não alcança o serviço.",
+            "cost": "Muda o seu fluxo de trabalho e exige manter a VPN. É a única defesa desta lista que zera o problema em vez de reduzi-lo."
+          },
+          {
+            "name": "só chave, senha nunca",
+            "how": "`PasswordAuthentication no` e `KbdInteractiveAuthentication no` no `sshd_config`. A força bruta contra um servidor que não aceita senha não tem o que adivinhar: a chave privada tem entropia demais para ser chutada.",
+            "cost": "Você passa a gerenciar chaves: distribuir, revogar e proteger com frase-secreta."
+          },
+          {
+            "name": "segundo fator",
+            "how": "Mesmo com a chave certa, o servidor pede um código de uso único. Transforma o roubo de uma chave em algo insuficiente sozinho.",
+            "cost": "Atrito em toda automação que use SSH; costuma exigir uma exceção para as chaves de deploy."
+          },
+          {
+            "name": "limitar a taxa de tentativas",
+            "how": "fail2ban, `MaxAuthTries` baixo ou um limite de conexões novas por minuto no firewall. Encarece a força bruta e limpa o log.",
+            "cost": "Reduz o ruído, não elimina o risco: quem distribui as tentativas por milhares de endereços passa por baixo do limite."
+          }
+        ],
+        "myths": [
+          {
+            "claim": "mudar o SSH para a porta 2222 esconde o serviço",
+            "why": "Esconde do varredor preguiçoso, e de mais ninguém. Varrer todas as 65.535 portas de UM endereço leva segundos, e o sshd se apresenta na primeira linha da conversa (`SSH-2.0-OpenSSH_9.6`). O ganho real existe e é outro: menos ruído no log, o que faz o ataque de verdade aparecer. Não confunda ficar quieto com estar protegido."
+          }
+        ]
+      },
+      "en": {
+        "use": "Opening a terminal on a machine that is far away. Everything you type and everything that comes back travels encrypted — it is the direct replacement for Telnet, and the reason Telnet died.",
+        "stackNote": "No container in this stack runs an SSH server. Getting into a container here means `docker exec`, which talks to the local daemon and opens no port at all.",
+        "attacks": [
+          {
+            "name": "brute force and credential stuffing",
+            "how": "The attacker opens connection after connection trying username/password pairs from a list. He does not need to guess YOUR password: he sweeps millions of addresses and only needs one machine that was left on `admin/admin`. That is the economics of it — cost per attempt is near zero and the target is the statistic, not you.",
+            "tell": "`journalctl -u sshd` full of `Failed password for invalid user` from addresses you have never seen, in bursts."
+          },
+          {
+            "name": "a flaw in the SSH server itself",
+            "how": "The minority of cases, and the frightening one: a bug in sshd's own code that grants access with no credential at all. regreSSHion (CVE-2024-6387, 2024) was a signal handler race that gave root without authenticating, and it was a REGRESSION — the same flaw had been fixed in 2006 and came back in a 2020 commit. It affected OpenSSH 8.5p1 through 9.7p1 on glibc Linux.",
+            "tell": "Your OpenSSH version. `ssh -V` answers in one line."
+          },
+          {
+            "name": "the stolen private key",
+            "how": "The key on a developer's laptop is worth more than the password: it does not expire, it usually has no passphrase, and it opens everything at once. Malware that reads `~/.ssh/id_ed25519` hands over the whole access without tripping a single failed-password alert.",
+            "tell": "A successful login, with a legitimate key, at an odd hour from a new address. Which is why the success log matters as much as the failure log."
+          }
+        ],
+        "defenses": [
+          {
+            "name": "do not publish the port",
+            "how": "SSH listens on the internal network only, and whoever needs in goes through a VPN or a bastion first. Brute force stops existing because the attacker cannot reach the service.",
+            "cost": "It changes your workflow and you now maintain a VPN. It is the only defense on this list that zeroes the problem instead of shrinking it."
+          },
+          {
+            "name": "keys only, never passwords",
+            "how": "`PasswordAuthentication no` and `KbdInteractiveAuthentication no` in `sshd_config`. Brute force against a server that accepts no password has nothing to guess: a private key carries far too much entropy.",
+            "cost": "You now manage keys: distributing, revoking and protecting them with passphrases."
+          },
+          {
+            "name": "a second factor",
+            "how": "Even with the right key, the server asks for a one-time code. It turns a stolen key into something that is not enough on its own.",
+            "cost": "Friction in every automation that uses SSH; it usually needs an exception for deploy keys."
+          },
+          {
+            "name": "rate-limit the attempts",
+            "how": "fail2ban, a low `MaxAuthTries`, or a new-connections-per-minute cap in the firewall. It makes brute force expensive and cleans up the log.",
+            "cost": "It cuts noise, not risk: spreading attempts across thousands of addresses slips under the limit."
+          }
+        ],
+        "myths": [
+          {
+            "claim": "moving SSH to port 2222 hides the service",
+            "why": "It hides it from the lazy scanner and from nobody else. Sweeping all 65,535 ports of ONE address takes seconds, and sshd introduces itself on the first line of the conversation (`SSH-2.0-OpenSSH_9.6`). The real gain is different and it is genuine: less log noise, which makes the actual attack visible. Do not mistake being quiet for being protected."
+          }
+        ]
+      },
+      "sources": [
+        {
+          "label": "Qualys — regreSSHion (CVE-2024-6387)",
+          "url": "https://www.qualys.com/regresshion-cve-2024-6387"
+        },
+        {
+          "label": "OpenBSD — sshd_config(5)",
+          "url": "https://man.openbsd.org/sshd_config"
+        }
+      ]
+    },
+    {
+      "port": 23,
+      "service": "Telnet",
+      "transport": "TCP",
+      "group": "poster",
+      "inThisStack": "absent",
+      "pt": {
+        "use": "O avô do SSH: mesma ideia de terminal remoto, e sem cifra nenhuma. Tudo — inclusive a senha, letra por letra — viaja em texto que qualquer um no caminho consegue ler.",
+        "stackNote": "Ausente, e não por acaso: não existe caso de uso em 2026 que o Telnet resolva e o SSH não resolva melhor.",
+        "attacks": [
+          {
+            "name": "leitura do tráfego",
+            "how": "Não há nada para 'quebrar'. O protocolo manda a senha assim mesmo, e qualquer equipamento entre você e a máquina — um switch comprometido, um ponto de wi-fi falso, o roteador do hotel — lê como quem lê uma carta aberta.",
+            "tell": "Não há sinal. É esse o problema: a leitura passiva não deixa rastro nenhum no servidor."
+          },
+          {
+            "name": "força bruta com senha de fábrica",
+            "how": "O alvo não é o servidor administrado, é o aparelho que ninguém administra: câmera, DVR, roteador doméstico. O Mirai varria TCP/23 e TCP/2323 disparando SYN às cegas e, ao achar quem atendesse, tentava 10 pares sorteados de uma lista de 62 credenciais de fábrica. Chegou a 600 mil aparelhos infectados no pico, com tempo de duplicação de 76 minutos.",
+            "tell": "O aparelho esquenta, a banda de saída sobe e a interface fica lenta. Quase ninguém olha — que é justamente por isso que funciona."
+          },
+          {
+            "name": "sequestro da sessão já aberta",
+            "how": "Como não há cifra nem verificação de integridade, quem está no caminho não precisa nem saber a senha: pode injetar comandos numa sessão que JÁ foi autenticada por você.",
+            "tell": "Comando que você não digitou aparecendo no histórico."
+          }
+        ],
+        "defenses": [
+          {
+            "name": "desligar",
+            "how": "Essa é a defesa. `systemctl disable --now telnet.socket`, ou desmarcar a opção no equipamento. Toda função do Telnet existe no SSH, cifrada.",
+            "cost": "Nenhum, salvo equipamento antigo que só fale Telnet."
+          },
+          {
+            "name": "rede isolada para o legado",
+            "how": "Quando o equipamento é velho demais para mudar, ele vai para uma rede separada, sem rota para a internet e sem rota para a rede dos escritórios. O texto claro continua claro, mas só para quem já está lá dentro.",
+            "cost": "Uma VLAN a mais para administrar e um salto a mais para quem precisa acessar de verdade."
+          },
+          {
+            "name": "trocar toda senha de fábrica",
+            "how": "O ataque do Mirai inteiro dependia de uma lista de 62 senhas que vinham de fábrica. Trocar a senha o derruba na primeira tentativa.",
+            "cost": "Um inventário do que existe na rede — e essa costuma ser a parte difícil, porque ninguém sabe quantos aparelhos tem."
+          }
+        ],
+        "myths": [
+          {
+            "claim": "está numa rede interna, então texto claro não importa",
+            "why": "'Rede interna' quase sempre inclui o wi-fi da recepção, a impressora que ninguém atualiza e a máquina do estagiário. Mandar senha em texto claro é decidir confiar em todo mundo que encostar num cabo — inclusive em quem entrar amanhã. É a premissa que a arquitetura de confiança zero existe para recusar."
+          }
+        ]
+      },
+      "en": {
+        "use": "SSH's grandfather: same idea of a remote terminal, with no encryption whatsoever. Everything — the password included, letter by letter — travels as text that anyone on the path can read.",
+        "stackNote": "Absent, and not by accident: there is no use case in 2026 that Telnet solves and SSH does not solve better.",
+        "attacks": [
+          {
+            "name": "reading the traffic",
+            "how": "There is nothing to 'break'. The protocol sends the password like that, and any gear between you and the machine — a compromised switch, a fake access point, the hotel router — reads it like an open letter.",
+            "tell": "There is no sign. That is the problem: passive reading leaves no trace on the server at all."
+          },
+          {
+            "name": "brute force with factory passwords",
+            "how": "The target is not the managed server, it is the appliance nobody manages: a camera, a DVR, a home router. Mirai swept TCP/23 and TCP/2323 firing blind SYNs and, on finding something that answered, tried 10 pairs drawn at random from a list of 62 factory credentials. It peaked at 600,000 infected devices, with a 76-minute doubling time.",
+            "tell": "The device runs hot, upstream bandwidth climbs and the interface crawls. Almost nobody looks — which is exactly why it works."
+          },
+          {
+            "name": "hijacking a session already open",
+            "how": "With no encryption and no integrity check, whoever sits on the path does not even need the password: they can inject commands into a session YOU have already authenticated.",
+            "tell": "A command you never typed showing up in the history."
+          }
+        ],
+        "defenses": [
+          {
+            "name": "turn it off",
+            "how": "That is the defense. `systemctl disable --now telnet.socket`, or unticking the box on the appliance. Every Telnet feature exists in SSH, encrypted.",
+            "cost": "None, except for old gear that speaks nothing else."
+          },
+          {
+            "name": "an isolated network for the legacy gear",
+            "how": "When the device is too old to change, it moves to a separate network with no route to the internet and no route to the office network. The cleartext stays clear, but only for whoever is already inside.",
+            "cost": "One more VLAN to run and one more hop for the people who legitimately need access."
+          },
+          {
+            "name": "change every factory password",
+            "how": "The entire Mirai attack rested on a list of 62 passwords that shipped from the factory. Changing the password defeats it on the first try.",
+            "cost": "An inventory of what is on your network — and that is usually the hard part, because nobody knows how many devices there are."
+          }
+        ],
+        "myths": [
+          {
+            "claim": "it is on an internal network, so cleartext does not matter",
+            "why": "'Internal network' almost always includes the reception wifi, the printer nobody patches and the intern's laptop. Sending passwords in the clear is deciding to trust everyone who touches a cable — including whoever walks in tomorrow. It is the exact premise zero-trust architecture exists to refuse."
+          }
+        ]
+      },
+      "sources": [
+        {
+          "label": "Antonakakis et al. — Understanding the Mirai Botnet (USENIX Security 2017)",
+          "url": "https://www.usenix.org/conference/usenixsecurity17/technical-sessions/presentation/antonakakis"
+        },
+        {
+          "label": "RFC 854 — Telnet Protocol Specification",
+          "url": "https://www.rfc-editor.org/rfc/rfc854"
+        }
+      ]
+    },
+    {
+      "port": 25,
+      "service": "SMTP",
+      "transport": "TCP",
+      "group": "poster",
+      "inThisStack": "absent",
+      "pt": {
+        "use": "Entregar e-mail de um servidor para outro. É a conversa entre os correios, não entre você e o correio: o seu programa de e-mail fala na 587, que é a porta de SUBMISSÃO e exige autenticação (RFC 6409).",
+        "stackNote": "Esta stack não manda e-mail. Vale registrar o motivo: assim que um sistema ganha 'recuperar senha por e-mail', ele herda toda esta superfície.",
+        "attacks": [
+          {
+            "name": "relay aberto",
+            "how": "Um servidor mal configurado aceita entregar mensagem de QUALQUER remetente para QUALQUER destinatário. O spammer passa a usar a sua máquina, a sua banda e — o que dói de verdade — a reputação do seu endereço IP. Você descobre quando o seu domínio inteiro para de conseguir entregar e-mail, porque entrou numa lista de bloqueio.",
+            "tell": "Fila de saída com milhares de mensagens para domínios que não são seus, e um pico de banda de madrugada."
+          },
+          {
+            "name": "falsificação do remetente",
+            "how": "O campo `From:` que você lê no cliente é texto livre; o SMTP original não prova nada sobre quem enviou. É por isso que existem três registros de DNS: o SPF diz quais servidores podem mandar e-mail pelo seu domínio, o DKIM assina a mensagem com uma chave cujo par público está no seu DNS, e o DMARC diz ao destinatário o que fazer quando SPF e DKIM não batem com o `From:`. Sem os três, qualquer um manda e-mail 'do' seu domínio.",
+            "tell": "Respostas a mensagens que você nunca mandou, e relatórios de DMARC apontando entregas de endereços desconhecidos."
+          },
+          {
+            "name": "coleta e teste de credenciais na submissão",
+            "how": "A porta de submissão (587) aceita usuário e senha, então ela sofre exatamente a força bruta da 22 e da 3389 — só que o prêmio é a caixa de e-mail, que costuma ser a chave de recuperação de todas as outras contas.",
+            "tell": "Tentativas de autenticação falhas no log do servidor de e-mail, de muitos endereços diferentes, para poucas contas."
+          }
+        ],
+        "defenses": [
+          {
+            "name": "nunca ser relay aberto",
+            "how": "A regra é: sem autenticação, o servidor só aceita mensagem DESTINADA a um domínio seu. Todo o resto exige credencial. É a configuração padrão do Postfix moderno — o risco está em copiar uma configuração antiga de algum tutorial.",
+            "cost": "Nenhum. Testar leva um minuto com um verificador de relay aberto."
+          },
+          {
+            "name": "SPF, DKIM e DMARC, os três",
+            "how": "SPF sozinho quebra quando a mensagem é encaminhada; DKIM sozinho não diz o que fazer com a falha. O DMARC amarra os dois ao domínio que o leitor de fato vê e, em `p=reject`, manda descartar o que não bater.",
+            "cost": "Publicar registros de DNS e passar semanas em `p=none` lendo relatórios antes de endurecer, ou você bloqueia o seu próprio e-mail de marketing."
+          },
+          {
+            "name": "não entregar e-mail por conta própria",
+            "how": "Provedores de nuvem bloqueiam a porta 25 de saída por padrão justamente porque instância comprometida vira fonte de spam em minutos. Um serviço de entrega assume a reputação do IP, que é a parte cara.",
+            "cost": "Dependência externa e custo por mensagem. Em troca, você deixa de ser responsável por uma superfície inteira."
+          }
+        ],
+        "myths": [
+          {
+            "claim": "STARTTLS no SMTP prova quem mandou a mensagem",
+            "why": "Prova apenas que aquele trecho da conversa foi cifrado — e o e-mail costuma dar vários saltos, cada um com a própria decisão sobre TLS. Autenticidade de remetente é SPF/DKIM/DMARC, que é outra camada e responde a outra pergunta. Confundir as duas é o motivo de tanta gente achar que o cadeado no cliente de e-mail significa 'confiável'."
+          }
+        ]
+      },
+      "en": {
+        "use": "Delivering mail from one server to another. It is the conversation between post offices, not between you and the post office: your mail client speaks on 587, the SUBMISSION port, which requires authentication (RFC 6409).",
+        "stackNote": "This stack sends no mail. Worth recording why: the moment a system grows a 'reset your password by email' feature, it inherits this entire surface.",
+        "attacks": [
+          {
+            "name": "open relay",
+            "how": "A misconfigured server agrees to deliver mail from ANY sender to ANY recipient. The spammer now uses your machine, your bandwidth and — the part that really hurts — your IP address's reputation. You find out when your whole domain stops being able to deliver mail, because it landed on a blocklist.",
+            "tell": "An outbound queue with thousands of messages for domains that are not yours, and a bandwidth spike in the small hours."
+          },
+          {
+            "name": "sender spoofing",
+            "how": "The `From:` header you read in the client is free text; original SMTP proves nothing about who sent it. That is why three DNS records exist: SPF names which servers may send mail for your domain, DKIM signs the message with a key whose public half sits in your DNS, and DMARC tells the recipient what to do when SPF and DKIM do not line up with the `From:`. Without all three, anyone sends mail 'from' your domain.",
+            "tell": "Replies to messages you never sent, and DMARC reports showing deliveries from addresses you do not recognise."
+          },
+          {
+            "name": "credential harvesting on submission",
+            "how": "The submission port (587) takes a username and password, so it gets exactly the brute force that 22 and 3389 get — except the prize is the mailbox, which is usually the recovery key to every other account.",
+            "tell": "Failed authentication attempts in the mail server log, from many addresses, against a handful of accounts."
+          }
+        ],
+        "defenses": [
+          {
+            "name": "never be an open relay",
+            "how": "The rule is: with no authentication, the server accepts mail only when it is ADDRESSED to one of your domains. Everything else demands a credential. It is the default in a modern Postfix — the risk is copying an old configuration from a tutorial.",
+            "cost": "None. Testing takes a minute with any open-relay checker."
+          },
+          {
+            "name": "SPF, DKIM and DMARC, all three",
+            "how": "SPF alone breaks when mail is forwarded; DKIM alone does not say what to do about a failure. DMARC ties both to the domain the reader actually sees and, at `p=reject`, orders anything that does not match to be dropped.",
+            "cost": "Publishing DNS records and spending weeks at `p=none` reading reports before you tighten, or you will block your own marketing mail."
+          },
+          {
+            "name": "do not run your own delivery",
+            "how": "Cloud providers block outbound port 25 by default precisely because a compromised instance becomes a spam source in minutes. A delivery service takes on IP reputation, which is the expensive part.",
+            "cost": "An external dependency and a per-message price. In exchange you stop owning an entire attack surface."
+          }
+        ],
+        "myths": [
+          {
+            "claim": "STARTTLS on SMTP proves who sent the message",
+            "why": "It only proves that one leg of the conversation was encrypted — and mail usually takes several hops, each making its own decision about TLS. Sender authenticity is SPF/DKIM/DMARC, a different layer answering a different question. Conflating the two is why so many people think the padlock in their mail client means 'trustworthy'."
+          }
+        ]
+      },
+      "sources": [
+        {
+          "label": "RFC 5321 — Simple Mail Transfer Protocol",
+          "url": "https://www.rfc-editor.org/rfc/rfc5321"
+        },
+        {
+          "label": "RFC 6409 — Message Submission for Mail",
+          "url": "https://www.rfc-editor.org/rfc/rfc6409"
+        },
+        {
+          "label": "RFC 7489 — DMARC",
+          "url": "https://www.rfc-editor.org/rfc/rfc7489"
+        }
+      ]
+    },
+    {
+      "port": 53,
+      "service": "DNS",
+      "transport": "UDP e TCP",
+      "group": "poster",
+      "inThisStack": "internal",
+      "pt": {
+        "use": "Traduzir nome em endereço. Toda conexão que você faz começa com uma pergunta ao DNS — inclusive as desta stack, quando a api procura o host `db`.",
+        "stackNote": "Existe e é interno: toda rede bridge criada por você ganha um resolvedor do Docker em `127.0.0.11`, alcançável só de dentro daquela rede. É ele que faz `POSTGRES_HOST: db` funcionar sem ninguém conhecer um IP.",
+        "attacks": [
+          {
+            "name": "amplificação para negar serviço",
+            "how": "O atacante manda uma pergunta PEQUENA a um servidor DNS que responde a qualquer um, e FORJA o endereço de origem, pondo o da vítima. A resposta — bem maior que a pergunta — vai para a vítima, que nunca perguntou nada. Com milhares de servidores abertos, o atacante multiplica a própria banda: a CISA mediu o fator de amplificação do DNS entre 28 e 54 vezes. Quem manda 1 Gb/s entrega de 28 a 54 Gb/s no alvo, e o tráfego chega de servidores legítimos.",
+            "tell": "Para a vítima: enxurrada de respostas DNS que ela não pediu. Para quem hospeda o resolvedor aberto: tráfego de saída inexplicável e uma conta de banda."
+          },
+          {
+            "name": "envenenamento de cache",
+            "how": "Convencer um resolvedor a guardar uma resposta falsa. A partir dali, todo mundo que usa aquele resolvedor vai para o servidor do atacante ao digitar o seu domínio — sem erro de certificado se o atacante também conseguir um. A falha que Dan Kaminsky mostrou em 2008 tornou isso prático em segundos; as respostas foram aleatorizar a porta de origem da consulta, os cookies do RFC 7873 e, no limite, assinar as respostas com DNSSEC.",
+            "tell": "Usuários chegando ao lugar errado enquanto o servidor deles está no ar e correto. É um dos ataques mais difíceis de diagnosticar de dentro."
+          },
+          {
+            "name": "exfiltração por DNS",
+            "how": "Quando todo o resto está bloqueado, o DNS quase sempre sai — é a última porta que um firewall fecha. O invasor codifica o dado roubado no próprio nome consultado (`ZGFkb3Mtcm91YmFkb3M.exfil.exemplo.com`) e lê o resultado no servidor autoritativo que ele controla. É lento e é silencioso.",
+            "tell": "Volume anormal de consultas para subdomínios longos e aleatórios de um mesmo domínio."
+          }
+        ],
+        "defenses": [
+          {
+            "name": "não rodar resolvedor recursivo aberto",
+            "how": "O servidor só responde consulta recursiva para os endereços da sua própria rede. A amplificação some porque o atacante deixa de ter o que amplificar.",
+            "cost": "Nenhum, e é a configuração padrão de qualquer resolvedor moderno. O problema quase sempre é equipamento antigo com o padrão de dez anos atrás."
+          },
+          {
+            "name": "limite de taxa na resposta",
+            "how": "No servidor autoritativo, o RRL (Response Rate Limiting) corta respostas repetidas ao mesmo endereço. Como o ataque de amplificação depende de muitas respostas para UM alvo, o limite estraga o negócio.",
+            "cost": "Ajuste fino: um limite agressivo demais pode descartar consultas legítimas de um resolvedor grande."
+          },
+          {
+            "name": "DNSSEC",
+            "how": "As respostas vêm assinadas, e o resolvedor que valida recusa uma resposta forjada. Ataca o envenenamento de cache na raiz do problema em vez de dificultar o acerto.",
+            "cost": "Gerenciar chaves e rotação; uma assinatura vencida tira o seu domínio do ar de um jeito bem mais eficaz que qualquer atacante."
+          }
+        ],
+        "myths": [
+          {
+            "claim": "DNS é UDP, então não dá para se defender",
+            "why": "O UDP explica por que o endereço de origem é fácil de forjar — não há handshake que prove quem está do outro lado. Mas a defesa não depende disso: quem amplifica é o SERVIDOR que responde a estranhos. Um resolvedor que só atende a própria rede não amplifica nada, continue ele em UDP ou não."
+          }
+        ]
+      },
+      "en": {
+        "use": "Turning a name into an address. Every connection you make starts with a DNS question — including the ones in this stack, when the api looks up the host `db`.",
+        "stackNote": "Present and internal: every user-defined bridge network gets a Docker resolver at `127.0.0.11`, reachable only from inside that network. It is what makes `POSTGRES_HOST: db` work without anyone knowing an IP.",
+        "attacks": [
+          {
+            "name": "amplification for denial of service",
+            "how": "The attacker sends a SMALL question to a DNS server that answers anyone, and FORGES the source address, putting the victim's there. The answer — far larger than the question — goes to the victim, who asked nothing. With thousands of open servers the attacker multiplies his own bandwidth: CISA measured DNS amplification at 28 to 54 times. Whoever sends 1 Gb/s delivers 28 to 54 Gb/s on the target, and the traffic arrives from legitimate servers.",
+            "tell": "For the victim: a flood of DNS answers it never requested. For whoever hosts the open resolver: unexplained outbound traffic and a bandwidth bill."
+          },
+          {
+            "name": "cache poisoning",
+            "how": "Convincing a resolver to cache a false answer. From then on, everyone using that resolver goes to the attacker's server when they type your domain — with no certificate error if the attacker also obtains one. The flaw Dan Kaminsky demonstrated in 2008 made this practical in seconds; the answers were randomising the query's source port, the cookies of RFC 7873 and, ultimately, signing answers with DNSSEC.",
+            "tell": "Users landing in the wrong place while your server is up and correct. It is one of the hardest attacks to diagnose from the inside."
+          },
+          {
+            "name": "exfiltration over DNS",
+            "how": "When everything else is blocked, DNS almost always gets out — it is the last port a firewall closes. The intruder encodes the stolen data in the queried name itself (`c3RvbGVuLWRhdGE.exfil.example.com`) and reads the result on an authoritative server he controls. It is slow and it is silent.",
+            "tell": "An abnormal volume of queries for long, random subdomains of one single domain."
+          }
+        ],
+        "defenses": [
+          {
+            "name": "do not run an open recursive resolver",
+            "how": "The server answers recursive queries only for addresses on your own network. Amplification disappears because the attacker no longer has anything to amplify.",
+            "cost": "None, and it is the default in any modern resolver. The problem is almost always old gear carrying a ten-year-old default."
+          },
+          {
+            "name": "response rate limiting",
+            "how": "On the authoritative server, RRL cuts repeated answers to the same address. Since amplification depends on many answers aimed at ONE target, the limit ruins the business model.",
+            "cost": "Tuning: too aggressive a limit can drop legitimate queries from a large resolver."
+          },
+          {
+            "name": "DNSSEC",
+            "how": "Answers arrive signed, and a validating resolver refuses a forged one. It attacks cache poisoning at the root instead of making the guess harder.",
+            "cost": "Key management and rotation; an expired signature takes your domain down far more effectively than any attacker."
+          }
+        ],
+        "myths": [
+          {
+            "claim": "DNS is UDP, so there is no defending it",
+            "why": "UDP explains why the source address is easy to forge — there is no handshake proving who is on the other end. But the defense does not hinge on that: the thing doing the amplifying is the SERVER that answers strangers. A resolver that only serves its own network amplifies nothing, UDP or not."
+          }
+        ]
+      },
+      "sources": [
+        {
+          "label": "CISA — UDP-Based Amplification Attacks (TA14-017A)",
+          "url": "https://www.cisa.gov/news-events/alerts/2014/01/17/udp-based-amplification-attacks"
+        },
+        {
+          "label": "CISA — DNS Amplification Attacks (TA13-088A)",
+          "url": "https://www.cisa.gov/news-events/alerts/2013/03/29/dns-amplification-attacks"
+        },
+        {
+          "label": "RFC 7873 — Domain Name System (DNS) Cookies",
+          "url": "https://www.rfc-editor.org/rfc/rfc7873"
+        }
+      ]
+    },
+    {
+      "port": 80,
+      "service": "HTTP",
+      "transport": "TCP",
+      "group": "poster",
+      "inThisStack": "absent",
+      "pt": {
+        "use": "A web sem cifra. Hoje quase todo site só atende nela para mandar o navegador imediatamente para a 443 — ela virou um trampolim, não um destino.",
+        "stackNote": "O edge desta stack escuta em 8080, publicada apenas em `127.0.0.1`. A porta 80 do host não é tocada por ninguém aqui.",
+        "attacks": [
+          {
+            "name": "injeção de SQL, XSS e travessia de diretório",
+            "how": "Aqui está o erro de categoria que o cartaz comete, e que vale entender com calma: NENHUM destes três ataca a porta 80. Todos atacam a APLICAÇÃO que atende nela. A porta é só por onde a requisição entrou. A prova é que os três chegam exatamente iguais pela 443 — o TLS cifra o caminho, decifra na chegada e entrega a mesma requisição hostil à mesma aplicação.",
+            "tell": "Nos logs da aplicação: aspas, `UNION SELECT`, `<script>` e `../../` dentro de parâmetros que deveriam conter um número ou um nome."
+          },
+          {
+            "name": "rebaixamento de HTTPS para HTTP (SSL stripping)",
+            "how": "Este sim mora na 80, e é o segundo ponto em que o cartaz troca as bolas ao colocá-lo na 443. Você digita `exemplo.com` e o navegador tenta HTTP primeiro. O atacante no meio intercepta essa requisição em texto claro e NUNCA deixa o redirecionamento para HTTPS chegar até você: ele mesmo fala HTTPS com o site e HTTP com você. A barra de endereço nunca mostra cadeado nenhum — e quase ninguém repara na ausência. Moxie Marlinspike demonstrou e automatizou isso no Black Hat DC de 2009.",
+            "tell": "Ausência de cadeado num site que você sabe que tem HTTPS. É um sinal negativo, e por isso passa batido."
+          },
+          {
+            "name": "interceptação passiva do conteúdo",
+            "how": "Sem cifra, tudo que trafega é legível: cookie de sessão, formulário preenchido, o que você leu. Roubar o cookie de sessão costuma ser suficiente — o atacante entra como você sem nunca saber a sua senha.",
+            "tell": "Nenhum. A leitura passiva não deixa rastro, que é o motivo de o HTTPS ter deixado de ser opcional."
+          }
+        ],
+        "defenses": [
+          {
+            "name": "redirecionar tudo e mandar HSTS",
+            "how": "A 80 responde só com um redirecionamento para HTTPS, e a resposta em HTTPS carrega o cabeçalho `Strict-Transport-Security` (RFC 6797). A partir daí o navegador se recusa a falar HTTP com aquele domínio, mesmo que o usuário digite `http://`. Na lista de preload, ele se recusa já na PRIMEIRA visita — que é a única janela que o HSTS sozinho não cobre.",
+            "cost": "O preload é difícil de desfazer: entrar na lista é rápido, sair leva meses. Só entre quando tiver certeza de que todo subdomínio fala HTTPS."
+          },
+          {
+            "name": "consulta parametrizada",
+            "how": "A defesa contra injeção de SQL, e ela não mora na rede: mora na linha de código que monta a consulta. É o assunto inteiro da lição 5.",
+            "cost": "Nenhum. É mais fácil de escrever que a concatenação."
+          },
+          {
+            "name": "escapar na saída e declarar uma CSP",
+            "how": "Contra XSS: todo dado vindo do usuário sai escapado segundo o contexto (HTML, atributo, JavaScript), e um cabeçalho `Content-Security-Policy` diz ao navegador de onde script pode ser carregado — de modo que, mesmo escapando um, ele não executa.",
+            "cost": "A CSP quebra scripts embutidos e serviços de terceiros; costuma exigir uma rodada de ajuste em modo só-relatório."
+          },
+          {
+            "name": "nunca montar caminho de arquivo com entrada do usuário",
+            "how": "Contra travessia de diretório: o nome que chega pelo usuário vira uma CHAVE numa lista de arquivos permitidos, e não um pedaço do caminho. Assim `../../etc/passwd` não resolve para lugar nenhum porque nunca é concatenado a nada.",
+            "cost": "Nenhum, se feito desde o começo."
+          }
+        ],
+        "myths": [
+          {
+            "claim": "fechar a porta 80 deixa o site seguro",
+            "why": "Fechar a 80 resolve UMA coisa — o canal em texto claro e o rebaixamento que vive nele — e não toca em nenhuma das injeções, que atravessam a 443 idênticas. Este é o ponto que separa quem entendeu de quem decorou o cartaz: o número da porta diz por onde a requisição entrou, e nunca o que ela faz depois de entrar."
+          }
+        ]
+      },
+      "en": {
+        "use": "The web without encryption. Today almost every site answers here only to send the browser straight to 443 — it became a springboard, not a destination.",
+        "stackNote": "This stack's edge listens on 8080, published on `127.0.0.1` only. Nothing here touches the host's port 80.",
+        "attacks": [
+          {
+            "name": "SQL injection, XSS and directory traversal",
+            "how": "Here is the category error the poster makes, and it is worth slowing down for: NONE of these three attacks port 80. All three attack the APPLICATION listening on it. The port is merely where the request came in. The proof is that all three arrive identically over 443 — TLS encrypts the path, decrypts on arrival, and hands the same hostile request to the same application.",
+            "tell": "In the application log: quotes, `UNION SELECT`, `<script>` and `../../` inside parameters that were supposed to hold a number or a name."
+          },
+          {
+            "name": "downgrading HTTPS to HTTP (SSL stripping)",
+            "how": "This one does live on 80, and it is the second place the poster mixes things up by filing it under 443. You type `example.com` and the browser tries HTTP first. The attacker in the middle intercepts that cleartext request and NEVER lets the redirect to HTTPS reach you: he speaks HTTPS with the site and HTTP with you. The address bar simply never shows a padlock — and almost nobody notices an absence. Moxie Marlinspike demonstrated and automated this at Black Hat DC in 2009.",
+            "tell": "No padlock on a site you know has HTTPS. It is a negative signal, which is exactly why it slips past people."
+          },
+          {
+            "name": "passive interception of the content",
+            "how": "With no encryption, everything on the wire is readable: session cookie, filled-in form, what you read. Stealing the session cookie is usually enough — the attacker becomes you without ever learning your password.",
+            "tell": "None. Passive reading leaves no trace, which is why HTTPS stopped being optional."
+          }
+        ],
+        "defenses": [
+          {
+            "name": "redirect everything and send HSTS",
+            "how": "Port 80 answers with nothing but a redirect to HTTPS, and the HTTPS response carries the `Strict-Transport-Security` header (RFC 6797). From then on the browser refuses to speak HTTP to that domain even if the user types `http://`. On the preload list it refuses on the FIRST visit too — the one window HSTS alone cannot cover.",
+            "cost": "Preload is hard to undo: getting on the list is fast, getting off takes months. Only opt in once every subdomain speaks HTTPS."
+          },
+          {
+            "name": "parameterised queries",
+            "how": "The defense against SQL injection, and it does not live in the network: it lives in the line of code that builds the query. It is the whole subject of lesson 5.",
+            "cost": "None. It is easier to write than concatenation."
+          },
+          {
+            "name": "escape on output and declare a CSP",
+            "how": "Against XSS: every piece of user data leaves escaped for its context (HTML, attribute, JavaScript), and a `Content-Security-Policy` header tells the browser where script may be loaded from — so that even one that slips through does not execute.",
+            "cost": "CSP breaks inline scripts and third-party widgets; it usually needs a tuning round in report-only mode."
+          },
+          {
+            "name": "never build a file path from user input",
+            "how": "Against directory traversal: the name arriving from the user becomes a KEY into a list of allowed files, not a piece of the path. `../../etc/passwd` then resolves to nothing, because it is never concatenated onto anything.",
+            "cost": "None, if done from the start."
+          }
+        ],
+        "myths": [
+          {
+            "claim": "closing port 80 makes the site secure",
+            "why": "Closing 80 fixes ONE thing — the cleartext channel and the downgrade that lives in it — and touches none of the injections, which cross 443 unchanged. This is the point that separates understanding from memorising the poster: the port number tells you where the request came in, never what it does once inside."
+          }
+        ]
+      },
+      "sources": [
+        {
+          "label": "OWASP Top 10 2021 — A03: Injection",
+          "url": "https://owasp.org/Top10/A03_2021-Injection/"
+        },
+        {
+          "label": "RFC 6797 — HTTP Strict Transport Security (HSTS)",
+          "url": "https://www.rfc-editor.org/rfc/rfc6797"
+        },
+        {
+          "label": "sslstrip — Moxie Marlinspike",
+          "url": "https://github.com/moxie0/sslstrip"
+        }
+      ]
+    },
+    {
+      "port": 443,
+      "service": "HTTPS",
+      "transport": "TCP",
+      "group": "poster",
+      "inThisStack": "absent",
+      "pt": {
+        "use": "A mesma web da porta 80, dentro de um túnel cifrado por TLS. O TLS entrega três coisas e só três: ninguém no caminho lê (confidencialidade), ninguém no caminho altera sem ser notado (integridade) e você tem certeza de estar falando com o dono daquele domínio (autenticação do servidor).",
+        "stackNote": "Ausente localmente, de propósito: `AUTO_HTTPS: off` porque o endereço é `127.0.0.1`. Troque `SITE_ADDRESS` por um domínio real e o Caddy emite e renova o certificado sozinho, via ACME.",
+        "attacks": [
+          {
+            "name": "exatamente os mesmos ataques da porta 80",
+            "how": "Injeção, XSS e travessia atravessam o TLS sem perder um caractere. O túnel protege o TRANSPORTE; o conteúdo é decifrado no servidor e entregue à aplicação como veio. Uma requisição com `' OR 1=1 --` chega cifrada e é processada igualzinha. O cartaz sugere o contrário ao listar as injeções só na 80, e é a confusão mais cara da tabela inteira.",
+            "tell": "O mesmo log de aplicação de sempre. O TLS não muda nada do lado de dentro."
+          },
+          {
+            "name": "falha na própria biblioteca de TLS",
+            "how": "O código que implementa a cifra é software, e software tem defeito. O Heartbleed (CVE-2014-0160) foi um erro de leitura de memória no OpenSSL: bastava pedir, e o servidor devolvia pedaços da própria memória — sessões de outros usuários, senhas e, no pior caso, a chave privada do certificado. Sem deixar nada no log.",
+            "tell": "Nenhum, no caso do Heartbleed. Por isso a defesa é atualizar, e não detectar."
+          },
+          {
+            "name": "intermediário com certificado que o seu dispositivo aceita",
+            "how": "O TLS vale exatamente o quanto valem as autoridades certificadoras em que o seu aparelho confia. Num notebook gerenciado pela empresa, um certificado da própria empresa costuma estar instalado — e então o túnel é aberto, lido e refeito no meio do caminho, com cadeado e tudo. É o mesmo mecanismo de um proxy corporativo e o de um ataque, mudando apenas quem instalou o certificado.",
+            "tell": "Clicar no cadeado e olhar QUEM emitiu o certificado. Se não for uma autoridade pública conhecida, alguém está no meio."
+          }
+        ],
+        "defenses": [
+          {
+            "name": "HSTS com preload",
+            "how": "Fecha a janela da primeira visita, que é onde o rebaixamento da porta 80 morde. Ver a defesa correspondente na 80 — as duas portas resolvem esse problema juntas.",
+            "cost": "Difícil de reverter; exige que todo subdomínio já fale HTTPS."
+          },
+          {
+            "name": "tratar a biblioteca de TLS como dependência de primeira classe",
+            "how": "OpenSSL é uma dependência como qualquer outra, e as imagens desta stack são pinadas por digest e escaneadas pelo Trivy a cada `make verify` justamente para que uma falha como o Heartbleed apareça no portão em vez de aparecer na imprensa.",
+            "cost": "Atualizar o digest quebra o cache de build e exige rodar o portão de novo. É o preço de saber o que está dentro da imagem."
+          },
+          {
+            "name": "configuração moderna de TLS",
+            "how": "TLS 1.2 no mínimo, de preferência 1.3 (RFC 8446), e nada de cifras antigas. Um servidor que ainda aceita protocolo velho pode ser convencido a usá-lo — é a família de ataques de rebaixamento de versão.",
+            "cost": "Clientes muito antigos param de conectar. Na prática, isso é um recurso e não um defeito."
+          }
+        ],
+        "myths": [
+          {
+            "claim": "o cadeado no navegador quer dizer que o site é confiável",
+            "why": "Quer dizer duas coisas bem menores: a conversa está cifrada e o nome do domínio confere com o certificado. Um site de phishing tem cadeado igualzinho — emitir certificado hoje é grátis e automático, e é assim que deve ser, porque cifrar a web para todo mundo importa mais. O cadeado responde 'estou falando mesmo com quem diz ser este domínio?' e nunca 'este domínio merece a minha senha?'."
+          }
+        ]
+      },
+      "en": {
+        "use": "The same web as port 80, inside a TLS-encrypted tunnel. TLS delivers three things and only three: nobody on the path reads it (confidentiality), nobody on the path alters it unnoticed (integrity), and you can be sure you are talking to the owner of that domain (server authentication).",
+        "stackNote": "Absent locally, on purpose: `AUTO_HTTPS: off` because the address is `127.0.0.1`. Swap `SITE_ADDRESS` for a real domain and Caddy issues and renews the certificate on its own, over ACME.",
+        "attacks": [
+          {
+            "name": "exactly the same attacks as port 80",
+            "how": "Injection, XSS and traversal cross TLS without losing a character. The tunnel protects TRANSPORT; the content is decrypted at the server and handed to the application as it came. A request carrying `' OR 1=1 --` arrives encrypted and is processed identically. The poster implies otherwise by listing the injections only under 80, and it is the costliest confusion in the whole table.",
+            "tell": "The same application log as always. TLS changes nothing on the inside."
+          },
+          {
+            "name": "a flaw in the TLS library itself",
+            "how": "The code implementing the encryption is software, and software has bugs. Heartbleed (CVE-2014-0160) was an out-of-bounds read in OpenSSL: you simply asked, and the server handed back chunks of its own memory — other users' sessions, passwords and, at worst, the certificate's private key. Leaving nothing in the log.",
+            "tell": "None, in Heartbleed's case. Which is why the defense is patching, not detecting."
+          },
+          {
+            "name": "a middleman with a certificate your device accepts",
+            "how": "TLS is worth exactly what the certificate authorities your device trusts are worth. On a company-managed laptop, a certificate belonging to the company is usually installed — and then the tunnel is opened, read and rebuilt in the middle, padlock and all. It is the same mechanism in a corporate proxy and in an attack; only who installed the certificate differs.",
+            "tell": "Click the padlock and look at WHO issued the certificate. If it is not a public authority you recognise, somebody is in the middle."
+          }
+        ],
+        "defenses": [
+          {
+            "name": "HSTS with preload",
+            "how": "It closes the first-visit window, which is where the port-80 downgrade bites. See the matching defense under 80 — the two ports solve this problem together.",
+            "cost": "Hard to reverse; requires every subdomain to already speak HTTPS."
+          },
+          {
+            "name": "treat the TLS library as a first-class dependency",
+            "how": "OpenSSL is a dependency like any other, and this stack's images are pinned by digest and scanned by Trivy on every `make verify` precisely so a flaw like Heartbleed shows up at the gate instead of in the press.",
+            "cost": "Bumping the digest busts the build cache and means running the gate again. That is the price of knowing what is inside the image."
+          },
+          {
+            "name": "a modern TLS configuration",
+            "how": "TLS 1.2 minimum, preferably 1.3 (RFC 8446), and no legacy ciphers. A server that still accepts old protocols can be talked into using them — that is the downgrade family of attacks.",
+            "cost": "Very old clients stop connecting. In practice that is a feature, not a bug."
+          }
+        ],
+        "myths": [
+          {
+            "claim": "the padlock in the browser means the site is trustworthy",
+            "why": "It means two much smaller things: the conversation is encrypted, and the domain name matches the certificate. A phishing site has the very same padlock — issuing a certificate today is free and automatic, and it should be, because encrypting the web for everyone matters more. The padlock answers 'am I really talking to whoever owns this domain?' and never 'does this domain deserve my password?'."
+          }
+        ]
+      },
+      "sources": [
+        {
+          "label": "RFC 8446 — TLS 1.3",
+          "url": "https://www.rfc-editor.org/rfc/rfc8446"
+        },
+        {
+          "label": "NVD — CVE-2014-0160 (Heartbleed)",
+          "url": "https://nvd.nist.gov/vuln/detail/CVE-2014-0160"
+        }
+      ]
+    },
+    {
+      "port": 445,
+      "service": "SMB",
+      "transport": "TCP",
+      "group": "poster",
+      "inThisStack": "absent",
+      "pt": {
+        "use": "Compartilhar pasta e impressora numa rede Windows. É o protocolo que faz `\\\\servidor\\financeiro` aparecer como uma unidade na sua máquina.",
+        "stackNote": "Ausente. Vale a menção porque é a porta que mais aparece em varredura da internet e a que nunca deveria estar lá.",
+        "attacks": [
+          {
+            "name": "execução remota sem credencial (EternalBlue)",
+            "how": "Uma falha na versão 1 do SMB (MS17-010, corrigida em março de 2017) permitia executar código na máquina sem NENHUMA credencial. Em maio de 2017 o WannaCry a usou para se espalhar sozinho: cada máquina infectada varria a rede atrás da próxima. Isso é um verme — nenhum clique humano no meio, e o tempo entre a primeira e a milésima máquina é medido em minutos.",
+            "tell": "Tráfego SMB entre máquinas que nunca conversaram, e o serviço `Server` reiniciando."
+          },
+          {
+            "name": "pass-the-hash",
+            "how": "O Windows autentica com o hash da senha, não com a senha. Quem consegue ler o hash da memória de uma máquina onde teve administrador local pode apresentá-lo em OUTRA máquina e entrar — sem nunca descobrir a senha, e sem que trocar a senha em si resolva enquanto o hash antigo valer.",
+            "tell": "O mesmo usuário autenticando em sequência em máquinas que ele não costuma usar."
+          },
+          {
+            "name": "retransmissão de autenticação (NTLM relay)",
+            "how": "O atacante induz a sua máquina a tentar autenticar nele — basta um link para `\\\\atacante\\x` num e-mail ou numa página — e repassa essa autenticação, em tempo real, para um terceiro servidor. Ele entra como você sem em momento algum ter a sua senha nem o seu hash.",
+            "tell": "Autenticações a partir de um host que não deveria receber nenhuma."
+          }
+        ],
+        "defenses": [
+          {
+            "name": "a 445 nunca cruza a borda da rede",
+            "how": "Não há exceção legítima: compartilhamento de arquivo entre escritórios passa por VPN. Esta única regra teria evitado a maior parte da propagação do WannaCry entre organizações.",
+            "cost": "Nenhum. Se alguém pedir a exceção, o pedido é o problema."
+          },
+          {
+            "name": "desligar o SMBv1",
+            "how": "A versão vulnerável ao EternalBlue. Está desabilitada por padrão no Windows moderno; o risco é o servidor antigo que ninguém tocou e o equipamento de rede que só fala v1.",
+            "cost": "Equipamento muito antigo (scanners, NAS de dez anos) pode perder o compartilhamento."
+          },
+          {
+            "name": "exigir assinatura SMB",
+            "how": "Com assinatura obrigatória, a mensagem carrega uma prova de integridade atrelada à sessão — e a retransmissão deixa de funcionar, porque o atacante não consegue reassinar o que repassa.",
+            "cost": "Um pouco de CPU e, em redes antigas, incompatibilidade com clientes que não assinam."
+          },
+          {
+            "name": "corrigir, e corrigir rápido",
+            "how": "Entre o MS17-010 e o WannaCry houve dois meses. A janela existe quase sempre; o que falta é o processo para usá-la.",
+            "cost": "Janela de manutenção e o risco de uma atualização quebrar algo — que é real, e ainda assim menor."
+          }
+        ],
+        "myths": [
+          {
+            "claim": "estou atrás de NAT, então a 445 está protegida",
+            "why": "Está protegida de quem vem de fora, e o WannaCry mostrou que essa não é a única direção. A infecção entra por e-mail numa máquina qualquer e, a partir dali, a rede interna é plana e a 445 está aberta entre TODAS as máquinas. A borda é uma camada, não a única — é exatamente o raciocínio que a segmentação desta stack aplica aos containers."
+          }
+        ]
+      },
+      "en": {
+        "use": "Sharing folders and printers on a Windows network. It is the protocol that makes `\\\\server\\finance` show up as a drive on your machine.",
+        "stackNote": "Absent. Worth mentioning because it is the port that shows up most in internet-wide scanning and the one that should never be there.",
+        "attacks": [
+          {
+            "name": "remote code execution with no credential (EternalBlue)",
+            "how": "A flaw in SMB version 1 (MS17-010, patched in March 2017) allowed running code on the machine with NO credential at all. In May 2017 WannaCry used it to spread by itself: every infected machine scanned the network for the next one. That is a worm — no human click in the loop, and the time between the first and the thousandth machine is measured in minutes.",
+            "tell": "SMB traffic between machines that never talked before, and the `Server` service restarting."
+          },
+          {
+            "name": "pass-the-hash",
+            "how": "Windows authenticates with the password's hash, not the password. Whoever reads that hash from the memory of a machine where they had local administrator can present it on ANOTHER machine and get in — never learning the password, and changing the password does not help while the old hash is still valid.",
+            "tell": "The same user authenticating in sequence on machines they never normally touch."
+          },
+          {
+            "name": "authentication relay (NTLM relay)",
+            "how": "The attacker gets your machine to try authenticating to him — a link to `\\\\attacker\\x` in an email or a web page is enough — and forwards that authentication, live, to a third server. He logs in as you without ever holding your password or your hash.",
+            "tell": "Authentications originating from a host that should never receive any."
+          }
+        ],
+        "defenses": [
+          {
+            "name": "445 never crosses the network border",
+            "how": "There is no legitimate exception: file sharing between offices goes over a VPN. This single rule would have prevented most of WannaCry's spread between organisations.",
+            "cost": "None. If someone asks for the exception, the request is the problem."
+          },
+          {
+            "name": "turn off SMBv1",
+            "how": "The version EternalBlue exploited. It is disabled by default on modern Windows; the risk is the old server nobody touched and the network appliance that speaks nothing else.",
+            "cost": "Very old equipment (scanners, ten-year-old NAS boxes) may lose the share."
+          },
+          {
+            "name": "require SMB signing",
+            "how": "With mandatory signing, the message carries an integrity proof tied to the session — and relaying stops working, because the attacker cannot re-sign what he forwards.",
+            "cost": "A little CPU and, on old networks, incompatibility with clients that do not sign."
+          },
+          {
+            "name": "patch, and patch fast",
+            "how": "There were two months between MS17-010 and WannaCry. The window almost always exists; what is missing is the process to use it.",
+            "cost": "A maintenance window and the risk that an update breaks something — which is real, and still smaller."
+          }
+        ],
+        "myths": [
+          {
+            "claim": "I am behind NAT, so 445 is protected",
+            "why": "It is protected from whoever comes from outside, and WannaCry showed that is not the only direction. The infection arrives by email on some random machine and, from there, the internal network is flat and 445 is open between ALL machines. The border is one layer, not the only one — exactly the reasoning this stack's segmentation applies to containers."
+          }
+        ]
+      },
+      "sources": [
+        {
+          "label": "Microsoft — MS17-010 Security Update for Microsoft Windows SMB Server",
+          "url": "https://learn.microsoft.com/en-us/security-updates/securitybulletins/2017/ms17-010"
+        },
+        {
+          "label": "CISA — Indicators Associated With WannaCry Ransomware",
+          "url": "https://www.cisa.gov/news-events/alerts/2017/05/12/indicators-associated-wannacry-ransomware"
+        }
+      ]
+    },
+    {
+      "port": 3389,
+      "service": "RDP",
+      "transport": "TCP",
+      "group": "poster",
+      "inThisStack": "absent",
+      "pt": {
+        "use": "Ver e usar a tela de um Windows que está longe, com teclado e mouse como se você estivesse sentado na frente dele.",
+        "stackNote": "Ausente — esta stack é Linux e sem interface gráfica. A porta entra aqui porque é, ano após ano, a via de entrada mais comum de ransomware.",
+        "attacks": [
+          {
+            "name": "força bruta e credencial reaproveitada",
+            "how": "O mesmo ataque da porta 22, com um alvo mais valioso: acertar significa sessão gráfica de administrador numa máquina Windows, geralmente dentro da rede corporativa. E raramente é força bruta de verdade — é credencial que já vazou em outro lugar e foi reusada. A Sophos reportou credencial comprometida como causa-raiz número um dos incidentes de 2024 (41%), e o RDP aparecendo em 84% dos casos como ferramenta usada pelo invasor.",
+            "tell": "Evento 4625 em rajada, seguido de um único 4624 bem-sucedido — o momento em que pararam de errar."
+          },
+          {
+            "name": "falha pré-autenticação (BlueKeep)",
+            "how": "A CVE-2019-0708 permitia executar código sem credencial nenhuma, e era 'vermável' — isto é, dava para escrever um verme com ela, como o EternalBlue foi. A Microsoft emitiu correção até para Windows XP, fora de suporte havia cinco anos. Emitir patch para sistema morto é a medida exata do susto.",
+            "tell": "Versão do sistema. É uma checagem de inventário, não de log."
+          },
+          {
+            "name": "engenharia social",
+            "how": "O caminho que o cartaz cita e que não tem nada de técnico: ligar para a pessoa fingindo ser o suporte e pedir que ela mesma conceda o acesso, ou aprove o segundo fator. Contra isso, nenhuma configuração de servidor ajuda.",
+            "tell": "Pedido de MFA aprovado em horário estranho, ou uma sessão iniciada logo depois de um chamado que ninguém abriu."
+          }
+        ],
+        "defenses": [
+          {
+            "name": "não publicar o RDP na internet",
+            "how": "Atrás de VPN ou de um gateway de área de trabalho remota. É a mesma primeira defesa da 22 e pelo mesmo motivo: o ataque some quando o serviço não é alcançável.",
+            "cost": "Um componente a mais para manter — e ele passa a ser o alvo, o que só vale a pena porque ele é feito para isso."
+          },
+          {
+            "name": "NLA, autenticação antes da sessão",
+            "how": "Com Network Level Authentication, o servidor exige credencial ANTES de alocar uma sessão gráfica. Encarece a força bruta e fecha classes inteiras de falha pré-autenticação, o BlueKeep incluído.",
+            "cost": "Clientes antigos podem não suportar."
+          },
+          {
+            "name": "segundo fator e bloqueio de conta",
+            "how": "MFA no gateway transforma senha adivinhada em acesso negado; o bloqueio após N tentativas encarece a adivinhação.",
+            "cost": "O bloqueio é uma faca de dois gumes: dá para usá-lo para travar contas de propósito e causar indisponibilidade."
+          }
+        ],
+        "myths": [
+          {
+            "claim": "RDP é seguro porque a sessão é cifrada",
+            "why": "A cifra resolve quem está no meio do caminho e não resolve quem tem a senha. Na estatística de incidentes, quase nunca alguém lê o tráfego do RDP — alguém entra pela porta da frente com uma credencial que funciona. Cifra e controle de acesso respondem a perguntas diferentes, e confundi-las é o erro mais comum desta tabela inteira."
+          }
+        ]
+      },
+      "en": {
+        "use": "Seeing and using the screen of a Windows machine far away, with keyboard and mouse as if you were sitting in front of it.",
+        "stackNote": "Absent — this stack is Linux and headless. The port is here because it is, year after year, the most common entry route for ransomware.",
+        "attacks": [
+          {
+            "name": "brute force and reused credentials",
+            "how": "The same attack as port 22, with a more valuable target: a hit means an administrator's graphical session on a Windows machine, usually inside the corporate network. And it is rarely brute force — it is a credential that leaked somewhere else and was reused. Sophos reported compromised credentials as the number one root cause of 2024 incidents (41%), with RDP showing up in 84% of cases as a tool the intruder used.",
+            "tell": "Event 4625 in a burst, followed by a single successful 4624 — the moment they stopped getting it wrong."
+          },
+          {
+            "name": "a pre-authentication flaw (BlueKeep)",
+            "how": "CVE-2019-0708 allowed running code with no credential at all, and it was 'wormable' — meaning a worm could be built on it, as EternalBlue was. Microsoft shipped a patch even for Windows XP, five years out of support. Patching a dead system is the precise measure of the alarm.",
+            "tell": "The OS version. This is an inventory check, not a log check."
+          },
+          {
+            "name": "social engineering",
+            "how": "The route the poster names, and the one with nothing technical about it: phoning the person pretending to be support and asking them to grant the access themselves, or to approve the second factor. No server setting helps against this.",
+            "tell": "An MFA prompt approved at an odd hour, or a session starting right after a support ticket nobody opened."
+          }
+        ],
+        "defenses": [
+          {
+            "name": "do not publish RDP to the internet",
+            "how": "Behind a VPN or a Remote Desktop Gateway. Same first defense as port 22, for the same reason: the attack disappears when the service is unreachable.",
+            "cost": "One more component to maintain — and it becomes the target, which is only worth it because it is built for the job."
+          },
+          {
+            "name": "NLA, authentication before the session",
+            "how": "With Network Level Authentication the server demands a credential BEFORE allocating a graphical session. It makes brute force expensive and closes whole classes of pre-auth flaw, BlueKeep included.",
+            "cost": "Old clients may not support it."
+          },
+          {
+            "name": "a second factor and account lockout",
+            "how": "MFA on the gateway turns a guessed password into a denied login; lockout after N tries makes guessing expensive.",
+            "cost": "Lockout cuts both ways: it can be used deliberately to lock accounts out and cause an outage."
+          }
+        ],
+        "myths": [
+          {
+            "claim": "RDP is safe because the session is encrypted",
+            "why": "Encryption deals with whoever is on the path and does nothing about whoever has the password. In incident statistics, almost nobody reads RDP traffic — somebody walks in the front door with a credential that works. Encryption and access control answer different questions, and confusing them is the single most common mistake in this whole table."
+          }
+        ]
+      },
+      "sources": [
+        {
+          "label": "NVD — CVE-2019-0708 (BlueKeep)",
+          "url": "https://nvd.nist.gov/vuln/detail/CVE-2019-0708"
+        },
+        {
+          "label": "Sophos — Active Adversary Report",
+          "url": "https://www.sophos.com/en-us/content/security-operations/active-adversary-report"
+        }
+      ]
+    },
+    {
+      "port": 5432,
+      "service": "PostgreSQL",
+      "transport": "TCP",
+      "group": "database",
+      "inThisStack": "internal",
+      "pt": {
+        "use": "A porta do PostgreSQL. Quem conversa com ela conversa com o banco inteiro: todas as tabelas, limitado apenas pelas permissões do usuário que entrou.",
+        "stackNote": "Existe e é interna: o `db` vive só na rede `data`, que é `internal: true` — sem gateway, sem rota para fora. Em produção nenhuma porta é publicada; no overlay de desenvolvimento a 5432 aparece em `127.0.0.1:5432`, de propósito, para você abrir um cliente.",
+        "attacks": [
+          {
+            "name": "a porta publicada por acidente",
+            "how": "Escrever `ports: [\"5432:5432\"]` no Compose publica o banco em TODAS as interfaces do host — e o Docker escreve essa regra de NAT numa cadeia avaliada ANTES das regras do seu firewall. O `ufw status` continua dizendo 'deny incoming' e o banco está na internet. É a causa mais comum de banco exposto que existe, e não parece um erro: parece uma linha de configuração normal.",
+            "tell": "`docker compose ps` mostrando `0.0.0.0:5432->5432/tcp`. Se aparecer `0.0.0.0`, está publicado para o mundo."
+          },
+          {
+            "name": "autenticação frouxa",
+            "how": "O `initdb` sem argumento monta um `pg_hba.conf` em que conexões locais entram com método `trust` — ou seja, SEM SENHA. Dentro de um container isso significa que qualquer processo que consiga execução ali dentro entra no banco como dono. Esta stack passa `--auth-host=scram-sha-256 --auth-local=scram-sha-256` ao `initdb` exatamente por causa disso.",
+            "tell": "`SELECT * FROM pg_hba_file_rules;` com `trust` em qualquer linha."
+          },
+          {
+            "name": "a credencial vazada",
+            "how": "A senha em `environment:` aparece em `docker inspect`, no log do orquestrador e na lista de variáveis de qualquer processo filho. A senha num `ARG` ou num `ENV` do Dockerfile fica gravada no histórico da imagem e viaja com ela para o registry. A senha commitada no git fica no histórico para sempre, mesmo depois de removida.",
+            "tell": "`docker history --no-trunc <imagem> | grep -i senha` e `docker inspect` — os dois comandos que o portão desta stack roda a cada `make verify`."
+          },
+          {
+            "name": "injeção de SQL pela aplicação",
+            "how": "O caminho que não precisa da porta: a aplicação já está autenticada no banco, e o atacante só empresta essa sessão. É o assunto da lição 5.",
+            "tell": "Consulta lenta e estranha no `pg_stat_statements`, ou um `UNION SELECT` no log de erro."
+          }
+        ],
+        "defenses": [
+          {
+            "name": "não publicar a porta",
+            "how": "O banco fala só com quem divide rede com ele. Nesta stack o `edge` — a única coisa exposta ao host — não tem sequer ROTA até o `db`, e o portão testa essa ausência de conexão em toda execução.",
+            "cost": "Nenhum, e é por isso que o overlay de desenvolvimento publica em `127.0.0.1:` quando você precisa de um cliente: loopback não é a internet."
+          },
+          {
+            "name": "scram-sha-256",
+            "how": "Autenticação por desafio e resposta: a senha nunca atravessa a rede, nem mesmo com hash, e o servidor não guarda nada que sirva para se autenticar diretamente. Substitui o `md5`, que era vulnerável a repetição de credencial roubada do próprio servidor.",
+            "cost": "Clientes muito antigos (libpq anterior à 10) não conectam."
+          },
+          {
+            "name": "senha em arquivo, nunca em variável de ambiente",
+            "how": "A convenção `<VAR>_FILE` apontando para `/run/secrets/`: o Compose monta o arquivo num tmpfs e o processo lê o conteúdo. `docker inspect` mostra só o CAMINHO. É como `config.go` e `config.py` desta stack leem a senha do Postgres.",
+            "cost": "Um pouco de código no arranque da aplicação — umas dez linhas, uma vez."
+          },
+          {
+            "name": "o usuário da aplicação sem superpoder",
+            "how": "O usuário que a aplicação usa não deveria ser `SUPERUSER` nem dono do esquema: só `SELECT`, `INSERT`, `UPDATE` e `DELETE` nas tabelas que ele realmente usa. Assim uma injeção bem-sucedida lê e escreve dados, mas não cria função, não lê arquivo do disco e não muda a configuração.",
+            "cost": "Migrações passam a precisar de um segundo usuário, com mais poder e usado só nelas."
+          }
+        ],
+        "myths": [
+          {
+            "claim": "publiquei em 5433 em vez de 5432, então ninguém acha",
+            "why": "Acha na primeira varredura. E há um detalhe pior: o PostgreSQL se identifica no handshake, então o varredor não precisa nem supor pela porta. Esconder o número muda o custo do atacante de 'zero' para 'quase zero' — e a sensação de segurança que isso dá costuma adiar a defesa que funcionaria."
+          }
+        ]
+      },
+      "en": {
+        "use": "PostgreSQL's port. Whoever talks to it talks to the entire database: every table, bounded only by the permissions of the user who logged in.",
+        "stackNote": "Present and internal: `db` lives only on the `data` network, which is `internal: true` — no gateway, no route out. In production no port is published; in the development overlay 5432 shows up on `127.0.0.1:5432` on purpose, so you can open a client.",
+        "attacks": [
+          {
+            "name": "the accidentally published port",
+            "how": "Writing `ports: [\"5432:5432\"]` in Compose publishes the database on ALL host interfaces — and Docker writes that NAT rule into a chain evaluated BEFORE your firewall's rules. `ufw status` keeps saying 'deny incoming' while the database is on the internet. It is the single most common cause of an exposed database, and it does not look like a mistake: it looks like an ordinary configuration line.",
+            "tell": "`docker compose ps` showing `0.0.0.0:5432->5432/tcp`. If you see `0.0.0.0`, it is published to the world."
+          },
+          {
+            "name": "loose authentication",
+            "how": "`initdb` with no arguments writes a `pg_hba.conf` where local connections use the `trust` method — that is, NO PASSWORD. Inside a container that means any process that gets execution in there logs into the database as the owner. This stack passes `--auth-host=scram-sha-256 --auth-local=scram-sha-256` to `initdb` for exactly this reason.",
+            "tell": "`SELECT * FROM pg_hba_file_rules;` with `trust` on any line."
+          },
+          {
+            "name": "the leaked credential",
+            "how": "A password in `environment:` shows up in `docker inspect`, in the orchestrator's log and in the environment of every child process. A password in a Dockerfile `ARG` or `ENV` is baked into the image history and travels with it to the registry. A password committed to git stays in the history forever, even after it is removed.",
+            "tell": "`docker history --no-trunc <image> | grep -i password` and `docker inspect` — the two commands this stack's gate runs on every `make verify`."
+          },
+          {
+            "name": "SQL injection through the application",
+            "how": "The route that needs no port at all: the application is already authenticated to the database, and the attacker merely borrows that session. It is the subject of lesson 5.",
+            "tell": "A slow, strange query in `pg_stat_statements`, or a `UNION SELECT` in the error log."
+          }
+        ],
+        "defenses": [
+          {
+            "name": "do not publish the port",
+            "how": "The database speaks only to whoever shares a network with it. In this stack `edge` — the only thing exposed to the host — has no ROUTE to `db` at all, and the gate tests that absence of a connection on every run.",
+            "cost": "None, which is why the development overlay publishes on `127.0.0.1:` when you need a client: loopback is not the internet."
+          },
+          {
+            "name": "scram-sha-256",
+            "how": "Challenge-response authentication: the password never crosses the network, not even hashed, and the server stores nothing that can be replayed to authenticate. It replaces `md5`, which was vulnerable to replaying a credential stolen from the server itself.",
+            "cost": "Very old clients (libpq before 10) cannot connect."
+          },
+          {
+            "name": "the password in a file, never in an environment variable",
+            "how": "The `<VAR>_FILE` convention pointing at `/run/secrets/`: Compose mounts the file on a tmpfs and the process reads the contents. `docker inspect` shows only the PATH. It is how this stack's `config.go` and `config.py` read the Postgres password.",
+            "cost": "A little code at application startup — about ten lines, once."
+          },
+          {
+            "name": "an application user with no superpowers",
+            "how": "The user the application connects with should be neither `SUPERUSER` nor schema owner: only `SELECT`, `INSERT`, `UPDATE` and `DELETE` on the tables it actually uses. A successful injection then reads and writes data, but cannot create a function, read a file from disk or change the configuration.",
+            "cost": "Migrations now need a second, more powerful user, used only for them."
+          }
+        ],
+        "myths": [
+          {
+            "claim": "I published it on 5433 instead of 5432, so nobody will find it",
+            "why": "It gets found on the first scan. And there is a worse detail: PostgreSQL identifies itself during the handshake, so the scanner does not even have to guess from the port. Hiding the number moves the attacker's cost from 'zero' to 'nearly zero' — and the sense of safety it creates usually delays the defense that would have worked."
+          }
+        ]
+      },
+      "sources": [
+        {
+          "label": "PostgreSQL — The pg_hba.conf File",
+          "url": "https://www.postgresql.org/docs/current/auth-pg-hba-conf.html"
+        },
+        {
+          "label": "PostgreSQL — Password Authentication",
+          "url": "https://www.postgresql.org/docs/current/auth-password.html"
+        }
+      ]
+    },
+    {
+      "port": 3306,
+      "service": "MySQL / MariaDB",
+      "transport": "TCP",
+      "group": "database",
+      "inThisStack": "absent",
+      "pt": {
+        "use": "A porta do MySQL e do MariaDB — o banco relacional mais instalado do mundo, e por isso um dos alvos mais varridos.",
+        "stackNote": "Ausente: esta stack usa PostgreSQL. Os ataques valem igual, porque quase nenhum deles é sobre o motor do banco.",
+        "attacks": [
+          {
+            "name": "a porta exposta com senha fraca de root",
+            "how": "A combinação clássica: 3306 na internet e um `root` com senha curta ou vazia. O ataque não precisa de nada sofisticado — é login, e funciona.",
+            "tell": "Conexões de endereços estrangeiros no `performance_schema` ou no log geral."
+          },
+          {
+            "name": "leitura de arquivo do SERVIDOR",
+            "how": "Um usuário com privilégio `FILE` consegue `SELECT ... INTO OUTFILE` e `LOAD_FILE()` — ou seja, ler e escrever arquivos na máquina do banco. Uma injeção de SQL num usuário com esse privilégio deixa de ser roubo de dados e vira acesso ao sistema de arquivos.",
+            "tell": "Privilégio `FILE` concedido a um usuário de aplicação. Não deveria existir."
+          },
+          {
+            "name": "o servidor malicioso lendo o CLIENTE (LOAD DATA LOCAL)",
+            "how": "A direção que quase ninguém conhece: com `LOCAL INFILE` habilitado no cliente, o SERVIDOR pode pedir um arquivo qualquer da máquina do cliente, e o cliente obedece. Conectar num MySQL desconhecido — um 'banco de teste' que alguém mandou — pode entregar arquivos do seu laptop.",
+            "tell": "Configuração `local_infile` ligada num cliente que não precisa importar arquivo nenhum."
+          }
+        ],
+        "defenses": [
+          {
+            "name": "não publicar, e escutar só onde precisa",
+            "how": "`bind-address = 127.0.0.1` quando banco e aplicação dividem a máquina; rede interna quando não dividem.",
+            "cost": "Nenhum."
+          },
+          {
+            "name": "rodar o `mysql_secure_installation`",
+            "how": "Remove o usuário anônimo, remove o banco `test`, proíbe login remoto de root e obriga a definir senha. É o roteiro de endurecimento mínimo, e ele existe justamente porque os padrões históricos eram frouxos.",
+            "cost": "Um minuto, uma vez."
+          },
+          {
+            "name": "privilégio mínimo, e nada de FILE",
+            "how": "O usuário da aplicação recebe DML nas tabelas dele e mais nada. Sem `FILE`, sem `SUPER`, sem `GRANT`.",
+            "cost": "Mais um usuário para as migrações, como no PostgreSQL."
+          },
+          {
+            "name": "desligar `local_infile` no cliente",
+            "how": "Fecha a direção servidor-lê-cliente. É configuração do lado de quem conecta, e por isso costuma ser esquecida.",
+            "cost": "Nenhum, salvo em rotinas de importação que realmente usem o recurso."
+          }
+        ],
+        "myths": [
+          {
+            "claim": "o banco está no mesmo servidor da aplicação, então não preciso de senha forte",
+            "why": "A aplicação é justamente a coisa exposta à internet. Se ela for comprometida, o atacante já está 'no mesmo servidor' — e a senha do banco é a única coisa entre ele e os dados. Proximidade não é confiança; é só topologia."
+          }
+        ]
+      },
+      "en": {
+        "use": "The MySQL and MariaDB port — the most installed relational database in the world, and therefore one of the most scanned targets.",
+        "stackNote": "Absent: this stack uses PostgreSQL. The attacks carry over anyway, because almost none of them are about the database engine.",
+        "attacks": [
+          {
+            "name": "an exposed port with a weak root password",
+            "how": "The classic combination: 3306 on the internet and a `root` with a short or empty password. The attack needs nothing sophisticated — it is a login, and it works.",
+            "tell": "Connections from foreign addresses in `performance_schema` or the general log."
+          },
+          {
+            "name": "reading files from the SERVER",
+            "how": "A user holding the `FILE` privilege can `SELECT ... INTO OUTFILE` and `LOAD_FILE()` — that is, read and write files on the database machine. A SQL injection against such a user stops being data theft and becomes filesystem access.",
+            "tell": "The `FILE` privilege granted to an application user. It should not exist."
+          },
+          {
+            "name": "a malicious server reading the CLIENT (LOAD DATA LOCAL)",
+            "how": "The direction almost nobody knows about: with `LOCAL INFILE` enabled on the client, the SERVER can ask for any file on the client's machine, and the client complies. Connecting to an unknown MySQL — a 'test database' somebody sent you — can hand over files from your laptop.",
+            "tell": "`local_infile` switched on in a client that needs to import nothing."
+          }
+        ],
+        "defenses": [
+          {
+            "name": "do not publish, and listen only where needed",
+            "how": "`bind-address = 127.0.0.1` when database and application share a machine; an internal network when they do not.",
+            "cost": "None."
+          },
+          {
+            "name": "run `mysql_secure_installation`",
+            "how": "It removes the anonymous user, drops the `test` database, forbids remote root login and forces a password. It is the minimum hardening script, and it exists precisely because the historical defaults were loose.",
+            "cost": "One minute, once."
+          },
+          {
+            "name": "least privilege, and no FILE",
+            "how": "The application user gets DML on its own tables and nothing else. No `FILE`, no `SUPER`, no `GRANT`.",
+            "cost": "One more user for migrations, as with PostgreSQL."
+          },
+          {
+            "name": "disable `local_infile` on the client",
+            "how": "It closes the server-reads-client direction. It is a setting on the connecting side, which is why it gets forgotten.",
+            "cost": "None, except in import routines that genuinely use the feature."
+          }
+        ],
+        "myths": [
+          {
+            "claim": "the database is on the same server as the application, so I do not need a strong password",
+            "why": "The application is precisely the thing exposed to the internet. If it is compromised, the attacker is already 'on the same server' — and the database password is the only thing between him and the data. Proximity is not trust; it is just topology."
+          }
+        ]
+      },
+      "sources": [
+        {
+          "label": "MySQL — Security Considerations for LOAD DATA LOCAL",
+          "url": "https://dev.mysql.com/doc/refman/8.4/en/load-data-local-security.html"
+        },
+        {
+          "label": "MySQL — mysql_secure_installation",
+          "url": "https://dev.mysql.com/doc/refman/8.4/en/mysql-secure-installation.html"
+        }
+      ]
+    },
+    {
+      "port": 1433,
+      "service": "Microsoft SQL Server",
+      "transport": "TCP",
+      "group": "database",
+      "inThisStack": "absent",
+      "pt": {
+        "use": "A porta do SQL Server. Aparece em toda varredura da internet porque acompanha muita aplicação corporativa instalada e esquecida.",
+        "stackNote": "Ausente. Está aqui por causa de uma característica que muda a gravidade de uma injeção de SQL, e que vale conhecer mesmo usando outro banco.",
+        "attacks": [
+          {
+            "name": "força bruta na conta `sa`",
+            "how": "A conta administrativa tem nome fixo e conhecido, então o atacante só precisa adivinhar a senha. Metade do trabalho já vem pronta.",
+            "tell": "Evento 18456 (`Login failed for user 'sa'`) em rajada no log de erro do SQL Server."
+          },
+          {
+            "name": "de injeção de SQL a comando de sistema (`xp_cmdshell`)",
+            "how": "O SQL Server traz um procedimento que executa comandos do sistema operacional. Se ele estiver habilitado e o usuário da aplicação for privilegiado, uma injeção deixa de ser 'o atacante leu a tabela de clientes' e vira 'o atacante executa comandos no servidor'. É a diferença entre um vazamento e uma invasão, e ela depende de uma configuração — não do ataque.",
+            "tell": "`sp_configure 'xp_cmdshell'` retornando 1. Deveria ser 0."
+          },
+          {
+            "name": "o resumo do servidor entregue de graça (porta 1434/UDP)",
+            "how": "O serviço de navegação do SQL Server responde, por UDP, quais instâncias existem e em que portas elas escutam. É reconhecimento pronto para quem varre — e, como é UDP com resposta maior que a pergunta, também serve de amplificador.",
+            "tell": "Tráfego UDP/1434 vindo de fora."
+          }
+        ],
+        "defenses": [
+          {
+            "name": "não publicar, e usar autenticação integrada",
+            "how": "Autenticação do Windows/Entra em vez de usuário e senha do próprio SQL Server elimina a conta `sa` do caminho e traz junto as políticas de senha e de bloqueio do diretório.",
+            "cost": "Exige domínio; não se aplica a ambiente sem diretório."
+          },
+          {
+            "name": "`xp_cmdshell` desabilitado",
+            "how": "É o padrão desde o SQL Server 2005, e a checagem existe porque alguém sempre habilita 'temporariamente' para uma rotina e esquece ligado.",
+            "cost": "A rotina que dependia dele precisa de outra solução — normalmente um agente ou um job, que é o certo de qualquer forma."
+          },
+          {
+            "name": "renomear ou desabilitar o `sa`",
+            "how": "Toda tentativa de força bruta começa sabendo metade do par: o nome `sa` é fixo e público. Renomear a conta (`ALTER LOGIN sa WITH NAME = ...`) ou desabilitá-la de vez obriga o atacante a adivinhar usuário E senha, o que multiplica o espaço de busca por algo que ele não tem como enumerar. Vale como camada, não como defesa isolada — ela encarece o ataque sem torná-lo impossível.",
+            "cost": "Documentar bem, ou a próxima pessoa perde uma tarde."
+          }
+        ],
+        "myths": [
+          {
+            "claim": "injeção de SQL só serve para roubar dados",
+            "why": "Depende inteiramente do que o banco oferece ao usuário que a aplicação usa. Com `xp_cmdshell` no SQL Server, com `FILE` no MySQL ou com `COPY ... FROM PROGRAM` num PostgreSQL superusuário, a injeção vira execução de comando no servidor. É por isso que privilégio mínimo no usuário do banco não é burocracia: é o que decide a gravidade do pior dia."
+          }
+        ]
+      },
+      "en": {
+        "use": "The SQL Server port. It shows up in every internet-wide scan because it ships with a great deal of enterprise software that gets installed and forgotten.",
+        "stackNote": "Absent. It is here because of one characteristic that changes the severity of a SQL injection, and that is worth knowing even if you use another database.",
+        "attacks": [
+          {
+            "name": "brute force against the `sa` account",
+            "how": "The administrative account has a fixed, well-known name, so the attacker only has to guess the password. Half the work comes pre-solved.",
+            "tell": "Event 18456 (`Login failed for user 'sa'`) in bursts in the SQL Server error log."
+          },
+          {
+            "name": "from SQL injection to operating-system command (`xp_cmdshell`)",
+            "how": "SQL Server ships a procedure that runs operating-system commands. If it is enabled and the application's user is privileged, an injection stops being 'the attacker read the customers table' and becomes 'the attacker runs commands on the server'. That is the difference between a leak and a breach, and it depends on a setting — not on the attack.",
+            "tell": "`sp_configure 'xp_cmdshell'` returning 1. It should be 0."
+          },
+          {
+            "name": "a free summary of the server (UDP port 1434)",
+            "how": "The SQL Server Browser service answers, over UDP, which instances exist and on which ports they listen. That is reconnaissance handed to the scanner — and since it is UDP with an answer bigger than the question, it doubles as an amplifier.",
+            "tell": "UDP/1434 traffic arriving from outside."
+          }
+        ],
+        "defenses": [
+          {
+            "name": "do not publish, and use integrated authentication",
+            "how": "Windows/Entra authentication instead of SQL Server's own username and password takes the `sa` account out of the path and brings the directory's password and lockout policies along.",
+            "cost": "Requires a domain; does not apply where there is no directory."
+          },
+          {
+            "name": "`xp_cmdshell` disabled",
+            "how": "It has been the default since SQL Server 2005, and the check exists because somebody always enables it 'temporarily' for a job and leaves it on.",
+            "cost": "Whatever depended on it needs another solution — usually an agent or a scheduled job, which is the right answer anyway."
+          },
+          {
+            "name": "rename or disable `sa`",
+            "how": "Every brute-force attempt starts knowing half the pair: the name `sa` is fixed and public. Renaming the account (`ALTER LOGIN sa WITH NAME = ...`) or disabling it outright forces the attacker to guess username AND password, multiplying the search space by something he cannot enumerate. It counts as a layer, not as a standalone defense — it makes the attack expensive rather than impossible.",
+            "cost": "Document it well, or the next person loses an afternoon."
+          }
+        ],
+        "myths": [
+          {
+            "claim": "SQL injection is only good for stealing data",
+            "why": "It depends entirely on what the database offers the user the application connects as. With `xp_cmdshell` on SQL Server, with `FILE` on MySQL, or with `COPY ... FROM PROGRAM` on a PostgreSQL superuser, injection becomes command execution on the server. Which is why least privilege on the database user is not bureaucracy: it is what decides how bad your worst day gets."
+          }
+        ]
+      },
+      "sources": [
+        {
+          "label": "Microsoft — xp_cmdshell (Server Configuration Option)",
+          "url": "https://learn.microsoft.com/en-us/sql/database-engine/configure-windows/xp-cmdshell-server-configuration-option"
+        },
+        {
+          "label": "Microsoft — SQL Server Browser Service",
+          "url": "https://learn.microsoft.com/en-us/sql/tools/configuration-manager/sql-server-browser-service"
+        }
+      ]
+    },
+    {
+      "port": 6379,
+      "service": "Redis",
+      "transport": "TCP",
+      "group": "database",
+      "inThisStack": "internal",
+      "pt": {
+        "use": "A porta do Redis — um armazém de chave-valor na memória, usado como cache, fila e sessão. Nesta stack ele é as duas primeiras coisas.",
+        "stackNote": "Existe e é interna: o `cache` vive só na rede `data`, sem rota para fora, e nenhuma porta é publicada em produção.",
+        "attacks": [
+          {
+            "name": "acesso não autenticado",
+            "how": "O Redis nasceu com uma premissa explícita: 'só a sua aplicação fala comigo, numa rede confiável'. Por muitos anos isso significou, na prática, nenhuma senha. Quem alcança a porta pode ler TUDO que está lá — inclusive sessões de usuários logados, que valem tanto quanto senhas.",
+            "tell": "`redis-cli -h <host> INFO` respondendo sem pedir credencial."
+          },
+          {
+            "name": "de escrita de arquivo a acesso por SSH",
+            "how": "O passo que transforma um cache exposto em máquina invadida. Com acesso não autenticado, o atacante usa `CONFIG SET dir` e `CONFIG SET dbfilename` para escolher ONDE e COM QUE NOME o Redis vai gravar o próprio dump — por exemplo, `/root/.ssh/authorized_keys`. Depois grava a chave pública dele numa chave qualquer e manda `SAVE`. O Redis, obediente, escreve o arquivo. O atacante entra por SSH. Nada nisso é uma falha de software: é uma função legítima usada por quem não deveria ter alcance a ela.",
+            "tell": "Chaves com nomes absurdos no banco, `dir` apontando para fora do diretório de dados, e uma chave em `authorized_keys` que ninguém reconhece."
+          },
+          {
+            "name": "falha na engine de scripts",
+            "how": "Mesmo com autenticação, o Redis é software: a CVE-2025-49844 ('RediShell') permitia escapar do sandbox de Lua e executar código no host, e vinha de um defeito de 13 anos. Autenticar reduz muito a superfície; não a zera.",
+            "tell": "Versão do Redis. É checagem de inventário — e é por isso que esta stack pina a imagem por digest e passa o Trivy a cada portão."
+          }
+        ],
+        "defenses": [
+          {
+            "name": "nunca alcançável de fora",
+            "how": "Rede interna, e ponto. O Redis foi projetado com essa premissa; usá-lo de outro jeito é usá-lo errado. Nesta stack, o `cache` está na rede `data` com `internal: true`.",
+            "cost": "Nenhum."
+          },
+          {
+            "name": "`protected-mode` ligado e `bind` explícito",
+            "how": "Desde a versão 3.2, o `protected-mode` recusa conexões de fora quando não há senha configurada. É um freio de mão para o caso de alguém expor a porta sem perceber.",
+            "cost": "Nenhum, e é o padrão. O risco é copiar um `redis.conf` de tutorial que o desliga."
+          },
+          {
+            "name": "senha e comandos perigosos renomeados",
+            "how": "`requirepass`, ou melhor, ACLs com usuário por aplicação. E renomear ou desabilitar `CONFIG`, `FLUSHALL` e `DEBUG`, que é o que fecha o caminho do `CONFIG SET dir`.",
+            "cost": "Uma senha a mais para gerenciar — de preferência como arquivo, pela mesma convenção `_FILE` do Postgres."
+          },
+          {
+            "name": "rodar como usuário sem casa gravável",
+            "how": "Se o processo do Redis não puder escrever em `/root/.ssh` nem em `/var/spool/cron`, o truque do `CONFIG SET dir` perde o destino. Esta stack roda com rootfs `read_only`, e no Kubernetes com `runAsUser` e `fsGroup`.",
+            "cost": "Exige declarar explicitamente o que é gravável — que é o trabalho que o overlay de endurecimento desta stack faz."
+          }
+        ],
+        "myths": [
+          {
+            "claim": "é só cache, não tem nada sensível",
+            "why": "Cache de sessão é credencial em repouso: quem lê a sessão vira o usuário, sem precisar da senha dele. E mesmo um cache 'inócuo' entrega a modelagem do sistema, os identificadores e o ritmo do negócio. Além disso, o ataque do `CONFIG SET dir` nem quer os seus dados — quer a sua máquina."
+          }
+        ]
+      },
+      "en": {
+        "use": "The Redis port — an in-memory key-value store used as cache, queue and session store. In this stack it is the first two.",
+        "stackNote": "Present and internal: `cache` lives only on the `data` network, with no route out, and no port is published in production.",
+        "attacks": [
+          {
+            "name": "unauthenticated access",
+            "how": "Redis was born with an explicit premise: 'only your application talks to me, on a trusted network'. For many years that meant, in practice, no password. Whoever reaches the port can read EVERYTHING in it — including the sessions of logged-in users, which are worth as much as passwords.",
+            "tell": "`redis-cli -h <host> INFO` answering without asking for a credential."
+          },
+          {
+            "name": "from arbitrary file write to SSH access",
+            "how": "The step that turns an exposed cache into an owned machine. With unauthenticated access, the attacker uses `CONFIG SET dir` and `CONFIG SET dbfilename` to choose WHERE and UNDER WHAT NAME Redis will write its own dump — say, `/root/.ssh/authorized_keys`. Then he stores his public key under some key and issues `SAVE`. Redis obediently writes the file. The attacker logs in over SSH. None of this is a software flaw: it is a legitimate feature used by someone who should never have been able to reach it.",
+            "tell": "Absurdly named keys in the database, `dir` pointing outside the data directory, and a key in `authorized_keys` nobody recognises."
+          },
+          {
+            "name": "a flaw in the scripting engine",
+            "how": "Even with authentication, Redis is software: CVE-2025-49844 ('RediShell') allowed escaping the Lua sandbox and executing code on the host, and came from a 13-year-old defect. Authenticating shrinks the surface a great deal; it does not zero it.",
+            "tell": "The Redis version. That is an inventory check — and it is why this stack pins the image by digest and runs Trivy at every gate."
+          }
+        ],
+        "defenses": [
+          {
+            "name": "never reachable from outside",
+            "how": "Internal network, full stop. Redis was designed on that premise; using it any other way is using it wrong. In this stack `cache` sits on the `data` network with `internal: true`.",
+            "cost": "None."
+          },
+          {
+            "name": "`protected-mode` on and an explicit `bind`",
+            "how": "Since version 3.2, `protected-mode` refuses outside connections when no password is configured. It is a handbrake for the case where somebody exposes the port without noticing.",
+            "cost": "None, and it is the default. The risk is copying a tutorial `redis.conf` that turns it off."
+          },
+          {
+            "name": "a password, and dangerous commands renamed",
+            "how": "`requirepass`, or better, ACLs with one user per application. And rename or disable `CONFIG`, `FLUSHALL` and `DEBUG`, which is what closes the `CONFIG SET dir` route.",
+            "cost": "One more password to manage — preferably as a file, by the same `_FILE` convention as Postgres."
+          },
+          {
+            "name": "run as a user with no writable home",
+            "how": "If the Redis process cannot write to `/root/.ssh` or `/var/spool/cron`, the `CONFIG SET dir` trick loses its destination. This stack runs with a `read_only` rootfs, and on Kubernetes with `runAsUser` and `fsGroup`.",
+            "cost": "It requires declaring explicitly what is writable — which is the work this stack's hardening overlay does."
+          }
+        ],
+        "myths": [
+          {
+            "claim": "it is just a cache, there is nothing sensitive in it",
+            "why": "A session cache is a credential at rest: whoever reads the session becomes the user, without needing their password. And even an 'innocuous' cache hands over your data model, your identifiers and your business rhythm. Besides, the `CONFIG SET dir` attack does not even want your data — it wants your machine."
+          }
+        ]
+      },
+      "sources": [
+        {
+          "label": "Redis — Security",
+          "url": "https://redis.io/docs/latest/operate/oss_and_stack/management/security/"
+        },
+        {
+          "label": "Wiz Research — Critical Redis RCE (CVE-2025-49844)",
+          "url": "https://www.wiz.io/blog/wiz-research-redis-rce-cve-2025-49844"
+        }
+      ]
+    },
+    {
+      "port": 27017,
+      "service": "MongoDB",
+      "transport": "TCP",
+      "group": "database",
+      "inThisStack": "absent",
+      "pt": {
+        "use": "A porta do MongoDB, banco de documentos. Guarda JSON em vez de tabelas, e por muito tempo guardou sem pedir senha.",
+        "stackNote": "Ausente. Entra aqui porque protagonizou o episódio que melhor explica o que 'padrão inseguro' custa no mundo real.",
+        "attacks": [
+          {
+            "name": "banco aberto, sem autenticação",
+            "how": "Por padrão, versões antigas escutavam em todas as interfaces e não exigiam credencial. Em janeiro de 2017 isso virou uma onda: milhares de instâncias tiveram os dados copiados, apagados e substituídos por um pedido de resgate. Não houve exploração de falha nenhuma — os atacantes simplesmente conectaram e mandaram apagar. O projeto mudou o padrão depois disso, o que é a admissão mais clara possível de que o padrão era o problema.",
+            "tell": "Uma coleção chamada algo como `READ_ME_TO_RECOVER_YOUR_DATA` e o resto do banco vazio."
+          },
+          {
+            "name": "injeção de NoSQL",
+            "how": "A injeção não morre quando o SQL sai de cena. Se a aplicação monta o filtro a partir de JSON vindo do usuário, um objeto como `{\"$ne\": null}` no lugar da senha faz a consulta casar com QUALQUER documento — e o login passa sem senha. Mesma doença da injeção de SQL, sintaxe diferente: dado do usuário virando estrutura de consulta.",
+            "tell": "Operadores `$` chegando dentro de campos que deveriam conter texto."
+          },
+          {
+            "name": "a réplica e o backup esquecidos",
+            "how": "O banco principal está protegido, e a réplica de leitura que alguém subiu para um relatório, não. Ou o dump noturno num bucket público. O dado não precisa ser roubado de onde ele é bem cuidado.",
+            "tell": "Inventário: liste onde MAIS existe uma cópia dos seus dados. Quase sempre a resposta surpreende."
+          }
+        ],
+        "defenses": [
+          {
+            "name": "`bindIp` e autenticação ligada",
+            "how": "`bindIp: 127.0.0.1` (ou a rede interna) e `security.authorization: enabled`. As duas linhas que o episódio de 2017 tornou obrigatórias.",
+            "cost": "Nenhum."
+          },
+          {
+            "name": "tipar a entrada antes de consultar",
+            "how": "Contra injeção de NoSQL: se o campo `senha` deve ser uma string, converta e valide para string ANTES de montar o filtro. Um objeto nunca deveria chegar até a consulta.",
+            "cost": "Uma camada de validação — que você deveria ter de qualquer jeito."
+          },
+          {
+            "name": "tratar cópia como original",
+            "how": "Réplica, backup e ambiente de homologação com dado de produção recebem os mesmos controles do original. Se não puderem receber, então não podem ter o dado real.",
+            "cost": "Anonimizar dados para homologação dá trabalho. Vazar dados de homologação dá mais."
+          }
+        ],
+        "myths": [
+          {
+            "claim": "NoSQL não tem injeção porque não tem SQL",
+            "why": "A injeção nunca foi sobre SQL: é sobre dado do usuário atravessando a fronteira e virando ESTRUTURA de consulta. Acontece com JSON no MongoDB, com LDAP, com XPath, com comando de shell e com template de HTML. Trocar de banco troca a sintaxe do ataque e não a existência dele."
+          }
+        ]
+      },
+      "en": {
+        "use": "The MongoDB port, a document database. It stores JSON instead of tables, and for a long time it stored it without asking for a password.",
+        "stackNote": "Absent. It is here because it starred in the episode that best explains what an 'insecure default' costs in the real world.",
+        "attacks": [
+          {
+            "name": "an open database, no authentication",
+            "how": "By default, older versions listened on all interfaces and required no credential. In January 2017 that became a wave: thousands of instances had their data copied, deleted and replaced with a ransom note. No flaw was exploited — the attackers simply connected and issued a drop. The project changed the default afterwards, which is about the clearest possible admission that the default was the problem.",
+            "tell": "A collection named something like `READ_ME_TO_RECOVER_YOUR_DATA` and the rest of the database empty."
+          },
+          {
+            "name": "NoSQL injection",
+            "how": "Injection does not die when SQL leaves the stage. If the application builds its filter from user-supplied JSON, an object like `{\"$ne\": null}` in place of the password makes the query match ANY document — and the login succeeds with no password. Same disease as SQL injection, different syntax: user data becoming query structure.",
+            "tell": "`$` operators arriving inside fields that were supposed to hold text."
+          },
+          {
+            "name": "the forgotten replica and backup",
+            "how": "The primary is protected, and the read replica somebody spun up for a report is not. Or the nightly dump in a public bucket. Data does not have to be stolen from where it is well looked after.",
+            "tell": "An inventory: list where ELSE a copy of your data exists. The answer almost always surprises."
+          }
+        ],
+        "defenses": [
+          {
+            "name": "`bindIp` and authorization enabled",
+            "how": "`bindIp: 127.0.0.1` (or the internal network) and `security.authorization: enabled`. The two lines the 2017 episode made mandatory.",
+            "cost": "None."
+          },
+          {
+            "name": "type the input before querying",
+            "how": "Against NoSQL injection: if the `password` field must be a string, cast and validate it to a string BEFORE building the filter. An object should never reach the query.",
+            "cost": "A validation layer — which you should have anyway."
+          },
+          {
+            "name": "treat a copy as the original",
+            "how": "Replicas, backups and staging environments holding production data get the same controls as the original. If they cannot have the controls, they cannot have the real data.",
+            "cost": "Anonymising data for staging is work. Leaking staging data is more work."
+          }
+        ],
+        "myths": [
+          {
+            "claim": "NoSQL has no injection because it has no SQL",
+            "why": "Injection was never about SQL: it is about user data crossing a boundary and becoming query STRUCTURE. It happens with JSON in MongoDB, with LDAP, with XPath, with shell commands and with HTML templates. Changing database changes the syntax of the attack, not its existence."
+          }
+        ]
+      },
+      "sources": [
+        {
+          "label": "MongoDB — Security Checklist",
+          "url": "https://www.mongodb.com/docs/manual/administration/security-checklist/"
+        },
+        {
+          "label": "OWASP — Testing for NoSQL Injection",
+          "url": "https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/07-Input_Validation_Testing/05.6-Testing_for_NoSQL_Injection"
+        }
+      ]
+    },
+    {
+      "port": 9200,
+      "service": "Elasticsearch / OpenSearch",
+      "transport": "TCP",
+      "group": "database",
+      "inThisStack": "absent",
+      "pt": {
+        "use": "A porta do Elasticsearch — um motor de busca que também vira banco de dados na prática, porque é onde muita gente guarda log, métrica e catálogo inteiro.",
+        "stackNote": "Ausente: esta stack usa Loki e Prometheus para log e métrica. A porta entra pelo mesmo motivo do MongoDB — o padrão histórico era aberto.",
+        "attacks": [
+          {
+            "name": "o índice inteiro por um GET",
+            "how": "A interface é HTTP. Sem autenticação, `GET /_cat/indices` lista tudo o que existe e `GET /<índice>/_search` devolve os documentos. Não é preciso cliente especial nem conhecimento de protocolo — um navegador basta. É o que torna o Elasticsearch exposto tão fácil de saquear: a 'invasão' cabe numa barra de endereço.",
+            "tell": "Requisições `_search` no log de acesso vindas de endereços que não são os da sua aplicação."
+          },
+          {
+            "name": "apagar e pedir resgate",
+            "how": "A mesma onda que atingiu o MongoDB atingiu o Elasticsearch: índices apagados e substituídos por um documento com instruções de pagamento. E o mesmo detalhe amargo: quem apaga raramente copiou antes — pagar não traz nada de volta.",
+            "tell": "Um índice novo com nome de aviso e a contagem de documentos dos outros em zero."
+          },
+          {
+            "name": "log é dado sensível",
+            "how": "Este é o ponto que quase todo mundo subestima. Um índice de log costuma conter token em URL, cabeçalho de autorização, corpo de requisição, e-mail, CPF e mensagem de erro com consulta SQL inteira. O sistema é 'só de observabilidade' e o índice é uma cópia não catalogada dos seus dados mais sensíveis.",
+            "tell": "Procure por `authorization`, `token` e `password` dentro dos seus próprios índices de log. O resultado costuma render uma tarefa urgente."
+          }
+        ],
+        "defenses": [
+          {
+            "name": "nunca exposto, e autenticação ligada",
+            "how": "A segurança básica (usuário, senha e TLS) vem habilitada por padrão nas versões atuais; o risco é cluster antigo e o `xpack.security.enabled: false` que alguém pôs para 'destravar' o ambiente de desenvolvimento.",
+            "cost": "Nenhum nas versões novas."
+          },
+          {
+            "name": "não deixar segredo entrar no log",
+            "how": "Filtrar cabeçalho de autorização, token e senha no ponto em que o log é gerado — não depois, no índice. Log estruturado ajuda: com campos nomeados dá para redigir por nome de campo.",
+            "cost": "Disciplina em toda aplicação que escreve log. É trabalho contínuo, não uma configuração."
+          },
+          {
+            "name": "ciclo de vida do índice",
+            "how": "Log que não é apagado vira um passivo que só cresce. Uma política de retenção limita quanto dado existe para ser roubado.",
+            "cost": "Decidir por quanto tempo guardar — que é uma conversa com quem responde por conformidade, não uma decisão técnica."
+          }
+        ],
+        "myths": [
+          {
+            "claim": "é só log, não é banco de dados",
+            "why": "É um banco de dados que ninguém modelou, ninguém revisou e quase ninguém protege — e que contém amostras de tudo que passou pelo sistema. Na prática, um índice de log costuma ser o lugar mais fácil de roubar dado sensível da sua empresa, justamente porque foi classificado como 'só log'."
+          }
+        ]
+      },
+      "en": {
+        "use": "The Elasticsearch port — a search engine that in practice also becomes a database, because it is where a great many people keep logs, metrics and whole catalogues.",
+        "stackNote": "Absent: this stack uses Loki and Prometheus for logs and metrics. The port is here for the same reason as MongoDB — the historical default was open.",
+        "attacks": [
+          {
+            "name": "the whole index with one GET",
+            "how": "The interface is HTTP. With no authentication, `GET /_cat/indices` lists everything there is and `GET /<index>/_search` returns the documents. No special client and no protocol knowledge required — a browser is enough. That is what makes an exposed Elasticsearch so easy to loot: the 'breach' fits in an address bar.",
+            "tell": "`_search` requests in the access log coming from addresses that are not your application's."
+          },
+          {
+            "name": "wipe and ransom",
+            "how": "The same wave that hit MongoDB hit Elasticsearch: indices deleted and replaced with a document containing payment instructions. And the same bitter detail: whoever deletes rarely copied first — paying brings nothing back.",
+            "tell": "A new index with a warning name and every other index at zero documents."
+          },
+          {
+            "name": "logs are sensitive data",
+            "how": "This is the point nearly everyone underestimates. A log index routinely contains tokens in URLs, authorization headers, request bodies, email addresses, national IDs and error messages carrying entire SQL queries. The system is 'just observability' and the index is an uncatalogued copy of your most sensitive data.",
+            "tell": "Search your own log indices for `authorization`, `token` and `password`. The result usually generates an urgent ticket."
+          }
+        ],
+        "defenses": [
+          {
+            "name": "never exposed, and authentication on",
+            "how": "Basic security (user, password and TLS) is enabled by default in current versions; the risk is an old cluster and the `xpack.security.enabled: false` somebody added to 'unblock' the development environment.",
+            "cost": "None on recent versions."
+          },
+          {
+            "name": "keep secrets out of the log",
+            "how": "Filter authorization headers, tokens and passwords at the point the log is written — not afterwards, in the index. Structured logging helps: with named fields you can redact by field name.",
+            "cost": "Discipline in every application that writes a log. It is ongoing work, not a setting."
+          },
+          {
+            "name": "index lifecycle management",
+            "how": "A log that is never deleted becomes a liability that only grows. A retention policy caps how much data exists to be stolen.",
+            "cost": "Deciding how long to keep things — which is a conversation with whoever owns compliance, not a technical decision."
+          }
+        ],
+        "myths": [
+          {
+            "claim": "it is just logs, not a database",
+            "why": "It is a database nobody modelled, nobody reviewed and almost nobody protects — containing samples of everything that ever passed through the system. In practice a log index is often the easiest place to steal sensitive data from your company, precisely because it was filed under 'just logs'."
+          }
+        ]
+      },
+      "sources": [
+        {
+          "label": "Elastic — Configure security for the Elastic Stack",
+          "url": "https://www.elastic.co/guide/en/elasticsearch/reference/current/secure-cluster.html"
+        },
+        {
+          "label": "OWASP — Logging Cheat Sheet",
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,51 @@
+---
+/**
+ * O cartaz das portas, resolvido em tempo de build.
+ *
+ * Mesmo padrão do Quiz.astro, e pelo mesmo motivo: `ports.json` tem os dois
+ * idiomas no mesmo arquivo — o que é bom para a revisão, porque a divergência
+ * entre pt e en fica óbvia lado a lado — e passa de 100 KB. Mandar o arquivo
+ * inteiro para o navegador para descartar metade seria desperdício, e a ilha
+ * não tem como consultar a URL para saber o idioma. Então a seleção acontece
+ * aqui, no servidor, e só o idioma desta página atravessa.
+ *
+ * O `stackLabel` também é resolvido aqui: o JSON guarda uma CHAVE
+ * (`absent`, `internal`, `loopback`) e a legenda traduz. Guardar a chave e não
+ * o texto é o que permite o teste conferir que toda porta declarou o que
+ * acontece com ela nesta stack, em vez de aceitar qualquer frase.
+ */
+import PortExplorerIsland from "./islands/PortExplorer.tsx";
+import type { Lang } from "../i18n/ui";
+import data from "../data/ports.json";
+
+interface Props {
+  /** Só um dos grupos, quando a lição quer o recorte. Padrão: os dois. */
+  group?: "poster" | "database";
+}
+const { group } = Astro.props;
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+
+const legend = data.legend.inThisStack as Record<string, Record<string, string>>;
+
+const ports = data.ports
+  .filter((p) => !group || p.group === group)
+  .map((p) => {
+    const side = p[lang];
+    return {
+      port: p.port,
+      service: p.service,
+      transport: p.transport,
+      group: p.group as "poster" | "database",
+      inThisStack: p.inThisStack,
+      stackLabel: legend[p.inThisStack]?.[lang] ?? p.inThisStack,
+      use: side.use,
+      stackNote: side.stackNote,
+      attacks: side.attacks,
+      defenses: side.defenses,
+      myths: side.myths ?? [],
+      sources: p.sources,
+    };
+  });
+---
+<PortExplorerIsland client:visible lang={lang} ports={ports} />

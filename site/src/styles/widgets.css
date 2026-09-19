@@ -425,3 +425,104 @@
 
 .qz__result { margin: 0 0 0.85rem; color: var(--text-muted); }
 .qz__result strong { color: var(--text); }
+
+/* ── Explorador de portas (.px) ────────────────────────────────────────── */
+
+/* O widget da trilha de Segurança. Três seções com cores diferentes de
+   propósito: ataque puxa para o perigo, defesa para o acento, e o mito fica
+   apagado com o texto riscado — a leitura em diagonal já separa "o que
+   acontece" de "o que resolve" de "o que as pessoas acham que resolve". */
+
+.px {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-raised);
+  padding: 1rem 1.1rem 1.1rem;
+  margin: 2rem 0;
+  font-size: 0.9375rem;
+}
+
+.px__group + .px__group { margin-top: 0.9rem; }
+.px__grouphead { display: flex; flex-direction: column; gap: 0.15rem; margin-bottom: 0.5rem; }
+.px__grouptitle {
+  font-size: 0.75rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--text-muted);
+}
+.px__groupnote { font-size: 0.8125rem; color: var(--text-faint); line-height: 1.45; }
+
+.px__chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.px__chip {
+  font: inherit; cursor: pointer; text-align: left;
+  display: flex; flex-direction: column; gap: 0.05rem;
+  padding: 0.35rem 0.7rem;
+  background: var(--bg-sunken); color: var(--text-muted);
+  border: 1px solid var(--border); border-radius: var(--radius);
+}
+.px__chip:hover { border-color: var(--border-strong); color: var(--text); }
+.px__chip.is-active {
+  background: var(--accent-soft); color: var(--accent-text);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.px__chipnum { font-family: var(--font-mono); font-weight: 700; font-size: 0.875rem; line-height: 1.2; }
+.px__chipsvc { font-size: 0.6875rem; letter-spacing: 0.02em; opacity: 0.85; }
+
+.px__detail {
+  margin-top: 1rem; padding-top: 0.9rem;
+  border-top: 1px solid var(--border);
+}
+.px__head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0.6rem; }
+.px__port {
+  font-family: var(--font-mono); font-size: 1.6rem; font-weight: 700;
+  line-height: 1; color: var(--track-seg);
+}
+.px__svc { display: flex; align-items: baseline; gap: 0.4rem; }
+.px__proto { font-size: 0.75rem; color: var(--text-faint); }
+.px__here {
+  margin-left: auto; white-space: nowrap;
+  font-size: 0.6875rem; letter-spacing: 0.02em;
+  border: 1px solid var(--border); border-radius: 999px;
+  padding: 0.12rem 0.55rem; background: var(--bg-sunken); color: var(--text-faint);
+}
+.px__here--internal { color: var(--accent-text); border-color: color-mix(in srgb, var(--accent) 35%, transparent); }
+.px__here--loopback { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 35%, transparent); }
+
+.px__use { margin: 0.7rem 0 0.35rem; line-height: 1.55; }
+.px__stacknote {
+  margin: 0 0 0.9rem; padding-left: 0.7rem;
+  border-left: 2px solid var(--border-strong);
+  font-size: 0.8125rem; color: var(--text-muted); line-height: 1.5;
+}
+
+.px__section { margin-top: 0.9rem; }
+.px__sectitle {
+  margin: 0 0 0.5rem; font-size: 0.6875rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-faint);
+}
+.px__section--attack .px__sectitle { color: var(--danger); }
+.px__section--defense .px__sectitle { color: var(--accent-text); }
+
+.px__item {
+  padding: 0.5rem 0 0.55rem 0.7rem;
+  border-left: 2px solid var(--border);
+}
+.px__item + .px__item { border-top: 1px dashed var(--border); }
+.px__section--attack .px__item { border-left-color: color-mix(in srgb, var(--danger) 45%, transparent); }
+.px__section--defense .px__item { border-left-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+
+.px__itemname { display: block; font-weight: 650; color: var(--text); }
+.px__itemname--struck { text-decoration: line-through; color: var(--text-faint); font-weight: 600; }
+.px__itemhow { margin: 0.25rem 0 0; line-height: 1.55; color: var(--text-muted); }
+.px__itemmeta { margin: 0.3rem 0 0; font-size: 0.8125rem; color: var(--text-faint); line-height: 1.5; }
+.px__metalabel { font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.6875rem; }
+
+.px__foot {
+  margin-top: 1rem; padding-top: 0.7rem; border-top: 1px solid var(--border);
+  font-size: 0.75rem; color: var(--text-faint);
+}
+.px__foot a { color: var(--text-muted); }
+.px__foot a:hover { color: var(--accent-text); }
+
+@media (max-width: 560px) {
+  .px__here { margin-left: 0; }
+  .px__chip { flex: 1 1 auto; }
+}

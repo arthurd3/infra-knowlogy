@@ -57,6 +57,22 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PATH="/app/.venv/bin:$PATH"
 
+# A atualização de segurança dos pacotes do Debian. O site/Dockerfile já fazia
+# o equivalente com `apk --no-cache upgrade`; esta imagem não fazia, e era por
+# isso que o `libpcre2-8-0` aparecia no scanner com correção DISPONÍVEL — a
+# distroless não tinha o pacote, o python-slim tinha, e ninguém o atualizava.
+#
+# Sim, isto reintroduz uma variável no build: o `upgrade` traz o que estiver no
+# espelho no dia. A base continua pinada por digest (ADR 0004) e o que muda é
+# só o delta de segurança em cima dela — é a mesma troca que o site já fazia, e
+# a alternativa é embarcar uma vulnerabilidade com correção publicada.
+#
+# O DL3005 existe justamente para cobrar essa justificativa. Ela está acima.
+# hadolint ignore=DL3005
+RUN apt-get update \
+    && apt-get upgrade -y --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/*
+
 # UID/GID explícitos e fixos. Sem o número, o UID depende de quantos usuários a
 # imagem base já tinha — e muda quando a base muda, quebrando a permissão de
 # qualquer volume que já existia.
