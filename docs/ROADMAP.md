@@ -48,9 +48,12 @@ lado a lado só é honesta porque a aplicação é a mesma.
   plano: 8 lições (o que um pipeline prova · Jenkins sem clique com JCasC e
   Job DSL · isolamento controller/agente · construir imagem sem entregar o host
   · pipeline como código · credenciais no CI · assinar o que você entrega ·
-  controle de fluxo e ramificação). O primeiro passo é a sonda do BuildKit
-  rootless sob SELinux: se ela não fechar nesta máquina, metade do desenho do
-  módulo muda.
+  controle de fluxo e ramificação). A sonda do BuildKit rootless sob SELinux —
+  o risco número um do módulo — **passou** e está em `make cicd-prereqs`:
+  constrói sem daemon, sem privilégio e com o SELinux confinado por
+  `container_engine_t`, e o binário sai idêntico ao do `docker build`
+  ([ADR 0011](adr/0011-como-o-agente-de-build-constroi-imagens.md)). Falta o
+  Jenkins: compose, controller com JCasC, agente, Jenkinsfile e o portão.
 - **Módulo 2:** depois das 3 lições iniciais — Ingress de verdade
   (ingress-nginx), StatefulSets a fundo, HPA, e um job de kind no CI (o nome
   fica reservado aqui até o portão estabilizar localmente).

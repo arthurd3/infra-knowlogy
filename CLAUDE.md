@@ -111,6 +111,16 @@ justamente por isso.
     PNG**, texto borrado e o renderizador do Chrome congelando ao pintar.
     `tools/scripts/flatten-drawio-svg.py` converte para `<text>` de verdade
     (80 KB, vetor). Ver ADR 0010.
+22. **`label=disable` não é o único jeito de rodar engine de container
+    aninhada sob SELinux** — e é o pior. O BuildKit rootless precisa dos três
+    `unconfined` da documentação (`seccomp`, `apparmor`, `systempaths`) e,
+    ainda assim, o `RUN` morre com `error mounting "proc" to rootfs ...
+    permission denied`. O workaround colado de todo tutorial é
+    `--security-opt label=disable`, que **desliga o confinamento**. O Fedora
+    tem um tipo feito para isto: `--security-opt label=type:container_engine_t`
+    mantém o SELinux enforcing E o processo confinado (o rótulo sai com
+    categorias MCS, o que prova que não houve fallback). Medido:
+    `make cicd-prereqs`. Ver ADR 0011.
 
 ## Ao mexer na stack
 
@@ -214,8 +224,12 @@ no CI. Os dois widgets pendentes saíram: a topologia do Compose virou o
 diagrama `StackTopology.astro` (lições 7 e 8) e a demo de vazamento de segredo
 via `docker history` virou o `<LabExercise>` da lição 3.
 
-A trilha `cicd` está cadastrada e **vazia** — o módulo 3 é o próximo, e o
-primeiro passo dele é a sonda do BuildKit rootless sob SELinux.
+A trilha `cicd` está cadastrada e **vazia**. A sonda do BuildKit rootless sob
+SELinux — que era o risco número um do módulo 3 — **passou**: `make cicd-prereqs`
+constrói sem daemon, sem privilégio e com o SELinux confinado, e o binário sai
+byte a byte igual ao do `docker build` (ADR 0011). O que falta do módulo é o
+Jenkins em si: `cicd/compose.yaml`, controller com JCasC e plugins pinados,
+agente sem socket, `Jenkinsfile`, o portão `make cicd-verify` e as 8 lições.
 
 ## O site
 

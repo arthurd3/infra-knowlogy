@@ -21,3 +21,4 @@ não material didático.
 | [0008](0008-acoes-ao-vivo-no-site-estatico.md) | Ações ao vivo num site que continua estático | aceita |
 | [0009](0009-afirmacao-medida-e-afirmacao-citada.md) | Afirmação medida e afirmação citada | aceita |
 | [0010](0010-imagens-de-terceiros.md) | Imagens de terceiros no site | aceita |
+| [0011](0011-como-o-agente-de-build-constroi-imagens.md) | Como o agente de build constrói imagens | aceita |

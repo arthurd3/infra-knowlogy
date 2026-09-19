@@ -125,6 +125,14 @@ k8s-lint: ## Valida os manifests (kustomize + kubeconform), sem cluster
 k8s-verify: ## O portão do módulo Kubernetes, end-to-end
 	@bash tools/scripts/k8s-verify.sh
 
+# ─── Módulo CI/CD / CI-CD module ─────────────────────────────────────────────
+# Portão separado, como o do Kubernetes (ADR 0007). Quem estuda só Docker não
+# instala Jenkins.
+
+.PHONY: cicd-prereqs
+cicd-prereqs: ## Checa o host e prova que dá para construir imagem sem daemon
+	@bash tools/scripts/cicd-prereqs.sh
+
 # ─── Site didático / Teaching site ───────────────────────────────────────────
 
 .PHONY: site-install
