@@ -19,6 +19,7 @@ O que é indexado:
   overview     README.md + k8s/README.md            (arquitetura e verificação)
   roadmap      docs/ROADMAP.md                      (os módulos e as regras deles)
   measurement  site/src/data/measured.json          (números medidos, virados em prosa)
+  quiz         site/src/data/quizzes/*.json         (a explicação de cada alternativa)
 
 O formato do ponto imita o do mcp-server-qdrant de propósito — vetor nomeado
 `fast-all-minilm-l6-v2` e payload `{document, metadata}` — para que o MCP
@@ -67,7 +68,20 @@ def clean(body: str) -> str:
     """Tira ruído de MDX que não ajuda a busca semântica."""
     body = re.sub(r"^import .+$", "", body, flags=re.M)
     body = re.sub(r"^<[A-Z]\w*[^>]*/>$", "", body, flags=re.M)
-    body = re.sub(r"^</?(Callout|RunIt)[^>]*>$", "", body, flags=re.M)
+    body = re.sub(r"^</?(Callout|RunIt|LabExercise|Fragment)[^>]*>$", "", body, flags=re.M)
+    # O <Tradeoff> carrega o critério de decisão nas PROPS, não no corpo — sem
+    # isto, "quando usar VM em vez de container" não teria resposta no índice.
+    body = re.sub(
+        r"<Tradeoff([\s\S]*?)/>",
+        lambda m: " ".join(
+            f"{k}: {v}." for k, v in re.findall(r'(\w+)="([^"]*)"', m.group(1))
+            if k in ("a", "b", "whenA", "whenB", "verdict")
+        ),
+        body,
+    )
+    # O que sobrar de tag some: para busca semântica, markup é ruído. Isto
+    # roda DEPOIS do Tradeoff, que precisa das props antes de perder as tags.
+    body = re.sub(r"</?\w+[^>]*>", "", body)
     return body
 
 
@@ -156,6 +170,35 @@ def measurement_points():
                     {"title": f"Medições — {service}", "lang": "pt", "service": service})
 
 
+def quiz_points():
+    """Transforma cada conjunto de perguntas em prosa pesquisável.
+
+    A explicação de por que uma alternativa ERRADA está errada costuma ser a
+    prosa mais direta que existe sobre um mal-entendido — e ela só existe num
+    JSON que nenhuma busca alcança. "Por que 137 nem sempre é OOM" tem resposta
+    escrita aqui e em lugar nenhum das lições.
+    """
+    d = ROOT / "site/src/data/quizzes"
+    if not d.is_dir():
+        return
+    for f in sorted(d.glob("*.json")):
+        quiz = json.loads(f.read_text())
+        key = f.stem
+        for lang in ("pt", "en"):
+            for i, q in enumerate(quiz.get(lang, [])):
+                lines = [q["q"], ""]
+                for o in q["options"]:
+                    mark = "correta" if o.get("correct") else "errada"
+                    if lang == "en":
+                        mark = "correct" if o.get("correct") else "wrong"
+                    lines.append(f"- ({mark}) {o['text']} — {o['why']}")
+                yield point(
+                    "quiz", f, f"{key} [{lang}] #{i + 1}", "\n".join(lines),
+                    {"title": f"Checagem — {key}", "lang": lang, "key": key,
+                     "url": f"/{lang}/lessons/{key}/"},
+                )
+
+
 def collect() -> list[models.PointStruct]:
     points: list[models.PointStruct] = []
 
@@ -183,6 +226,7 @@ def collect() -> list[models.PointStruct]:
             points += list(chunk_markdown(f, kind, {"lang": lang}))
 
     points += list(measurement_points())
+    points += list(quiz_points())
     return points
 
 
