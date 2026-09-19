@@ -47,12 +47,15 @@ export const ui = {
     "nav.stack": "A stack",
     "track.fundamentos": "Fundamentos",
     "track.producao": "Produção",
+    "track.seguranca": "Segurança",
     "track.kubernetes": "Kubernetes",
     "track.cicd": "CI/CD",
     "track.fundamentos.desc":
       "O que um container realmente é, como uma imagem é montada e por que o cache de build se comporta assim.",
     "track.producao.desc":
       "O que muda quando a stack precisa sobreviver a usuários reais: multi-stage, segurança, segredos e cadeia de suprimentos.",
+    "track.seguranca.desc":
+      "As portas que o mundo inteiro varre, como se ataca um banco de dados e o que de fato para cada ataque — com os ataques rodando contra esta stack, de mentira nenhuma.",
     "track.kubernetes.desc":
       "A mesma stack, portada para um cluster kind: o que um orquestrador acrescenta — auto-cura, probes, rolling — medido lado a lado com o Compose.",
     "track.cicd.desc":
@@ -90,6 +93,9 @@ export const ui = {
     "lab.hint": "Uma dica",
     "lab.answer": "Ver a resposta",
     "lab.provenBy": "O portão prova isto na checagem",
+
+    // ── Term: o conceito aberto ali mesmo, para quem não é da área ─────────
+    "term.label": "Conceito",
 
     // ── Quiz ────────────────────────────────────────────────────────────────
     "quiz.title": "Checagem rápida",
@@ -144,12 +150,15 @@ export const ui = {
     "nav.stack": "The stack",
     "track.fundamentos": "Fundamentals",
     "track.producao": "Production",
+    "track.seguranca": "Security",
     "track.kubernetes": "Kubernetes",
     "track.cicd": "CI/CD",
     "track.fundamentos.desc":
       "What a container actually is, how an image is assembled, and why the build cache behaves the way it does.",
     "track.producao.desc":
       "What changes when the stack has to survive real users: multi-stage, security, secrets and supply chain.",
+    "track.seguranca.desc":
+      "The ports the whole internet scans, how a database is actually attacked, and what really stops each attack — with the attacks fired at this very stack, nothing simulated.",
     "track.kubernetes.desc":
       "The same stack, ported to a kind cluster: what an orchestrator adds — self-healing, probes, rolling updates — measured side by side with Compose.",
     "track.cicd.desc":
@@ -187,6 +196,9 @@ export const ui = {
     "lab.hint": "A hint",
     "lab.answer": "Show the answer",
     "lab.provenBy": "The gate proves this in check",
+
+    // ── Term: the concept unpacked right there, for the non-specialist ─────
+    "term.label": "Concept",
 
     // ── Quiz ───────────────────────────────────────────────────────────────
     "quiz.title": "Quick check",
@@ -234,7 +246,7 @@ export function otherLang(lang: Lang): Lang {
  * mapa de badge da página da lição e os testes todos derivam daqui. Antes,
  * cada um repetia a lista à mão e acrescentar uma trilha era caçar literais.
  */
-export const TRACKS = ["fundamentos", "producao", "kubernetes", "cicd"] as const;
+export const TRACKS = ["fundamentos", "producao", "seguranca", "kubernetes", "cicd"] as const;
 export type Track = (typeof TRACKS)[number];
 
 /** Rótulo localizado de uma trilha. */
@@ -251,6 +263,7 @@ export function trackBadge(track: Track): string {
   return {
     fundamentos: "badge--fund",
     producao: "badge--prod",
+    seguranca: "badge--seg",
     kubernetes: "badge--k8s",
     cicd: "badge--cicd",
   }[track];

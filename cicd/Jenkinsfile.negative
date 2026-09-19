@@ -13,10 +13,14 @@ pipeline {
             steps {
                 sh '''
                     set -eu
+                    # A MESMA imagem de lint do pipeline bom, com EXCLUDES
+                    # vazio: a fixture ruim entra na varredura. Se este job
+                    # passar, o hadolint não está recusando nada.
                     buildctl build \
                       --frontend dockerfile.v0 \
-                      --local context=cicd/fixtures/bad \
-                      --local dockerfile=cicd/fixtures/bad \
+                      --local context=. \
+                      --local dockerfile=cicd/lint \
+                      --opt build-arg:EXCLUDES= \
                       --output type=tar,dest=/dev/null
                 '''
             }

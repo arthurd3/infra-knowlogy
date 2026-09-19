@@ -18,10 +18,14 @@ COPY . /work
 
 # `find -print0`/`xargs -0` porque caminho com espaço existe. O `|| exit 1` é
 # redundante com `set -e`, mas deixa explícito que este RUN é o portão.
-# A fixture NEGATIVA fica de fora: ela viola hadolint de propósito, para o
-# portão poder provar que o lint recusa. Incluí-la aqui faria o pipeline bom
-# falhar sempre. A fixture `hello` continua entrando — ela é código normal.
-ENV EXCLUDES="-not -path ./node_modules/* -not -path ./*/node_modules/* -not -path ./cicd/fixtures/bad/*"
+# A fixture NEGATIVA fica de fora por padrão: ela viola hadolint de propósito,
+# e incluí-la faria o pipeline bom falhar sempre.
+#
+# É ARG e não ENV para o pipeline negativo poder passar EXCLUDES vazio e
+# INCLUIR a fixture ruim. Assim a prova negativa usa a MESMA imagem, a MESMA
+# regra e o MESMO hadolint — muda um argumento. Sem isso, o negativo provaria
+# que outro arquivo falha, e não que este lint recusa.
+ARG EXCLUDES="-not -path ./node_modules/* -not -path ./*/node_modules/* -not -path ./cicd/fixtures/bad/*"
 
 RUN set -eu; \
     echo "── Dockerfiles encontrados:"; \

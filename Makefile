@@ -148,6 +148,10 @@ cicd-down: ## Derruba o módulo CI/CD (mantém os volumes)
 cicd-nuke: ## Derruba E apaga os volumes (jenkins_home, cache do buildkit, registry)
 	docker compose -f cicd/compose.yaml down --remove-orphans --volumes
 
+.PHONY: cicd-verify
+cicd-verify: ## O portão do módulo CI/CD, end-to-end
+	@bash tools/scripts/cicd-verify.sh
+
 .PHONY: cicd-plugins
 cicd-plugins: ## Atualiza as versões pinadas dos plugins do Jenkins
 	@bash tools/scripts/update-jenkins-plugins.sh

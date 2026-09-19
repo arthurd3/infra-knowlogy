@@ -28,6 +28,10 @@
 #   7. O `jenkins-cli` por WebSocket recusa com `X-CLI-Error: Unexpected
 #      request origin` quando a URL usada não bate com a configurada em
 #      `unclassified.location.url`. Use sempre a mesma origem.
+#   8. `jk_wait_ready` diz que a PORTA responde, não que a CONFIGURAÇÃO foi
+#      aplicada. O JCasC e o seed do Job DSL terminam DEPOIS de o /login
+#      voltar 200. Quem depende de job criado precisa esperar o job, não o
+#      HTTP — ou reprova por corrida e parece defeito.
 
 # curl autenticado. Usa token se já houver, senão a senha.
 jk_curl() {
