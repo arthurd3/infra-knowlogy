@@ -10,7 +10,7 @@ COMPOSE_PROD := $(COMPOSE) -f stack/compose.prod.yaml
 COMPOSE_OBS  := $(COMPOSE_PROD) -f stack/compose.obs.yaml --profile obs
 
 # Todo Dockerfile do repositório, descoberto e não hardcoded.
-DOCKERFILES := $(shell find stack site -name Dockerfile -not -path '*/node_modules/*' 2>/dev/null)
+DOCKERFILES := $(shell find stack site cicd -name Dockerfile -not -path '*/node_modules/*' 2>/dev/null)
 
 .PHONY: help
 help: ## Mostra esta ajuda / Show this help

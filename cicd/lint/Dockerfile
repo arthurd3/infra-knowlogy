@@ -8,6 +8,11 @@
 # Construído com o repositório inteiro como contexto.
 FROM hadolint/hadolint:v2.14.0-alpine@sha256:7aba693c1442eb31c0b015c129697cb3b6cb7da589d85c7562f9deb435a6657c
 
+# DL4006: sem isto, `find … | xargs hadolint` tem sucesso mesmo quando o
+# `find` falha — o shell só olha o último comando do pipe. É a mesma regra que
+# a lição 3 ensina, e o lint a cobrou de nós.
+SHELL ["/bin/ash", "-o", "pipefail", "-c"]
+
 WORKDIR /work
 COPY . /work
 

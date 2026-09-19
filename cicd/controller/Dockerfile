@@ -34,6 +34,15 @@ ENV CASC_JENKINS_CONFIG=/opt/casc
 # SECRETS é lido pelo SecretSource de arquivo do JCasC: `${chave}` no YAML vira
 # o conteúdo de /run/secrets/chave. É a mesma convenção do config.go e do
 # config.py desta stack — segredo é arquivo montado, nunca variável.
+# O DL3064 dispara pelo NOME da variável, não pelo valor: aqui SECRETS é um
+# CAMINHO, e o nome é exigido pelo SecretSource de arquivo do JCasC. Renomear
+# quebraria a leitura; suprimir sem explicar seria a mesma coisa que ignorar o
+# lint. Se algum dia o valor virar um segredo de verdade, esta exceção fica
+# errada — e é por isso que ela está encostada na linha.
+#
+# A diretiva abaixo precisa ser a ÚLTIMA linha antes da instrução: com
+# qualquer comentário entre ela e o ENV, o hadolint a ignora em silêncio.
+# hadolint ignore=DL3064
 ENV SECRETS=/run/secrets
 
 ENV JAVA_OPTS="-Djenkins.install.runSetupWizard=false \

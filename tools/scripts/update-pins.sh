@@ -29,7 +29,7 @@ while IFS= read -r file; do
     printf '   ↑ %-58s\n     %s -> %s\n' "$image" "${old:0:19}…" "${new:0:19}…"
     changed=1
   done < <(grep -ohE '[a-z0-9./_-]+(:[a-zA-Z0-9._-]+)?@sha256:[a-f0-9]{64}' "$file" | sort -u)
-done < <({ find "$ROOT/stack" "$ROOT/site" -name Dockerfile -o -name 'compose*.yaml';
+done < <({ find "$ROOT/stack" "$ROOT/site" "$ROOT/cicd" -name Dockerfile -o -name 'compose*.yaml';
            # Módulo Kubernetes: kindest/node no kind-config, as imagens
            # pinadas nos manifests, e o kubeconform (Makefile e k8s-verify).
            find "$ROOT/k8s" -name '*.yaml' 2>/dev/null;

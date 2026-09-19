@@ -10,7 +10,9 @@
 # silêncio.
 FROM jenkins/inbound-agent:latest@sha256:f049411749dda6fe6fb4693458f9da6fadc8dd54f9fd52afa687db28b14fe322
 
-USER root
+# UID numérico, como a lição 3 manda: sem o número, o usuário depende de
+# quem a imagem base já tinha, e muda quando a base muda.
+USER 0
 
 # O cliente do BuildKit sai da própria imagem do buildkit — mesma versão dos
 # dois lados, sem gerenciador de pacotes e sem um download a mais para
@@ -30,7 +32,7 @@ RUN git config --system --add safe.directory '*' \
 COPY entrypoint.sh /usr/local/bin/agent-entrypoint.sh
 RUN chmod 755 /usr/local/bin/agent-entrypoint.sh
 
-USER jenkins
+USER 1000:1000
 
 # O agente fala com o buildkitd por socket Unix num volume compartilhado, e
 # não por TCP: a documentação do buildx é explícita em dizer que BuildKit
