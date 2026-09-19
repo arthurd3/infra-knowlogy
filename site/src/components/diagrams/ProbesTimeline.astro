@@ -1,0 +1,76 @@
+---
+/** k8s-03 — as duas probes respondem a perguntas diferentes. */
+import Figure from "../Figure.astro";
+import type { Lang } from "../../i18n/ui";
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+const C = {
+  pt: {
+    liveness: "livenessProbe → /healthz",
+    livenessQ: "“o processo travou?”  falhou ⇒ REINICIA o container",
+    readiness: "readinessProbe → /readyz",
+    readinessQ: "“posso receber tráfego?”  falhou ⇒ SAI do balanceador",
+    dbDown: "o banco cai", dbUp: "o banco volta",
+    ready: "Ready 1/1", notReady: "Ready 0/1", restarts: "RESTARTS 0",
+    endpoints: "lista de endpoints",
+    full: "2 endpoints", empty: "vazia", back: "2 endpoints",
+    alive: "processo vivo o tempo todo — nada a reiniciar",
+    antipattern: "apontar a liveness para /readyz: réplicas sadias executadas por um banco que não é culpa delas",
+    measured: "medido: 11 s para reagir, 0 restarts",
+    caption:
+      "O erro caro é apontar a <b>liveness</b> para uma rota que checa dependências. Quando o banco cai, todas as réplicas falham ao mesmo tempo, o kubelet reinicia todas — e reiniciar não conserta um banco fora do ar. A readiness dá a resposta certa: tira do balanceador e espera.",
+    alt: "Linha do tempo com o banco caindo: readiness esvazia os endpoints e a liveness não reinicia nada.",
+  },
+  en: {
+    liveness: "livenessProbe → /healthz",
+    livenessQ: "“is the process stuck?”  fails ⇒ RESTARTS the container",
+    readiness: "readinessProbe → /readyz",
+    readinessQ: "“may I take traffic?”  fails ⇒ LEAVES the load balancer",
+    dbDown: "the database goes down", dbUp: "the database comes back",
+    ready: "Ready 1/1", notReady: "Ready 0/1", restarts: "RESTARTS 0",
+    endpoints: "endpoint list",
+    full: "2 endpoints", empty: "empty", back: "2 endpoints",
+    alive: "process alive the whole time — nothing to restart",
+    antipattern: "pointing liveness at /readyz: healthy replicas executed over a database that is not their fault",
+    measured: "measured: 11 s to react, 0 restarts",
+    caption:
+      "The expensive mistake is pointing <b>liveness</b> at a route that checks dependencies. When the database drops, every replica fails at once, the kubelet restarts them all — and restarting does not fix a database that is down. Readiness gives the right answer: leave the balancer and wait.",
+    alt: "Timeline with the database going down: readiness empties the endpoints and liveness restarts nothing.",
+  },
+}[lang];
+---
+<Figure caption={C.caption} alt={C.alt}>
+  <svg viewBox="0 0 700 270" xmlns="http://www.w3.org/2000/svg" font-size="11">
+    <text x="16" y="14" class="dg-muted" font-weight="620" font-size="10.5">{C.liveness}</text>
+    <text x="16" y="28" class="dg-faint" font-size="9.5">{C.livenessQ}</text>
+    <rect x="16" y="36" width="668" height="24" rx={5} class="dg-box dg-box--accent" />
+    <text x="350" y="52" text-anchor="middle" class="dg-mono" font-size="10">{C.alive}</text>
+
+    <!-- Marcadores de evento -->
+    <line x1="250" y1="70" x2="250" y2="228" class="dg-line dg-line--danger dg-line--dashed" />
+    <text x="254" y="82" class="dg-faint" font-size="9.5">{C.dbDown}</text>
+    <line x1="500" y1="70" x2="500" y2="228" class="dg-line dg-line--accent dg-line--dashed" />
+    <text x="504" y="82" class="dg-faint" font-size="9.5">{C.dbUp}</text>
+
+    <text x="16" y="104" class="dg-muted" font-weight="620" font-size="10.5">{C.readiness}</text>
+    <text x="16" y="118" class="dg-faint" font-size="9.5">{C.readinessQ}</text>
+    <rect x="16" y="126" width="234" height="26" rx={5} class="dg-box dg-box--accent" />
+    <text x="133" y="143" text-anchor="middle" class="dg-mono" font-size="10">{C.ready}</text>
+    <rect x="250" y="126" width="250" height="26" rx={5} class="dg-box dg-box--warn" />
+    <text x="375" y="143" text-anchor="middle" class="dg-mono" font-size="10">{C.notReady}</text>
+    <rect x="500" y="126" width="184" height="26" rx={5} class="dg-box dg-box--accent" />
+    <text x="592" y="143" text-anchor="middle" class="dg-mono" font-size="10">{C.ready}</text>
+
+    <text x="16" y="180" class="dg-muted" font-weight="620" font-size="10.5">{C.endpoints}</text>
+    <rect x="16" y="188" width="234" height="26" rx={5} class="dg-box" />
+    <text x="133" y="205" text-anchor="middle" class="dg-mono dg-muted" font-size="10">{C.full}</text>
+    <rect x="250" y="188" width="250" height="26" rx={5} class="dg-box dg-box--danger dg-box--dashed" />
+    <text x="375" y="205" text-anchor="middle" class="dg-mono" font-size="10">{C.empty}</text>
+    <rect x="500" y="188" width="184" height="26" rx={5} class="dg-box" />
+    <text x="592" y="205" text-anchor="middle" class="dg-mono dg-muted" font-size="10">{C.back}</text>
+
+    <text x="16" y="240" class="dg-mono dg-faint" font-size="9.5">{C.restarts}</text>
+    <text x="684" y="240" text-anchor="end" class="dg-faint" font-size="9.5">{C.measured}</text>
+    <text x="350" y="262" text-anchor="middle" class="dg-faint" font-size="9">{C.antipattern}</text>
+  </svg>
+</Figure>

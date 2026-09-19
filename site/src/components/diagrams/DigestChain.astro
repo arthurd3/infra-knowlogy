@@ -1,0 +1,77 @@
+---
+/** Lição 2 — por que `:latest` não identifica nada e o digest identifica. */
+import Figure from "../Figure.astro";
+import type { Lang } from "../../i18n/ui";
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+const C = {
+  pt: {
+    tag: "tag", tagNote: "um apelido mutável: pode apontar para outra coisa amanhã",
+    index: "índice de manifestos", indexNote: "uma entrada por plataforma",
+    manifest: "manifesto", manifestNote: "o conteúdo desta imagem, para esta plataforma",
+    config: "config", configNote: "ENV, CMD, USER, WORKDIR",
+    layers: "camadas", layersNote: "os tarballs, endereçados pelo próprio conteúdo",
+    immutable: "imutável a partir daqui",
+    caption:
+      "Tudo abaixo da tag é <b>endereçado por conteúdo</b>: mudou um byte, mudou o sha256, é outra imagem. A tag é a única parte que alguém pode reapontar — por isso este repositório pina toda base por digest, e por isso <code>make pins</code> existe.",
+    alt: "Cadeia da tag até os digests de config e camadas.",
+  },
+  en: {
+    tag: "tag", tagNote: "a mutable nickname: it may point elsewhere tomorrow",
+    index: "manifest index", indexNote: "one entry per platform",
+    manifest: "manifest", manifestNote: "this image's content, for this platform",
+    config: "config", configNote: "ENV, CMD, USER, WORKDIR",
+    layers: "layers", layersNote: "the tarballs, addressed by their own content",
+    immutable: "immutable from here down",
+    caption:
+      "Everything below the tag is <b>content-addressed</b>: change one byte, the sha256 changes, it is a different image. The tag is the only part anyone can repoint — which is why this repository pins every base by digest, and why <code>make pins</code> exists.",
+    alt: "Chain from tag down to the config and layer digests.",
+  },
+}[lang];
+
+const rows = [
+  { y: 24, label: C.tag, value: "python:3.13-slim-bookworm", note: C.tagNote, kind: "warn" },
+  { y: 84, label: C.index, value: "sha256:9c85d1d4…", note: C.indexNote, kind: "plain" },
+  { y: 144, label: C.manifest, value: "sha256:41b0f6ac…", note: C.manifestNote, kind: "plain" },
+];
+---
+<Figure caption={C.caption} alt={C.alt}>
+  <svg viewBox="0 0 700 286" xmlns="http://www.w3.org/2000/svg" font-size="11">
+    <defs>
+      <marker id="dc-arrow" viewBox="0 0 10 10" refX="8" refY="5"
+              markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M0 0 L10 5 L0 10 z" fill="var(--border-strong)" />
+      </marker>
+    </defs>
+
+    {rows.map((r) => (
+      <g>
+        <rect x={130} y={r.y} width={440} height={44} rx={6}
+              class={`dg-box ${r.kind === "warn" ? "dg-box--warn dg-box--dashed" : "dg-box--raised"}`} />
+        <text x={146} y={r.y + 20} class="dg-mono" font-size="11.5" font-weight="600">{r.value}</text>
+        <text x={146} y={r.y + 35} class="dg-faint" font-size="9.5">{r.note}</text>
+        <text x={122} y={r.y + 26} text-anchor="end" class="dg-muted" font-weight="620">{r.label}</text>
+        {r.y < 144 && <path d={`M350 ${r.y + 44} L350 ${r.y + 58}`} class="dg-line" marker-end="url(#dc-arrow)" />}
+      </g>
+    ))}
+
+    <path d="M350 188 L350 200 L240 200 L240 214" class="dg-line" marker-end="url(#dc-arrow)" />
+    <path d="M350 188 L350 200 L470 200 L470 214" class="dg-line" marker-end="url(#dc-arrow)" />
+
+    <rect x={130} y={214} width={220} height={44} rx={6} class="dg-box dg-box--accent" />
+    <text x={146} y={234} class="dg-mono" font-size="11">sha256:d4e7a10b…</text>
+    <text x={146} y={249} class="dg-faint" font-size="9.5">{C.configNote}</text>
+    <text x={122} y={240} text-anchor="end" class="dg-muted" font-weight="620">{C.config}</text>
+
+    <rect x={370} y={214} width={200} height={44} rx={6} class="dg-box dg-box--accent" />
+    <text x={386} y={230} class="dg-mono" font-size="10.5">sha256:7f2c…  45 MB</text>
+    <text x={386} y={243} class="dg-mono" font-size="10.5">sha256:b91e…  4.9 MB</text>
+    <text x={386} y={254} class="dg-faint" font-size="9">{C.layersNote}</text>
+    <text x={586} y={240} class="dg-muted" font-weight="620">{C.layers}</text>
+
+    <line x1="16" y1="78" x2="16" y2="272" class="dg-line dg-line--accent" />
+    <text x="24" y="180" class="dg-faint" font-size="9.5" transform="rotate(-90 24 180)" text-anchor="middle">
+      {C.immutable}
+    </text>
+  </svg>
+</Figure>

@@ -16,6 +16,9 @@ sources:
     url: "https://cheatsheetseries.owasp.org/cheatsheets/Docker_Security_Cheat_Sheet.html"
 ---
 
+import StackTopology from "../../../components/diagrams/StackTopology.astro";
+import LinkLab from "../../../components/islands/LinkLab.tsx";
+
 ## The default bridge versus the one you create
 
 Every container started without `--network` lands on the default bridge
@@ -92,6 +95,8 @@ user-submitted URLs. So it sits on `egress` — and that is why its code carries
 SSRF check in `enrich.py`. Network segmentation and application validation solve
 different parts of the same problem.
 
+<StackTopology />
+
 ## The published port that bypasses your firewall
 
 This is the most underestimated security trap in all of Docker.
@@ -120,6 +125,8 @@ Confirm it on your host with:
 ```bash
 sudo iptables -t nat -L DOCKER -n | head
 ```
+
+<LinkLab client:visible lang="en" />
 
 ## Ports: three different things
 

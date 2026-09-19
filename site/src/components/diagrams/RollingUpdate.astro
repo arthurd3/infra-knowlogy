@@ -1,0 +1,87 @@
+---
+/**
+ * k8s-03 — a corrida que derruba requisição num rolling update, e a espera
+ * que a resolve. É a armadilha 16 do CLAUDE.md, desenhada.
+ */
+import Figure from "../Figure.astro";
+import type { Lang } from "../../i18n/ui";
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+const C = {
+  pt: {
+    title: "o que acontece quando o pod velho recebe SIGTERM",
+    apiserver: "kubelet manda SIGTERM", endpointCtl: "controller remove dos endpoints",
+    kubeproxy: "kube-proxy reescreve as regras em cada nó",
+    race: "janela de corrida — conexões novas ainda chegam a um pod que já está fechando",
+    without: "sem cooperação da aplicação",
+    withDelay: "com SHUTDOWN_DELAY antes de fechar o listener",
+    lost: "502 para quem entrou na janela",
+    kept: "a api segue aceitando durante a espera, depois fecha",
+    parallel: "os dois acontecem EM PARALELO, não em ordem",
+    noPreStop: "preStop com sleep não existe em imagem distroless: não há shell para rodá-lo",
+    measured: "medido: 27 requisições durante o rolling, 0 falharam",
+    caption:
+      "O SIGTERM e a saída da lista de endpoints são eventos <b>paralelos</b>, não sequenciais — nada garante que o kube-proxy já parou de mandar tráfego quando o processo recebe o sinal. A aplicação fecha essa janela esperando alguns segundos antes de fechar o listener.",
+    alt: "Duas faixas comparando o desligamento sem espera e com SHUTDOWN_DELAY.",
+  },
+  en: {
+    title: "what happens when the old pod gets SIGTERM",
+    apiserver: "kubelet sends SIGTERM", endpointCtl: "controller removes it from endpoints",
+    kubeproxy: "kube-proxy rewrites the rules on every node",
+    race: "race window — new connections still reach a pod that is already closing",
+    without: "with no cooperation from the application",
+    withDelay: "with SHUTDOWN_DELAY before closing the listener",
+    lost: "502 for whoever entered the window",
+    kept: "the api keeps accepting during the wait, then closes",
+    parallel: "both happen IN PARALLEL, not in order",
+    noPreStop: "a preStop with sleep does not exist in a distroless image: there is no shell to run it",
+    measured: "measured: 27 requests during the rolling update, 0 failed",
+    caption:
+      "SIGTERM and removal from the endpoint list are <b>parallel</b> events, not sequential — nothing guarantees kube-proxy has stopped sending traffic by the time the process gets the signal. The application closes that window by waiting a few seconds before closing the listener.",
+    alt: "Two lanes comparing shutdown without a wait and with SHUTDOWN_DELAY.",
+  },
+}[lang];
+---
+<Figure caption={C.caption} alt={C.alt}>
+  <svg viewBox="0 0 700 280" xmlns="http://www.w3.org/2000/svg" font-size="11">
+    <defs>
+      <marker id="ru-arrow" viewBox="0 0 10 10" refX="8" refY="5"
+              markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+        <path d="M0 0 L10 5 L0 10 z" fill="var(--border-strong)" />
+      </marker>
+    </defs>
+
+    <text x="16" y="14" class="dg-title" font-size="12">{C.title}</text>
+
+    <!-- Os dois caminhos paralelos que saem do mesmo instante -->
+    <line x1="150" y1="24" x2="150" y2="262" class="dg-line dg-line--dashed" />
+    <rect x="16" y="30" width="268" height="24" rx={5} class="dg-box dg-box--warn" />
+    <text x="150" y="46" text-anchor="middle" font-size="10">{C.apiserver}</text>
+    <rect x="316" y="30" width="368" height="24" rx={5} class="dg-box" />
+    <text x="500" y="46" text-anchor="middle" class="dg-muted" font-size="10">{C.endpointCtl}</text>
+    <rect x="316" y="58" width="368" height="24" rx={5} class="dg-box" />
+    <text x="500" y="74" text-anchor="middle" class="dg-muted" font-size="10">{C.kubeproxy}</text>
+    <text x="500" y="98" text-anchor="middle" class="dg-faint" font-size="9">{C.parallel}</text>
+
+    <!-- Sem espera -->
+    <text x="16" y="128" class="dg-muted" font-weight="620" font-size="10.5">{C.without}</text>
+    <rect x="16" y="136" width="120" height="26" rx={5} class="dg-box dg-box--raised" />
+    <text x="76" y="153" text-anchor="middle" class="dg-mono" font-size="9.5">listen()</text>
+    <rect x="140" y="136" width="188" height="26" rx={5} class="dg-box dg-box--danger dg-box--dashed" />
+    <text x="234" y="153" text-anchor="middle" font-size="9.5">{C.lost}</text>
+    <text x="336" y="153" class="dg-faint" font-size="9">{C.race}</text>
+
+    <!-- Com espera -->
+    <text x="16" y="200" class="dg-muted" font-weight="620" font-size="10.5">{C.withDelay}</text>
+    <rect x="16" y="208" width="120" height="26" rx={5} class="dg-box dg-box--raised" />
+    <text x="76" y="225" text-anchor="middle" class="dg-mono" font-size="9.5">listen()</text>
+    <rect x="140" y="208" width="188" height="26" rx={5} class="dg-box dg-box--accent" />
+    <text x="234" y="225" text-anchor="middle" class="dg-mono" font-size="9.5">sleep 2s</text>
+    <rect x="332" y="208" width="120" height="26" rx={5} class="dg-box" />
+    <text x="392" y="225" text-anchor="middle" class="dg-mono dg-muted" font-size="9.5">close()</text>
+    <text x="462" y="221" class="dg-faint" font-size="9">{C.kept}</text>
+    <text x="462" y="234" class="dg-faint" font-size="9">{C.measured}</text>
+
+    <text x="16" y="268" class="dg-faint" font-size="9">{C.noPreStop}</text>
+  </svg>
+</Figure>

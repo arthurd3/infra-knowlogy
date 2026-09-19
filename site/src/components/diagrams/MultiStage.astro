@@ -1,0 +1,79 @@
+---
+/** Lição 3 — o que cada stage carrega e o que atravessa o COPY --from. */
+import Figure from "../Figure.astro";
+import type { Lang } from "../../i18n/ui";
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+const C = {
+  pt: {
+    build: "stage build", dist: "stage dist (a que é publicada)",
+    compiler: "compilador Go", modules: "módulos baixados",
+    src: "código-fonte", cache: "cache de build",
+    binary: "o binário", certs: "certificados CA", user: "usuário nonroot",
+    crosses: "só isto atravessa",
+    discarded: "descartado — nunca entra na imagem final",
+    measured: "6,0 MB medidos",
+    fat: "74,7 MB se tudo fosse junto",
+    target: "target: obrigatório — sem ele o BuildKit constrói a ÚLTIMA stage",
+    caption:
+      "O multi-stage não “comprime” nada: ele <b>escolhe</b> o que copiar. O compilador, os módulos e o código-fonte ficam na stage de build, que é descartada — e é por isso que a imagem final não tem shell para um invasor usar.",
+    alt: "Duas stages de build; apenas o binário, os certificados e o usuário atravessam para a imagem final.",
+  },
+  en: {
+    build: "build stage", dist: "dist stage (the one that ships)",
+    compiler: "Go compiler", modules: "downloaded modules",
+    src: "source code", cache: "build cache",
+    binary: "the binary", certs: "CA certificates", user: "nonroot user",
+    crosses: "only this crosses",
+    discarded: "discarded — never enters the final image",
+    measured: "6.0 MB measured",
+    fat: "74.7 MB if everything shipped",
+    target: "target: mandatory — without it BuildKit builds the LAST stage",
+    caption:
+      "Multi-stage does not “compress” anything: it <b>chooses</b> what to copy. The compiler, the modules and the source stay in the build stage, which is thrown away — and that is why the final image has no shell for an intruder to use.",
+    alt: "Two build stages; only the binary, certificates and user cross into the final image.",
+  },
+}[lang];
+---
+<Figure caption={C.caption} alt={C.alt}>
+  <svg viewBox="0 0 700 230" xmlns="http://www.w3.org/2000/svg" font-size="11">
+    <defs>
+      <marker id="ms-arrow" viewBox="0 0 10 10" refX="8" refY="5"
+              markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M0 0 L10 5 L0 10 z" class="dg-fill-accent" />
+      </marker>
+    </defs>
+
+    <rect x="16" y="24" width="270" height="156" rx={9} class="dg-box dg-box--dashed" />
+    <text x="30" y="43" class="dg-muted" font-weight="620" font-size="10.5">{C.build}</text>
+    <text x="30" y="56" class="dg-mono dg-faint" font-size="9">FROM golang:1.25-alpine AS build</text>
+
+    {[C.compiler, C.modules, C.src, C.cache].map((label, i) => (
+      <g>
+        <rect x={34} y={66 + i * 26} width={172} height={20} rx={4} class="dg-box dg-box--warn" />
+        <text x={44} y={80 + i * 26} class="dg-muted" font-size="10">{label}</text>
+      </g>
+    ))}
+    <rect x={34} y={170} width={172} height={20} rx={4} class="dg-box dg-box--accent" />
+    <text x={44} y={184} font-size="10" font-weight="620">{C.binary}</text>
+    <text x="151" y="212" text-anchor="middle" class="dg-faint" font-size="9">{C.discarded}</text>
+
+    <path d="M210 180 L300 118 L410 118" class="dg-line dg-line--accent" marker-end="url(#ms-arrow)" fill="none" />
+    <text x="312" y="110" class="dg-mono dg-faint" font-size="9">COPY --from=build</text>
+    <text x="312" y="136" class="dg-faint" font-size="9">{C.crosses}</text>
+
+    <rect x="414" y="24" width="270" height="156" rx={9} class="dg-box dg-box--accent" />
+    <text x="428" y="43" class="dg-muted" font-weight="620" font-size="10.5">{C.dist}</text>
+    <text x="428" y="56" class="dg-mono dg-faint" font-size="9">FROM distroless/static AS dist</text>
+
+    {[C.binary, C.certs, C.user].map((label, i) => (
+      <g>
+        <rect x={432} y={70 + i * 28} width={172} height={22} rx={4} class="dg-box dg-box--raised" />
+        <text x={442} y={85 + i * 28} font-size="10" font-weight={i === 0 ? "620" : "400"}>{label}</text>
+      </g>
+    ))}
+    <text x="549" y="172" text-anchor="middle" class="dg-title" font-size="12">{C.measured}</text>
+    <text x="549" y="200" text-anchor="middle" class="dg-faint" font-size="9">{C.fat}</text>
+    <text x="350" y="224" text-anchor="middle" class="dg-faint" font-size="9">{C.target}</text>
+  </svg>
+</Figure>

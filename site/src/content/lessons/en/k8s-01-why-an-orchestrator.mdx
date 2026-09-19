@@ -16,6 +16,9 @@ sources:
     url: "https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/"
 ---
 
+import ReconcileLoop from "../../../components/diagrams/ReconcileLoop.astro";
+import K8sMeasurements from "../../../components/islands/K8sMeasurements.tsx";
+
 The Docker module ended with a recorded decision: **Compose, not Kubernetes**
 (ADR 0001). That decision came with an honest list of what we were giving up —
 Compose does not recreate a container that disappeared, does not deploy without
@@ -59,6 +62,8 @@ because before that NetworkPolicy was accepted by the API and silently ignored.
 From 0.23 on, the built-in CNI enforces the policies — and the module's gate
 proves it in practice. See docs/adr/0007.
 </Callout>
+
+<ReconcileLoop />
 
 ## What Compose already did just as well
 
@@ -178,6 +183,8 @@ distroless image, because there is no shell to run <code>sleep</code>. The
 orchestrator promises the rolling; the application delivers the "zero
 downtime".
 </Callout>
+
+<K8sMeasurements client:visible lang="en" />
 
 ## The verdict stays the same
 

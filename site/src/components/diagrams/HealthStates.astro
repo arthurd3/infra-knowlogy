@@ -1,0 +1,79 @@
+---
+/** Lição 8 — por que `depends_on` sozinho não espera nada. */
+import Figure from "../Figure.astro";
+import type { Lang } from "../../i18n/ui";
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+const C = {
+  pt: {
+    without: "depends_on sem condition",
+    with: "depends_on: condition: service_healthy",
+    started: "db iniciou",
+    starting: "starting", healthy: "healthy", unhealthy: "unhealthy",
+    apiUp: "api sobe",
+    crash: "api morre: o Postgres ainda está inicializando",
+    apiWaits: "api espera",
+    apiUpOk: "api sobe com o banco pronto",
+    startPeriod: "start_period: falhas aqui não contam",
+    retries: "retries: 3 falhas seguidas ⇒ unhealthy",
+    caption:
+      "“O container subiu” e “o serviço atende” são eventos diferentes, e o Postgres deixa isso óbvio: ele aceita conexões, reinicia e recusa por alguns segundos. Sem <code>condition: service_healthy</code> o Compose só garante a <b>ordem de criação</b> — não a prontidão.",
+    alt: "Duas linhas do tempo: sem condição de saúde a api morre; com a condição, ela espera.",
+  },
+  en: {
+    without: "depends_on with no condition",
+    with: "depends_on: condition: service_healthy",
+    started: "db started",
+    starting: "starting", healthy: "healthy", unhealthy: "unhealthy",
+    apiUp: "api starts",
+    crash: "api dies: Postgres is still initialising",
+    apiWaits: "api waits",
+    apiUpOk: "api starts with the database ready",
+    startPeriod: "start_period: failures here do not count",
+    retries: "retries: 3 failures in a row ⇒ unhealthy",
+    caption:
+      "“The container started” and “the service answers” are different events, and Postgres makes that obvious: it accepts connections, restarts, and refuses for a few seconds. Without <code>condition: service_healthy</code>, Compose only guarantees <b>creation order</b> — not readiness.",
+    alt: "Two timelines: without a health condition the api dies; with it, the api waits.",
+  },
+}[lang];
+---
+<Figure caption={C.caption} alt={C.alt}>
+  <svg viewBox="0 0 700 250" xmlns="http://www.w3.org/2000/svg" font-size="11">
+    <defs>
+      <marker id="hs-arrow" viewBox="0 0 10 10" refX="8" refY="5"
+              markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+        <path d="M0 0 L10 5 L0 10 z" fill="var(--border-strong)" />
+      </marker>
+    </defs>
+
+    <!-- Faixa do db: starting -> healthy, comum às duas leituras -->
+    <text x="16" y="20" class="dg-muted" font-weight="620" font-size="10.5">db</text>
+    <rect x="58" y="26" width="200" height="26" rx={5} class="dg-box dg-box--warn" />
+    <text x="158" y="43" text-anchor="middle" class="dg-mono" font-size="10">{C.starting}</text>
+    <rect x="262" y="26" width="418" height="26" rx={5} class="dg-box dg-box--accent" />
+    <text x="471" y="43" text-anchor="middle" class="dg-mono" font-size="10">{C.healthy}</text>
+    <text x="158" y="66" text-anchor="middle" class="dg-faint" font-size="9">{C.startPeriod}</text>
+    <text x="471" y="66" text-anchor="middle" class="dg-faint" font-size="9">{C.retries}</text>
+
+    <!-- Sem condição -->
+    <text x="16" y="110" class="dg-muted" font-weight="620" font-size="10.5">{C.without}</text>
+    <line x1="62" y1="118" x2="62" y2="142" class="dg-line dg-line--dashed" />
+    <text x="70" y="134" class="dg-faint" font-size="9">{C.started}</text>
+    <rect x="58" y="122" width="76" height="26" rx={5} class="dg-box" opacity="0" />
+    <path d="M64 148 L100 148" class="dg-line" marker-end="url(#hs-arrow)" />
+    <rect x="104" y="134" width="90" height="26" rx={5} class="dg-box dg-box--raised" />
+    <text x="149" y="151" text-anchor="middle" class="dg-mono" font-size="10">{C.apiUp}</text>
+    <circle cx="214" cy="147" r="9" class="dg-box dg-box--danger" />
+    <path d="M209.5 142.5 L218.5 151.5 M218.5 142.5 L209.5 151.5" class="dg-line dg-line--danger" stroke-width="2" />
+    <text x="230" y="151" class="dg-muted" font-size="10">{C.crash}</text>
+
+    <!-- Com condição -->
+    <text x="16" y="200" class="dg-muted" font-weight="620" font-size="10.5">{C.with}</text>
+    <rect x="58" y="206" width="200" height="26" rx={5} class="dg-box dg-box--dashed" />
+    <text x="158" y="223" text-anchor="middle" class="dg-faint" font-size="10">{C.apiWaits}</text>
+    <path d="M258 219 L292 219" class="dg-line dg-line--accent" marker-end="url(#hs-arrow)" />
+    <rect x="296" y="206" width="240" height="26" rx={5} class="dg-box dg-box--accent" />
+    <text x="416" y="223" text-anchor="middle" class="dg-mono" font-size="10">{C.apiUpOk}</text>
+    <line x1="262" y1="52" x2="262" y2="206" class="dg-line dg-line--accent dg-line--dashed" />
+  </svg>
+</Figure>

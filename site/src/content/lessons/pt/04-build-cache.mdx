@@ -17,6 +17,7 @@ sources:
 ---
 
 import BuildCacheSimulator from "../../../components/islands/BuildCacheSimulator.tsx";
+import CacheCascade from "../../../components/diagrams/CacheCascade.astro";
 
 O build cache tem duas regras. A primeira é intuitiva; a segunda é a que
 transforma um build de 2 segundos num de 50.
@@ -41,6 +42,8 @@ Depende da instrução:
   Metadado como data de modificação não conta; um arquivo tocado mas não alterado
   não invalida nada.
 - **`ENV`, `LABEL`, `USER`, `WORKDIR`** — só o texto, e são baratas.
+
+<CacheCascade />
 
 ## Sinta a regra, não decore
 

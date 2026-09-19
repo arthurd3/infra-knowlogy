@@ -16,6 +16,9 @@ sources:
     url: "https://docs.docker.com/build/building/secrets/"
 ---
 
+import SignalTimeline from "../../../components/diagrams/SignalTimeline.astro";
+import MultiStage from "../../../components/diagrams/MultiStage.astro";
+
 Um Dockerfile parece um script shell e não é. Ele é uma **receita declarativa**
 onde cada instrução produz uma camada ou um metadado, avaliada por um builder que
 faz cache agressivo. As armadilhas abaixo vêm dessa diferença.
@@ -81,6 +84,8 @@ nada** sempre que o shell não consegue fazer `exec`. Você não quer que o
 comportamento do seu desligamento dependa de o BusyBox ter otimizado ou não a sua
 linha de comando. Por isso todo Dockerfile desta stack termina com um array JSON.
 
+<SignalTimeline />
+
 ## FROM — a base e as stages
 
 ```dockerfile
@@ -91,6 +96,8 @@ Três coisas numa linha: a imagem base, o pin por digest (ver a
 [lição sobre digests](/pt/lessons/images-layers-and-digests/)) e o **nome da
 stage**. Um Dockerfile pode ter vários `FROM`; cada um começa uma stage nova, e
 só a última — ou a escolhida por `--target` — vira a imagem final.
+
+<MultiStage />
 
 ## WORKDIR — sempre absoluto
 

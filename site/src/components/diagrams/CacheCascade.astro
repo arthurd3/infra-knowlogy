@@ -1,0 +1,86 @@
+---
+/** Lição 4 — a cascata: invalidou uma camada, invalidou todas as seguintes. */
+import Figure from "../Figure.astro";
+import type { Lang } from "../../i18n/ui";
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+const C = {
+  pt: {
+    good: "Ordem boa", bad: "Ordem ruim",
+    changed: "você editou um arquivo .ts",
+    cache: "CACHE", rebuild: "REBUILD",
+    totalGood: "12 s", totalBad: "54 s",
+    total: "rebuild",
+    caption:
+      "As duas imagens produzem o mesmo resultado. A diferença é <b>onde o <code>COPY</code> entra</b>: acima do <code>npm ci</code>, cada vez que você salva um arquivo o Docker reinstala as dependências do zero. A cascata é o ponto — invalidou uma, invalidam todas as de baixo.",
+    alt: "Duas ordens de Dockerfile comparadas: na ruim, o COPY antecipado invalida a instalação de dependências.",
+  },
+  en: {
+    good: "Good order", bad: "Bad order",
+    changed: "you edited a .ts file",
+    cache: "CACHED", rebuild: "REBUILD",
+    totalGood: "12 s", totalBad: "54 s",
+    total: "rebuild",
+    caption:
+      "Both images produce the same result. The difference is <b>where <code>COPY</code> sits</b>: above <code>npm ci</code>, every file you save makes Docker reinstall the dependencies from scratch. The cascade is the point — invalidate one, you invalidate everything below it.",
+    alt: "Two Dockerfile orderings compared: in the bad one, an early COPY invalidates the dependency install.",
+  },
+}[lang];
+
+const good = [
+  ["FROM node:22-alpine", false, "0.4s"],
+  ["WORKDIR /app", false, "0.1s"],
+  ["COPY package*.json ./", false, "0.2s"],
+  ["RUN npm ci", false, "42s"],
+  ["COPY . .", true, "0.6s"],
+  ["RUN npm run build", true, "11s"],
+];
+const bad = [
+  ["FROM node:22-alpine", false, "0.4s"],
+  ["WORKDIR /app", false, "0.1s"],
+  ["COPY . .", true, "0.6s"],
+  ["RUN npm ci", true, "42s"],
+  ["RUN npm run build", true, "11s"],
+];
+---
+<Figure caption={C.caption} alt={C.alt}>
+  <svg viewBox="0 0 700 262" xmlns="http://www.w3.org/2000/svg" font-size="11">
+    <text x="16" y="14" class="dg-title" font-size="12">{C.good}</text>
+    <text x="368" y="14" class="dg-title" font-size="12">{C.bad}</text>
+    <text x="16" y="252" class="dg-faint" font-size="9.5">↑ {C.changed}</text>
+
+    {good.map(([text, rebuild, cost], i) => (
+      <g>
+        <rect x={16} y={26 + i * 34} width={316} height={28} rx={5}
+              class={`dg-box ${rebuild ? "dg-box--warn" : ""}`} />
+        <rect x={16} y={26 + i * 34} width={4} height={28}
+              class={rebuild ? "dg-fill-warn" : ""} fill={rebuild ? undefined : "var(--border-strong)"} />
+        <text x={30} y={44 + i * 34} class="dg-mono" font-size="10.5">{text}</text>
+        <text x={252} y={44 + i * 34} text-anchor="end" class="dg-faint" font-size="8.5" font-weight="700"
+              letter-spacing="0.06em">{rebuild ? C.rebuild : C.cache}</text>
+        <text x={322} y={44 + i * 34} text-anchor="end" class="dg-muted" font-size="10">{rebuild ? cost : "—"}</text>
+      </g>
+    ))}
+    <text x={322} y={252} text-anchor="end" class="dg-title" font-size="12">
+      <tspan class="dg-muted" font-size="10" font-weight="400">{C.total} </tspan>{C.totalGood}
+    </text>
+
+    {bad.map(([text, rebuild, cost], i) => (
+      <g>
+        <rect x={368} y={26 + i * 34} width={316} height={28} rx={5}
+              class={`dg-box ${rebuild ? "dg-box--warn" : ""}`} />
+        <rect x={368} y={26 + i * 34} width={4} height={28}
+              class={rebuild ? "dg-fill-warn" : ""} fill={rebuild ? undefined : "var(--border-strong)"} />
+        <text x={382} y={44 + i * 34} class="dg-mono" font-size="10.5">{text}</text>
+        <text x={604} y={44 + i * 34} text-anchor="end" class="dg-faint" font-size="8.5" font-weight="700"
+              letter-spacing="0.06em">{rebuild ? C.rebuild : C.cache}</text>
+        <text x={674} y={44 + i * 34} text-anchor="end" class="dg-muted" font-size="10">{rebuild ? cost : "—"}</text>
+      </g>
+    ))}
+    {/* A chave que marca a cascata: tudo abaixo do COPY reconstrói junto. */}
+    <path d="M692 96 q10 0 10 10 v52 q0 10 -10 10" class="dg-line dg-line--warn" fill="none" />
+    <text x={674} y={252} text-anchor="end" class="dg-title" font-size="12">
+      <tspan class="dg-muted" font-size="10" font-weight="400">{C.total} </tspan>{C.totalBad}
+    </text>
+  </svg>
+</Figure>

@@ -17,6 +17,7 @@ sources:
 ---
 
 import BuildCacheSimulator from "../../../components/islands/BuildCacheSimulator.tsx";
+import CacheCascade from "../../../components/diagrams/CacheCascade.astro";
 
 The build cache has two rules. The first is intuitive; the second is what turns a
 2-second build into a 50-second one.
@@ -41,6 +42,8 @@ It depends on the instruction:
   Metadata like mtime does not count; a file touched but unchanged invalidates
   nothing.
 - **`ENV`, `LABEL`, `USER`, `WORKDIR`** — text only, and cheap.
+
+<CacheCascade />
 
 ## Feel the rule instead of memorising it
 

@@ -1,0 +1,81 @@
+---
+/** Lição 3 e 5 — o que o `docker stop` realmente faz, medido em segundos. */
+import Figure from "../Figure.astro";
+import type { Lang } from "../../i18n/ui";
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+const C = {
+  pt: {
+    good: "PID 1 trata o SIGTERM",
+    bad: "PID 1 ignora o SIGTERM",
+    stop: "docker stop",
+    sigterm: "SIGTERM",
+    sigkill: "SIGKILL",
+    grace: "período de graça (10 s por padrão)",
+    closes: "fecha conexões, dá flush, sai",
+    ignores: "nada acontece — o kernel não instala handler padrão no PID 1",
+    dead: "morto sem aviso",
+    measured: "medido: 2,9 s no pior serviço desta stack",
+    t0: "0 s", t10: "10 s",
+    caption:
+      "O processo 1 de um namespace não herda os handlers padrão de sinal — <b>ignorar SIGTERM é o comportamento normal dele</b>, não um bug do Docker. Quem não trata o sinal espera os 10 segundos e leva SIGKILL; quem trata sai em milissegundos.",
+    alt: "Linha do tempo do docker stop com duas faixas: um PID 1 que trata o sinal e um que ignora.",
+  },
+  en: {
+    good: "PID 1 handles SIGTERM",
+    bad: "PID 1 ignores SIGTERM",
+    stop: "docker stop",
+    sigterm: "SIGTERM",
+    sigkill: "SIGKILL",
+    grace: "grace period (10 s by default)",
+    closes: "closes connections, flushes, exits",
+    ignores: "nothing happens — the kernel installs no default handler on PID 1",
+    dead: "killed with no warning",
+    measured: "measured: 2.9 s on this stack's slowest service",
+    t0: "0 s", t10: "10 s",
+    caption:
+      "Process 1 of a namespace does not inherit the default signal handlers — <b>ignoring SIGTERM is its normal behaviour</b>, not a Docker bug. A process that does not handle the signal waits out the ten seconds and gets SIGKILL; one that handles it exits in milliseconds.",
+    alt: "Timeline of docker stop with two lanes: a PID 1 that handles the signal and one that ignores it.",
+  },
+}[lang];
+---
+<Figure caption={C.caption} alt={C.alt}>
+  <svg viewBox="0 0 700 214" xmlns="http://www.w3.org/2000/svg" font-size="11">
+    <defs>
+      <marker id="st-arrow" viewBox="0 0 10 10" refX="8" refY="5"
+              markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+        <path d="M0 0 L10 5 L0 10 z" fill="var(--border-strong)" />
+      </marker>
+    </defs>
+
+    <!-- Eixo do tempo -->
+    <text x="110" y="16" text-anchor="end" class="dg-mono dg-muted" font-size="10">{C.stop}</text>
+    <path d="M114 12 L126 12" class="dg-line" marker-end="url(#st-arrow)" />
+    <line x1="130" y1="26" x2="130" y2="196" class="dg-line dg-line--accent" stroke-width="2" />
+    <line x1="620" y1="26" x2="620" y2="196" class="dg-line dg-line--danger" stroke-width="2" stroke-dasharray="4 3" />
+    <text x="130" y="208" text-anchor="middle" class="dg-faint" font-size="9.5">{C.t0}</text>
+    <text x="620" y="208" text-anchor="middle" class="dg-faint" font-size="9.5">{C.t10}</text>
+    <text x="375" y="208" text-anchor="middle" class="dg-faint" font-size="9.5">{C.grace}</text>
+
+    <!-- Faixa boa -->
+    <text x="118" y="52" text-anchor="end" class="dg-muted" font-weight="620" font-size="10.5">{C.good}</text>
+    <rect x="130" y="38" width="56" height="26" rx={5} class="dg-box dg-box--accent" />
+    <text x="158" y="55" text-anchor="middle" class="dg-mono" font-size="9.5">{C.sigterm}</text>
+    <path d="M186 51 L224 51" class="dg-line dg-line--accent" marker-end="url(#st-arrow)" />
+    <rect x="228" y="38" width="176" height="26" rx={5} class="dg-box" />
+    <text x="316" y="55" text-anchor="middle" class="dg-muted" font-size="10">{C.closes}</text>
+    <circle cx="416" cy="51" r="5" class="dg-fill-accent" />
+    <text x="428" y="55" class="dg-faint" font-size="9.5">exit 0</text>
+    <text x="428" y="68" class="dg-faint" font-size="9">{C.measured}</text>
+
+    <!-- Faixa ruim -->
+    <text x="118" y="126" text-anchor="end" class="dg-muted" font-weight="620" font-size="10.5">{C.bad}</text>
+    <rect x="130" y="112" width="56" height="26" rx={5} class="dg-box dg-box--warn" />
+    <text x="158" y="129" text-anchor="middle" class="dg-mono" font-size="9.5">{C.sigterm}</text>
+    <rect x="190" y="112" width="426" height="26" rx={5} class="dg-box dg-box--dashed" />
+    <text x="403" y="129" text-anchor="middle" class="dg-faint" font-size="10">{C.ignores}</text>
+    <rect x="624" y="112" width="56" height="26" rx={5} class="dg-box dg-box--danger" />
+    <text x="652" y="129" text-anchor="middle" class="dg-mono" font-size="9.5">{C.sigkill}</text>
+    <text x="652" y="152" text-anchor="middle" class="dg-faint" font-size="9">{C.dead}</text>
+  </svg>
+</Figure>

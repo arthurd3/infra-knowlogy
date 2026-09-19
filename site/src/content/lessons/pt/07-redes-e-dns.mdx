@@ -16,6 +16,9 @@ sources:
     url: "https://cheatsheetseries.owasp.org/cheatsheets/Docker_Security_Cheat_Sheet.html"
 ---
 
+import StackTopology from "../../../components/diagrams/StackTopology.astro";
+import LinkLab from "../../../components/islands/LinkLab.tsx";
+
 ## A bridge padrão versus a que você cria
 
 Todo container sem `--network` cai na bridge padrão (`docker0`). Nunca use isso
@@ -92,6 +95,8 @@ enviadas por usuários. Por isso ele está na `egress` — e por isso o código 
 tem a checagem de SSRF em `enrich.py`. Segmentação de rede e validação na
 aplicação resolvem partes diferentes do mesmo problema.
 
+<StackTopology />
+
 ## A porta publicada que fura o seu firewall
 
 Esta é a armadilha de segurança mais subestimada do Docker inteiro.
@@ -120,6 +125,8 @@ Confirme no seu host com:
 ```bash
 sudo iptables -t nat -L DOCKER -n | head
 ```
+
+<LinkLab client:visible lang="pt" />
 
 ## Portas: as três coisas diferentes
 

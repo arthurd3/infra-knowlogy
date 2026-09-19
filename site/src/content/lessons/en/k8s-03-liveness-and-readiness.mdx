@@ -14,6 +14,9 @@ sources:
     url: "https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/"
 ---
 
+import ProbesTimeline from "../../../components/diagrams/ProbesTimeline.astro";
+import RollingUpdate from "../../../components/diagrams/RollingUpdate.astro";
+
 This stack's api has exposed two health endpoints since the Docker module, and
 the comment in `server.go` already said the essential part:
 
@@ -54,6 +57,8 @@ readinessProbe:
 
 `httpGet`, not `exec`: the image is distroless — there is no shell to run a
 command, and it is the kubelet making the request, from outside the container.
+
+<ProbesTimeline />
 
 ## The database outage, measured
 
@@ -133,6 +138,8 @@ dependent does not fix the dependency. Every check of a database, queue or
 neighboring service belongs in readiness, whose punishment — leaving the load
 balancing — reverses the instant the dependency returns.
 </Callout>
+
+<RollingUpdate />
 
 ## The three pieces of fine print
 

@@ -1,0 +1,102 @@
+---
+/** Lição 2 — por que escrever num arquivo da imagem não altera a imagem. */
+import Figure from "../Figure.astro";
+import type { Lang } from "../../i18n/ui";
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+const C = {
+  pt: {
+    image: "Imagem — camadas somente leitura",
+    upper: "upperdir — camada gravável do container",
+    merged: "merged — o que o processo enxerga em /",
+    copyup: "copy-up: o arquivo é copiado para cima ANTES de ser alterado",
+    ro: "somente leitura", rw: "leitura e escrita",
+    l1: "FROM python:3.13-slim",
+    l2: "RUN useradd app",
+    l3: "COPY /app /app",
+    f1: "/usr/bin/python3",
+    f2: "/app/worker.py",
+    f3: "/app/worker.py",
+    f3n: "(editado)",
+    f4: "/tmp/cache.db",
+    from: "vem da camada",
+    caption:
+      "A camada gravável é do <b>container</b>, não da imagem. Editar um arquivo que veio da imagem faz o OverlayFS copiá-lo para cima primeiro — a camada original continua intacta, e é por isso que dez containers da mesma imagem não ocupam dez vezes o disco.",
+    alt: "Pilha OverlayFS: três camadas somente leitura, uma camada gravável e a visão combinada.",
+  },
+  en: {
+    image: "Image — read-only layers",
+    upper: "upperdir — the container's writable layer",
+    merged: "merged — what the process sees at /",
+    copyup: "copy-up: the file is copied up BEFORE being changed",
+    ro: "read-only", rw: "read-write",
+    l1: "FROM python:3.13-slim",
+    l2: "RUN useradd app",
+    l3: "COPY /app /app",
+    f1: "/usr/bin/python3",
+    f2: "/app/worker.py",
+    f3: "/app/worker.py",
+    f3n: "(edited)",
+    f4: "/tmp/cache.db",
+    from: "from layer",
+    caption:
+      "The writable layer belongs to the <b>container</b>, not the image. Editing a file that came from the image makes OverlayFS copy it up first — the original layer stays untouched, which is why ten containers of the same image do not take ten times the disk.",
+    alt: "OverlayFS stack: three read-only layers, one writable layer and the merged view.",
+  },
+}[lang];
+---
+<Figure caption={C.caption} alt={C.alt}>
+  <svg viewBox="0 0 700 226" xmlns="http://www.w3.org/2000/svg" font-size="11">
+    <!-- ── Esquerda: a pilha ── -->
+    <text x="16" y="14" class="dg-title" font-size="12">{C.upper}</text>
+    <rect x="16" y="22" width="330" height="46" rx={6} class="dg-box dg-box--warn dg-box--dashed" />
+    <text x="30" y="41" class="dg-mono" font-size="10.5">{C.f3}</text>
+    <text x="30" y="56" class="dg-faint" font-size="9.5">{C.f3n}</text>
+    <text x="336" y="41" text-anchor="end" class="dg-faint" font-size="9.5">{C.rw}</text>
+    <text x="336" y="56" text-anchor="end" class="dg-mono" font-size="10.5">{C.f4}</text>
+
+    <text x="16" y="90" class="dg-title" font-size="12">{C.image}</text>
+    {[C.l3, C.l2, C.l1].map((label, i) => (
+      <g>
+        <rect x={16} y={98 + i * 38} width={330} height={32} rx={6} class="dg-box" />
+        <text x={30} y={118 + i * 38} class="dg-mono" font-size="10.5">{label}</text>
+        <text x={336} y={118 + i * 38} text-anchor="end" class="dg-faint" font-size="9.5">{C.ro}</text>
+      </g>
+    ))}
+
+    <!-- copy-up: a seta que sobe da camada COPY para a gravável. -->
+    <path d="M300 98 L300 76 L300 70" class="dg-line dg-line--warn" marker-end="url(#ov-arrow)" />
+    <defs>
+      <marker id="ov-arrow" viewBox="0 0 10 10" refX="8" refY="5"
+              markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M0 0 L10 5 L0 10 z" class="dg-fill-warn" />
+      </marker>
+    </defs>
+    <text x="292" y="86" text-anchor="end" class="dg-faint" font-size="9">{C.copyup}</text>
+
+    <!-- ── Direita: a visão combinada ── -->
+    <text x="404" y="14" class="dg-title" font-size="12">{C.merged}</text>
+    <rect x="404" y="22" width="280" height="190" rx={8} class="dg-box dg-box--raised" />
+    {[
+      { f: C.f3, note: C.f3n, warn: true, from: "upperdir" },
+      { f: C.f4, note: "", warn: true, from: "upperdir" },
+      { f: C.f2.replace("/app/worker.py", "/app/settings.py"), note: "", warn: false, from: `${C.from} COPY` },
+      { f: C.f1, note: "", warn: false, from: `${C.from} FROM` },
+    ].map((row, i) => (
+      <g>
+        <rect x={418} y={38 + i * 42} width={252} height={32} rx={5}
+              class={`dg-box ${row.warn ? "dg-box--warn" : "dg-box--raised"}`} />
+        <text x={430} y={52 + i * 42} class="dg-mono" font-size="10.5">{row.f}</text>
+        <text x={430} y={64 + i * 42} class="dg-faint" font-size="9">{row.note || row.from}</text>
+        {row.note && <text x={658} y={64 + i * 42} text-anchor="end" class="dg-faint" font-size="9">{row.from}</text>}
+      </g>
+    ))}
+    <path d="M350 118 L400 118" class="dg-line" marker-end="url(#ov-arrow2)" />
+    <defs>
+      <marker id="ov-arrow2" viewBox="0 0 10 10" refX="8" refY="5"
+              markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M0 0 L10 5 L0 10 z" fill="var(--border-strong)" />
+      </marker>
+    </defs>
+  </svg>
+</Figure>

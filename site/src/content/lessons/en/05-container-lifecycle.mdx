@@ -16,6 +16,8 @@ sources:
     url: "https://docs.docker.com/engine/logging/"
 ---
 
+import Lifecycle from "../../../components/diagrams/Lifecycle.astro";
+
 ## The container dies when PID 1 dies
 
 This is the only lifecycle rule, and it explains the most common beginner
@@ -57,6 +59,8 @@ process must be the service: `nginx -g "daemon off;"`, `postgres` without `-D`,
 `docker run` is just `create` + `start` in one go. And `exited` is **not**
 `removed`: a stopped container still occupies disk with its writable layer. That
 is what `docker ps -a` shows and what `docker container prune` reclaims.
+
+<Lifecycle />
 
 ## What `docker stop` actually does
 

@@ -1,0 +1,27 @@
+---
+/**
+ * Moldura de todo diagrama do site.
+ *
+ * Os diagramas são SVG escritos à mão, não imagens: eles herdam as cores do
+ * tema pelas custom properties (ver `.figure svg` em global.css), continuam
+ * legíveis em qualquer zoom, entram no `git diff` como texto e pesam alguns
+ * kilobytes. Uma captura de tela não faz nada disso.
+ *
+ * `viz-root` vem junto porque é onde a paleta categórica (--viz-1..3) é
+ * definida — a mesma já validada para contraste nos gráficos.
+ */
+interface Props {
+  /** Legenda abaixo do desenho. Aceita <b> e <code>. */
+  caption?: string;
+  /** Texto alternativo do desenho, para quem usa leitor de tela. */
+  alt?: string;
+}
+const { caption, alt } = Astro.props;
+---
+<figure class="figure viz-root">
+  <div class="figure__canvas" role={alt ? "img" : undefined} aria-label={alt}>
+    <slot />
+  </div>
+  <slot name="legend" />
+  {caption && <figcaption set:html={caption} />}
+</figure>

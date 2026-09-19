@@ -16,6 +16,8 @@ sources:
     url: "https://docs.docker.com/engine/storage/bind-mounts/"
 ---
 
+import MountKinds from "../../../components/diagrams/MountKinds.astro";
+
 A container's writable layer disappears when the container is removed. For any
 data that must outlive that, there are three mechanisms — and they are not
 interchangeable.
@@ -100,6 +102,8 @@ It lives in RAM and vanishes when the container stops. Three uses:
 The options are not decoration: `noexec` prevents executing anything written
 there, and `nosuid` disables setuid bits. If an attacker manages to write to
 `/tmp`, they cannot run what they wrote.
+
+<MountKinds />
 
 ## `--read-only` and what it breaks
 

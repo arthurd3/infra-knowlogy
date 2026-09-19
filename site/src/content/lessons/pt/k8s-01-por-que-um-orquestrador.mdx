@@ -16,6 +16,9 @@ sources:
     url: "https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/"
 ---
 
+import ReconcileLoop from "../../../components/diagrams/ReconcileLoop.astro";
+import K8sMeasurements from "../../../components/islands/K8sMeasurements.tsx";
+
 O módulo Docker terminou com uma decisão registrada: **Compose, e não Kubernetes**
 (ADR 0001). A decisão veio com uma lista honesta do que estávamos abrindo mão —
 o Compose não recria um container que sumiu, não faz deploy sem downtime, não
@@ -58,6 +61,8 @@ NetworkPolicy era aceita pela API e ignorada em silêncio. A partir da 0.23 o CN
 embutido aplica as policies — e o portão do módulo prova isso na prática.
 Ver docs/adr/0007.
 </Callout>
+
+<ReconcileLoop />
 
 ## O que o Compose já fazia igual
 
@@ -175,6 +180,8 @@ de fechar. O manual chama isso de preStop sleep — que numa imagem distroless
 não existe, porque não há shell para rodar <code>sleep</code>. O orquestrador
 promete o rolling; quem entrega o "sem downtime" é a aplicação.
 </Callout>
+
+<K8sMeasurements client:visible lang="pt" />
 
 ## O veredito continua o mesmo
 

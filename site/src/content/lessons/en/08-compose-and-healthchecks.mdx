@@ -16,6 +16,9 @@ sources:
     url: "https://docs.docker.com/compose/how-tos/use-secrets/"
 ---
 
+import HealthStates from "../../../components/diagrams/HealthStates.astro";
+import GateRunner from "../../../components/islands/GateRunner.tsx";
+
 ## `depends_on` alone does almost nothing
 
 ```yaml
@@ -90,6 +93,8 @@ HEALTHCHECK --interval=10s --timeout=3s --start-period=5s --retries=3 \
 Compose inherits it. Defining health next to the artifact beats scattering it
 across each orchestrator's config: whoever consumes the image under Kubernetes,
 under Swarm, or in a bare `docker run` inherits the same behaviour.
+
+<HealthStates />
 
 ## Liveness vs readiness — the distinction that prevents an outage
 
@@ -207,6 +212,8 @@ services:
 Keys prefixed with `x-` are ignored by Compose and serve as anchors. It is how this
 stack's log limit applies to all six services without being written six times — and
 without the risk of forgetting it on precisely the chattiest one.
+
+<GateRunner client:visible lang="en" />
 
 ## The honest limits of Compose
 

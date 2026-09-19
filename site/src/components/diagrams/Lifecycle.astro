@@ -1,0 +1,85 @@
+---
+/** Lição 5 — os estados de um container e o comando que move entre eles. */
+import Figure from "../Figure.astro";
+import type { Lang } from "../../i18n/ui";
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+const C = {
+  pt: {
+    created: "created", running: "running", paused: "paused",
+    exited: "exited", removed: "removed", image: "imagem",
+    createdNote: "existe, nunca rodou",
+    runningNote: "PID 1 vivo",
+    pausedNote: "congelado no cgroup freezer",
+    exitedNote: "sistema de arquivos ainda no disco",
+    removedNote: "a camada gravável some",
+    lostNote: "tudo que estava só na camada gravável some aqui",
+    caption:
+      "<code>docker stop</code> não destrói nada: ele leva a <code>exited</code>, e a camada gravável continua no disco — é por isso que <code>docker start</code> devolve os arquivos. Quem apaga é o <code>rm</code>. Um container parado não é um container removido.",
+    alt: "Máquina de estados do ciclo de vida de um container.",
+  },
+  en: {
+    created: "created", running: "running", paused: "paused",
+    exited: "exited", removed: "removed", image: "image",
+    createdNote: "exists, never ran",
+    runningNote: "PID 1 alive",
+    pausedNote: "frozen in the cgroup freezer",
+    exitedNote: "filesystem still on disk",
+    removedNote: "the writable layer is gone",
+    lostNote: "everything that lived only in the writable layer dies here",
+    caption:
+      "<code>docker stop</code> destroys nothing: it moves to <code>exited</code>, and the writable layer stays on disk — which is why <code>docker start</code> gives the files back. <code>rm</code> is what deletes. A stopped container is not a removed container.",
+    alt: "State machine of a container's lifecycle.",
+  },
+}[lang];
+
+const boxes: Array<{ x: number; y: number; w: number; label: string; note: string; cls: string }> = [
+  { x: 14, y: 74, w: 108, label: C.image, note: "", cls: "dg-box" },
+  { x: 150, y: 74, w: 112, label: C.created, note: C.createdNote, cls: "dg-box dg-box--raised" },
+  { x: 292, y: 74, w: 124, label: C.running, note: C.runningNote, cls: "dg-box dg-box--accent" },
+  { x: 292, y: 8, w: 124, label: C.paused, note: C.pausedNote, cls: "dg-box dg-box--dashed" },
+  { x: 446, y: 74, w: 124, label: C.exited, note: C.exitedNote, cls: "dg-box dg-box--warn" },
+  { x: 600, y: 74, w: 88, label: C.removed, note: C.removedNote, cls: "dg-box dg-box--danger dg-box--dashed" },
+];
+const arrows = [
+  { d: "M122 92 L146 92", label: "create", lx: 134, ly: 85 },
+  { d: "M262 92 L288 92", label: "start", lx: 275, ly: 85 },
+  { d: "M416 92 L442 92", label: "stop", lx: 429, ly: 85 },
+  { d: "M570 92 L596 92", label: "rm", lx: 583, ly: 85 },
+  { d: "M354 74 L354 46", label: "pause", lx: 362, ly: 62 },
+  { d: "M366 46 L366 74", label: "unpause", lx: 374, ly: 40 },
+  { d: "M504 116 L504 140 L354 140 L354 118", label: "start", lx: 429, ly: 152 },
+];
+---
+<Figure caption={C.caption} alt={C.alt}>
+  <svg viewBox="0 0 700 168" xmlns="http://www.w3.org/2000/svg" font-size="11">
+    <defs>
+      <marker id="lc-arrow" viewBox="0 0 10 10" refX="8.5" refY="5"
+              markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse">
+        <path d="M0 0 L10 5 L0 10 z" fill="var(--border-strong)" />
+      </marker>
+    </defs>
+
+    {boxes.map((b) => (
+      <g>
+        <rect x={b.x} y={b.y} width={b.w} height={36} rx={6} class={b.cls} />
+        <text x={b.x + b.w / 2} y={b.y + 22} text-anchor="middle" class="dg-mono" font-weight="620" font-size="11.5">
+          {b.label}
+        </text>
+        {b.note && (
+          <text x={b.x + b.w / 2} y={b.y + 48} text-anchor="middle" class="dg-faint" font-size="9">{b.note}</text>
+        )}
+      </g>
+    ))}
+
+    {arrows.map((a) => (
+      <g>
+        <path d={a.d} class="dg-line" marker-end="url(#lc-arrow)" />
+        <text x={a.lx} y={a.ly} text-anchor="middle" class="dg-mono dg-muted" font-size="9">{a.label}</text>
+      </g>
+    ))}
+
+    <text x={644} y={148} text-anchor="middle" class="dg-faint" font-size="9">{C.lostNote}</text>
+    <path d="M644 130 L644 138" class="dg-line dg-line--danger dg-line--dashed" />
+  </svg>
+</Figure>

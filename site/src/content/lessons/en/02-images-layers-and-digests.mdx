@@ -18,6 +18,8 @@ sources:
 
 import LayerExplorer from "../../../components/islands/LayerExplorer.tsx";
 import ImageSizeComparator from "../../../components/islands/ImageSizeComparator.tsx";
+import DigestChain from "../../../components/diagrams/DigestChain.astro";
+import OverlayFs from "../../../components/diagrams/OverlayFs.astro";
 
 When someone says "send me the image", the intuition is a file — an `.iso`, a
 `.zip`. It is not. An OCI image is a **manifest**: a small JSON listing digests of
@@ -85,6 +87,8 @@ the scanner: a pin gives you control over *when* you update, not permission to
 never update.
 </Callout>
 
+<DigestChain />
+
 ## The stack, and the writable layer
 
 Every instruction that modifies the filesystem (`RUN`, `COPY`, `ADD`) creates a
@@ -113,6 +117,8 @@ volume fills the host disk slowly and silently. It is one reason this stack's `d
 and `cache` mount named volumes — and why the other services run with
 `read_only: true`.
 </Callout>
+
+<OverlayFs />
 
 ## A layer never shrinks
 

@@ -16,6 +16,8 @@ sources:
     url: "https://docs.docker.com/engine/logging/"
 ---
 
+import Lifecycle from "../../../components/diagrams/Lifecycle.astro";
+
 ## O container morre quando o PID 1 morre
 
 Esta é a única regra do ciclo de vida, e ela explica a dúvida mais comum de quem
@@ -57,6 +59,8 @@ ser o serviço: `nginx -g "daemon off;"`, `postgres` sem `-D`, `celery worker` s
 `docker run` é só `create` + `start` numa tacada. E `exited` **não** é `removed`:
 o container parado continua ocupando disco com sua camada gravável. É o que o
 `docker ps -a` mostra e o que `docker container prune` limpa.
+
+<Lifecycle />
 
 ## O que o `docker stop` realmente faz
 

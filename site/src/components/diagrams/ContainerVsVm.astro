@@ -1,0 +1,88 @@
+---
+/** Lição 1 — o que uma VM carrega que um container não carrega. */
+import Figure from "../Figure.astro";
+import type { Lang } from "../../i18n/ui";
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+const C = {
+  pt: {
+    vm: "Máquinas virtuais", ct: "Containers",
+    hw: "Hardware", host: "Sistema operacional do host",
+    hyper: "Hipervisor", runtime: "Runtime de container (containerd + runc)",
+    guest: "SO convidado", kernel: "kernel próprio",
+    libs: "libs", app: "App",
+    noteVm: "três kernels, três inicializações, gigabytes",
+    noteCt: "um kernel só — o do host — e três processos",
+    caption:
+      "A diferença não é “mais leve”: é <b>o que existe</b>. A VM virtualiza a máquina e precisa de um kernel por convidado; o container virtualiza a <b>visão</b> que um processo tem do sistema e usa o kernel que já está rodando.",
+    alt: "Comparação entre a pilha de virtualização por VM e a pilha de containers.",
+  },
+  en: {
+    vm: "Virtual machines", ct: "Containers",
+    hw: "Hardware", host: "Host operating system",
+    hyper: "Hypervisor", runtime: "Container runtime (containerd + runc)",
+    guest: "Guest OS", kernel: "own kernel",
+    libs: "libs", app: "App",
+    noteVm: "three kernels, three boots, gigabytes",
+    noteCt: "a single kernel — the host's — and three processes",
+    caption:
+      "The difference is not “lighter”: it is <b>what exists</b>. A VM virtualises the machine and needs one kernel per guest; a container virtualises the <b>view</b> a process has of the system and uses the kernel that is already running.",
+    alt: "Comparison between the virtual machine stack and the container stack.",
+  },
+}[lang];
+
+const vmX = [18, 122, 226];
+const ctX = [380, 484, 588];
+---
+<Figure caption={C.caption} alt={C.alt}>
+  <svg viewBox="0 0 700 276" xmlns="http://www.w3.org/2000/svg" font-size="11">
+    <!-- ── Coluna esquerda: VMs ── -->
+    <text x="18" y="16" class="dg-title" font-size="12.5">{C.vm}</text>
+    {vmX.map((x) => (
+      <g>
+        <rect x={x} y={28} width={96} height={104} rx={6} class="dg-box dg-box--warn" />
+        <rect x={x + 8} y={36} width={80} height={22} rx={4} class="dg-box dg-box--raised" />
+        <text x={x + 48} y={51} text-anchor="middle" font-weight="600">{C.app}</text>
+        <rect x={x + 8} y={62} width={80} height={20} rx={4} class="dg-box dg-box--raised" />
+        <text x={x + 48} y={76} text-anchor="middle" class="dg-muted">{C.libs}</text>
+        <rect x={x + 8} y={86} width={80} height={38} rx={4} class="dg-box dg-box--danger" />
+        <text x={x + 48} y={101} text-anchor="middle" font-weight="600">{C.guest}</text>
+        <text x={x + 48} y={115} text-anchor="middle" class="dg-faint" font-size="9.5">{C.kernel}</text>
+      </g>
+    ))}
+    <rect x="18" y="140" width="304" height="30" rx={6} class="dg-box" />
+    <text x="170" y="159" text-anchor="middle" class="dg-muted">{C.hyper}</text>
+    <rect x="18" y="176" width="304" height="30" rx={6} class="dg-box" />
+    <text x="170" y="195" text-anchor="middle" class="dg-muted">{C.host}</text>
+    <rect x="18" y="212" width="304" height="28" rx={6} class="dg-box" />
+    <text x="170" y="230" text-anchor="middle" class="dg-faint">{C.hw}</text>
+    <text x="170" y="258" text-anchor="middle" class="dg-faint" font-size="10.5">{C.noteVm}</text>
+
+    <!-- ── Divisória ── -->
+    <line x1="351" y1="10" x2="351" y2="268" class="dg-line dg-line--dashed" />
+
+    <!-- ── Coluna direita: containers ── -->
+    <text x="380" y="16" class="dg-title" font-size="12.5">{C.ct}</text>
+    {ctX.map((x) => (
+      <g>
+        <rect x={x} y={62} width={96} height={70} rx={6} class="dg-box dg-box--accent" />
+        <rect x={x + 8} y={70} width={80} height={22} rx={4} class="dg-box dg-box--raised" />
+        <text x={x + 48} y={85} text-anchor="middle" font-weight="600">{C.app}</text>
+        <rect x={x + 8} y={96} width={80} height={20} rx={4} class="dg-box dg-box--raised" />
+        <text x={x + 48} y={110} text-anchor="middle" class="dg-muted">{C.libs}</text>
+      </g>
+    ))}
+    <rect x="380" y="140" width="304" height="30" rx={6} class="dg-box" />
+    <text x="532" y="159" text-anchor="middle" class="dg-muted">{C.runtime}</text>
+    <rect x="380" y="176" width="304" height="30" rx={6} class="dg-box dg-box--accent" />
+    <text x="532" y="195" text-anchor="middle" font-weight="620">{C.host}</text>
+    <rect x="380" y="212" width="304" height="28" rx={6} class="dg-box" />
+    <text x="532" y="230" text-anchor="middle" class="dg-faint">{C.hw}</text>
+    <text x="532" y="258" text-anchor="middle" class="dg-faint" font-size="10.5">{C.noteCt}</text>
+
+    <!-- Setas dos três containers para o MESMO kernel. -->
+    {ctX.map((x) => (
+      <path d={`M${x + 48} 132 L${x + 48} 174`} class="dg-line dg-line--accent" stroke-dasharray="3 3" />
+    ))}
+  </svg>
+</Figure>

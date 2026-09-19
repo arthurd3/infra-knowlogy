@@ -16,6 +16,9 @@ sources:
     url: "https://docs.docker.com/build/building/secrets/"
 ---
 
+import SignalTimeline from "../../../components/diagrams/SignalTimeline.astro";
+import MultiStage from "../../../components/diagrams/MultiStage.astro";
+
 A Dockerfile looks like a shell script and is not one. It is a **declarative
 recipe** where each instruction produces a layer or a piece of metadata, evaluated
 by a builder that caches aggressively. The traps below all come from that gap.
@@ -81,6 +84,8 @@ the shell cannot `exec`. You do not want your shutdown behaviour to depend on
 whether BusyBox happened to optimise your command line. That is why every
 Dockerfile in this stack ends with a JSON array.
 
+<SignalTimeline />
+
 ## FROM — the base and the stages
 
 ```dockerfile
@@ -91,6 +96,8 @@ Three things in one line: the base image, the digest pin (see the
 [lesson on digests](/en/lessons/images-layers-and-digests/)), and the **stage
 name**. A Dockerfile may have several `FROM`s; each starts a new stage, and only
 the last — or the one picked by `--target` — becomes the final image.
+
+<MultiStage />
 
 ## WORKDIR — always absolute
 

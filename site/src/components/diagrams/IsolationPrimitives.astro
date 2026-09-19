@@ -1,0 +1,79 @@
+---
+/** Lição 1 — as duas peças de kernel que, juntas, formam "um container". */
+import Figure from "../Figure.astro";
+import type { Lang } from "../../i18n/ui";
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+const C = {
+  pt: {
+    proc: "processo", pid1: "PID 1 dentro do container",
+    nsTitle: "namespaces — o que o processo VÊ",
+    cgTitle: "cgroups — o que o processo PODE USAR",
+    ns: [
+      ["pid", "só enxerga os próprios processos"],
+      ["net", "interface e portas próprias"],
+      ["mnt", "árvore de arquivos própria"],
+      ["uts", "hostname próprio"],
+      ["ipc", "memória compartilhada isolada"],
+      ["user", "uid 0 aqui ≠ root no host"],
+    ],
+    cg: [["cpu", "0,50"], ["memory", "256M"], ["pids", "128"]],
+    caption:
+      "Não existe objeto “container” no kernel Linux. Existe um processo comum com <b>namespaces</b> (o que ele enxerga) e <b>cgroups</b> (quanto ele consome). O Docker é quem amarra os dois e dá um nome ao conjunto.",
+    alt: "Um processo cercado pelos seis namespaces e limitado por três controladores de cgroup.",
+  },
+  en: {
+    proc: "process", pid1: "PID 1 inside the container",
+    nsTitle: "namespaces — what the process SEES",
+    cgTitle: "cgroups — what the process MAY USE",
+    ns: [
+      ["pid", "sees only its own processes"],
+      ["net", "its own interface and ports"],
+      ["mnt", "its own filesystem tree"],
+      ["uts", "its own hostname"],
+      ["ipc", "isolated shared memory"],
+      ["user", "uid 0 here ≠ root on the host"],
+    ],
+    cg: [["cpu", "0.50"], ["memory", "256M"], ["pids", "128"]],
+    caption:
+      "There is no “container” object in the Linux kernel. There is an ordinary process with <b>namespaces</b> (what it sees) and <b>cgroups</b> (how much it consumes). Docker is what ties the two together and gives the bundle a name.",
+    alt: "A process surrounded by the six namespaces and limited by three cgroup controllers.",
+  },
+}[lang];
+---
+<Figure caption={C.caption} alt={C.alt}>
+  <svg viewBox="0 0 700 232" xmlns="http://www.w3.org/2000/svg" font-size="11">
+    <text x="16" y="15" class="dg-title" font-size="12">{C.nsTitle}</text>
+
+    <!-- Namespaces, à esquerda, apontando para o processo. -->
+    {C.ns.map(([name, desc], i) => (
+      <g>
+        <rect x={16} y={28 + i * 34} width={70} height={26} rx={5} class="dg-box dg-box--accent" />
+        <text x={51} y={45 + i * 34} text-anchor="middle" class="dg-mono" font-weight="600">{name}</text>
+        <text x={94} y={45 + i * 34} class="dg-muted" font-size="10.5">{desc}</text>
+        <path d={`M${86} ${41 + i * 34} L${312} ${41 + i * 34}`} class="dg-line dg-line--dashed" opacity="0.35" />
+      </g>
+    ))}
+
+    <!-- O processo: só um processo. -->
+    <rect x="312" y="86" width="132" height="66" rx={8} class="dg-box dg-box--raised" />
+    <circle cx="378" cy="112" r="13" class="dg-fill-accent" />
+    <text x="378" y="116" text-anchor="middle" class="dg-on-accent" font-weight="700" font-size="10">1</text>
+    <text x="378" y="140" text-anchor="middle" font-weight="620">{C.proc}</text>
+    <text x="378" y="166" text-anchor="middle" class="dg-faint" font-size="9.5">{C.pid1}</text>
+
+    <!-- cgroups, à direita, como medidores com teto. -->
+    <text x="476" y="15" class="dg-title" font-size="12">{C.cgTitle}</text>
+    {C.cg.map(([name, limit], i) => (
+      <g>
+        <text x={476} y={45 + i * 46} class="dg-mono dg-muted" font-size="10.5">{name}</text>
+        <rect x={476} y={52 + i * 46} width={186} height={14} rx={4} class="dg-box" />
+        <rect x={476} y={52 + i * 46} width={[104, 132, 62][i]} height={14} rx={4} class="dg-fill-warn" opacity="0.85" />
+        <line x1={476 + [104, 132, 62][i]} y1={48 + i * 46} x2={476 + [104, 132, 62][i]} y2={70 + i * 46}
+              class="dg-line dg-line--warn" stroke-width="2" />
+        <text x={668} y={63 + i * 46} text-anchor="end" class="dg-mono dg-faint" font-size="9.5">{limit}</text>
+        <path d={`M${444} ${112} L${470} ${59 + i * 46}`} class="dg-line dg-line--dashed" opacity="0.35" />
+      </g>
+    ))}
+  </svg>
+</Figure>

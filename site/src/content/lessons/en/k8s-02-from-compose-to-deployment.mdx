@@ -16,6 +16,8 @@ sources:
     url: "https://kubernetes.io/docs/concepts/configuration/secret/"
 ---
 
+import ComposeToK8s from "../../../components/diagrams/ComposeToK8s.astro";
+
 The whole port lives in `k8s/base/` — plain YAML, no Helm, aggregated by a
 `kustomization.yaml` and applied with `kubectl apply -k`. The translation is
 mechanical on the surface and full of physics underneath. This lesson walks
@@ -41,6 +43,8 @@ the cluster with `kind load`) and the application. The api still reads
 mounts the file there — Compose mounted it from `stack/secrets/`, the kubelet
 mounts it from a Secret **generated from the very same file** by `k8s-up.sh`.
 Single source, zero drift.
+
+<ComposeToK8s />
 
 ## The cost in lines, measured
 

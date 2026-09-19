@@ -18,6 +18,8 @@ sources:
 
 import LayerExplorer from "../../../components/islands/LayerExplorer.tsx";
 import ImageSizeComparator from "../../../components/islands/ImageSizeComparator.tsx";
+import DigestChain from "../../../components/diagrams/DigestChain.astro";
+import OverlayFs from "../../../components/diagrams/OverlayFs.astro";
 
 Quando alguém diz "me manda a imagem", a intuição é de um arquivo — um `.iso`, um
 `.zip`. Não é isso. Uma imagem OCI é um **manifesto**: um JSON pequeno que lista
@@ -85,6 +87,8 @@ isso o CI roda o scanner: o pin dá controle sobre *quando* atualizar, não lice
 para nunca atualizar.
 </Callout>
 
+<DigestChain />
+
 ## A pilha, e a camada gravável
 
 Cada instrução que modifica o sistema de arquivos (`RUN`, `COPY`, `ADD`) cria uma
@@ -113,6 +117,8 @@ volume enche o disco do host devagar e sem avisar. É uma das razões pelas quai
 `db` e `cache` desta stack montam volumes nomeados — e pelas quais os outros
 serviços rodam com `read_only: true`.
 </Callout>
+
+<OverlayFs />
 
 ## Uma camada nunca encolhe
 

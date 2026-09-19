@@ -1,0 +1,116 @@
+---
+/**
+ * Lições 7 e 8 — a topologia real de stack/compose.yaml.
+ *
+ * Não é um desenho genérico de "arquitetura de microsserviços": as redes, os
+ * serviços e quem alcança quem saem do arquivo de verdade. O portão prova a
+ * aresta que NÃO existe (`edge` não alcança `db:5432`) — checagem 5/9.
+ */
+import Figure from "../Figure.astro";
+import type { Lang } from "../../i18n/ui";
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+const C = {
+  pt: {
+    internet: "internet", host: "host — 127.0.0.1:8080",
+    netEdge: "rede edge", netData: "rede data", netEgress: "rede egress",
+    internal: "internal: true — sem gateway, sem rota para fora",
+    published: "a ÚNICA porta publicada",
+    blocked: "edge não alcança db:5432",
+    proven: "provado pelo portão",
+    dnsNote: "o DNS do Compose resolve pelo NOME do serviço, só dentro da rede",
+    caption:
+      "Um serviço só enxerga quem divide rede com ele. O <code>db</code> vive numa rede <code>internal</code>, então o <code>edge</code> — a única coisa exposta ao host — não tem sequer rota até ele. O portão testa essa <b>ausência</b> de conexão, porque uma regra de rede que ninguém verifica é uma suposição.",
+    alt: "Topologia das três redes do Compose e de quais serviços vivem em cada uma.",
+  },
+  en: {
+    internet: "internet", host: "host — 127.0.0.1:8080",
+    netEdge: "edge network", netData: "data network", netEgress: "egress network",
+    internal: "internal: true — no gateway, no route out",
+    published: "the ONLY published port",
+    blocked: "edge cannot reach db:5432",
+    proven: "proven by the gate",
+    dnsNote: "Compose DNS resolves by service NAME, only inside the network",
+    caption:
+      "A service only sees whoever shares a network with it. <code>db</code> lives on an <code>internal</code> network, so <code>edge</code> — the only thing exposed to the host — has no route to it at all. The gate tests that <b>absence</b> of a connection, because a network rule nobody checks is an assumption.",
+    alt: "Topology of the three Compose networks and which services live on each.",
+  },
+}[lang];
+---
+<Figure caption={C.caption} alt={C.alt}>
+  <svg viewBox="0 0 700 330" xmlns="http://www.w3.org/2000/svg" font-size="11">
+    <defs>
+      <marker id="tp-arrow" viewBox="0 0 10 10" refX="8" refY="5"
+              markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse">
+        <path d="M0 0 L10 5 L0 10 z" fill="var(--border-strong)" />
+      </marker>
+      <marker id="tp-arrow-a" viewBox="0 0 10 10" refX="8" refY="5"
+              markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse">
+        <path d="M0 0 L10 5 L0 10 z" class="dg-fill-accent" />
+      </marker>
+    </defs>
+
+    <!-- Host -->
+    <rect x="232" y="6" width="236" height="28" rx={6} class="dg-box dg-box--raised" />
+    <text x="350" y="24" text-anchor="middle" class="dg-mono" font-size="10.5">{C.host}</text>
+    <path d="M350 34 L350 56" class="dg-line dg-line--accent" marker-end="url(#tp-arrow-a)" />
+    <text x="358" y="50" class="dg-faint" font-size="9">{C.published}</text>
+
+    <!-- Rede edge -->
+    <rect x="16" y="56" width="420" height="98" rx={10} class="dg-box dg-box--dashed" />
+    <text x="30" y="74" class="dg-muted" font-weight="620" font-size="10.5">{C.netEdge}</text>
+
+    <rect x="290" y="84" width="120" height="52" rx={6} class="dg-box dg-box--accent" />
+    <text x="350" y="106" text-anchor="middle" class="dg-mono" font-weight="620">edge</text>
+    <text x="350" y="122" text-anchor="middle" class="dg-faint" font-size="9">caddy :8080</text>
+
+    <rect x="40" y="84" width="104" height="52" rx={6} class="dg-box dg-box--raised" />
+    <text x="92" y="106" text-anchor="middle" class="dg-mono" font-weight="620">web</text>
+    <text x="92" y="122" text-anchor="middle" class="dg-faint" font-size="9">astro + caddy</text>
+
+    <rect x="166" y="84" width="104" height="52" rx={6} class="dg-box dg-box--raised" />
+    <text x="218" y="106" text-anchor="middle" class="dg-mono" font-weight="620">api</text>
+    <text x="218" y="122" text-anchor="middle" class="dg-faint" font-size="9">go :8080</text>
+
+    <path d="M288 104 L272 104" class="dg-line" marker-end="url(#tp-arrow)" />
+    <path d="M288 120 L150 120" class="dg-line" marker-end="url(#tp-arrow)" />
+
+    <!-- Rede data -->
+    <rect x="16" y="176" width="420" height="120" rx={10} class="dg-box dg-box--dashed" />
+    <text x="30" y="194" class="dg-muted" font-weight="620" font-size="10.5">{C.netData}</text>
+    <text x="118" y="194" class="dg-faint" font-size="9">{C.internal}</text>
+
+    <rect x="40" y="206" width="104" height="48" rx={6} class="dg-box dg-box--warn" />
+    <text x="92" y="226" text-anchor="middle" class="dg-mono" font-weight="620">db</text>
+    <text x="92" y="241" text-anchor="middle" class="dg-faint" font-size="9">postgres :5432</text>
+
+    <rect x="166" y="206" width="104" height="48" rx={6} class="dg-box dg-box--warn" />
+    <text x="218" y="226" text-anchor="middle" class="dg-mono" font-weight="620">cache</text>
+    <text x="218" y="241" text-anchor="middle" class="dg-faint" font-size="9">redis :6379</text>
+
+    <rect x="292" y="206" width="116" height="48" rx={6} class="dg-box dg-box--raised" />
+    <text x="350" y="226" text-anchor="middle" class="dg-mono" font-weight="620">worker</text>
+    <text x="350" y="241" text-anchor="middle" class="dg-faint" font-size="9">python</text>
+
+    <path d="M214 140 L204 202" class="dg-line" marker-end="url(#tp-arrow)" />
+    <path d="M212 140 L112 202" class="dg-line" marker-end="url(#tp-arrow)" />
+    <path d="M290 230 L276 230" class="dg-line" marker-end="url(#tp-arrow)" />
+    <path d="M300 250 L150 250" class="dg-line" marker-end="url(#tp-arrow)" />
+    <text x="222" y="278" text-anchor="middle" class="dg-faint" font-size="9">{C.dnsNote}</text>
+
+    <!-- A conexão que NÃO existe: edge -> db -->
+    <path d="M330 140 L112 200" class="dg-line dg-line--danger dg-line--dashed" />
+    <circle cx="221" cy="170" r="10" class="dg-box dg-box--danger" />
+    <path d="M216 165 L226 175 M226 165 L216 175" class="dg-line dg-line--danger" stroke-width="2" />
+    <text x="450" y="166" class="dg-muted" font-size="10" font-weight="620">{C.blocked}</text>
+    <text x="450" y="180" class="dg-faint" font-size="9">{C.proven}</text>
+
+    <!-- Rede egress: só o worker sai para a internet -->
+    <rect x="474" y="176" width="210" height="120" rx={10} class="dg-box dg-box--dashed" />
+    <text x="488" y="194" class="dg-muted" font-weight="620" font-size="10.5">{C.netEgress}</text>
+    <rect x="512" y="216" width="134" height="44" rx={6} class="dg-box" />
+    <text x="579" y="242" text-anchor="middle" class="dg-muted">{C.internet}</text>
+    <path d="M410 236 L508 236" class="dg-line" marker-end="url(#tp-arrow)" />
+    <text x="459" y="228" text-anchor="middle" class="dg-faint" font-size="9">worker</text>
+  </svg>
+</Figure>

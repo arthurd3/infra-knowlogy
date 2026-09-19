@@ -1,0 +1,86 @@
+---
+/** Lição 6 — os três jeitos de um container ter dados, e o que sobra depois. */
+import Figure from "../Figure.astro";
+import type { Lang } from "../../i18n/ui";
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+const C = {
+  pt: {
+    container: "container", host: "host",
+    volume: "volume nomeado", bind: "bind mount", tmpfs: "tmpfs",
+    volumeWhere: "/var/lib/docker/volumes/…",
+    bindWhere: "um caminho seu, tal como está",
+    tmpfsWhere: "RAM — nunca toca o disco",
+    volumeUse: "dados que precisam sobreviver",
+    bindUse: "código em desenvolvimento",
+    tmpfsUse: "rootfs read-only precisa de /tmp gravável",
+    survives: "sobrevive ao rm", survivesNo: "some com o container",
+    yes: "sim", no: "não",
+    selinux: "precisa de :z no SELinux",
+    owner: "dono herdado do diretório que já existe na imagem",
+    caption:
+      "As três montagens atravessam a camada gravável e escrevem em outro lugar. O <code>tmpfs</code> é o que torna um <code>read_only: true</code> viável: o rootfs inteiro fica imutável e só <code>/tmp</code> aceita escrita — exatamente o que o portão verifica nesta stack.",
+    alt: "Comparação entre volume nomeado, bind mount e tmpfs.",
+  },
+  en: {
+    container: "container", host: "host",
+    volume: "named volume", bind: "bind mount", tmpfs: "tmpfs",
+    volumeWhere: "/var/lib/docker/volumes/…",
+    bindWhere: "a path of yours, exactly as it is",
+    tmpfsWhere: "RAM — never touches disk",
+    volumeUse: "data that must survive",
+    bindUse: "source code while developing",
+    tmpfsUse: "a read-only rootfs still needs a writable /tmp",
+    survives: "survives rm", survivesNo: "dies with the container",
+    yes: "yes", no: "no",
+    selinux: "needs :z under SELinux",
+    owner: "owner inherited from the directory already in the image",
+    caption:
+      "All three mounts bypass the writable layer and write somewhere else. <code>tmpfs</code> is what makes <code>read_only: true</code> workable: the whole rootfs stays immutable and only <code>/tmp</code> accepts writes — exactly what the gate checks on this stack.",
+    alt: "Comparison between named volume, bind mount and tmpfs.",
+  },
+}[lang];
+
+const cols = [
+  { x: 16, name: C.volume, where: C.volumeWhere, use: C.volumeUse, survives: true,
+    note: C.owner, cls: "dg-box--accent", mono: "-v pgdata:/var/lib/postgresql/data" },
+  { x: 244, name: C.bind, where: C.bindWhere, use: C.bindUse, survives: true,
+    note: C.selinux, cls: "dg-box--raised", mono: "-v ./site/src:/app/src:z" },
+  { x: 472, name: C.tmpfs, where: C.tmpfsWhere, use: C.tmpfsUse, survives: false,
+    note: "", cls: "dg-box--warn", mono: "--tmpfs /tmp:size=16m" },
+];
+---
+<Figure caption={C.caption} alt={C.alt}>
+  <svg viewBox="0 0 700 266" xmlns="http://www.w3.org/2000/svg" font-size="11">
+    <defs>
+      <marker id="mk-arrow" viewBox="0 0 10 10" refX="8" refY="5"
+              markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse">
+        <path d="M0 0 L10 5 L0 10 z" fill="var(--border-strong)" />
+      </marker>
+    </defs>
+
+    <rect x="16" y="8" width="668" height="34" rx={6} class="dg-box dg-box--dashed" />
+    <text x="350" y="30" text-anchor="middle" class="dg-mono dg-muted">{C.container}</text>
+
+    {cols.map((c) => (
+      <g>
+        <path d={`M${c.x + 106} 42 L${c.x + 106} 68`} class="dg-line" marker-end="url(#mk-arrow)" />
+        <rect x={c.x} y={70} width={212} height={128} rx={8} class={`dg-box ${c.cls}`} />
+        <text x={c.x + 106} y={92} text-anchor="middle" class="dg-title" font-size="12">{c.name}</text>
+        <text x={c.x + 106} y={110} text-anchor="middle" class="dg-faint" font-size="9.5">{c.where}</text>
+        <rect x={c.x + 12} y={120} width={188} height={22} rx={4} class="dg-box dg-box--raised" />
+        <text x={c.x + 106} y={135} text-anchor="middle" class="dg-mono" font-size="9">{c.mono}</text>
+        <text x={c.x + 106} y={160} text-anchor="middle" class="dg-muted" font-size="10">{c.use}</text>
+        <text x={c.x + 106} y={182} text-anchor="middle" font-size="10" font-weight="620"
+              class={c.survives ? "dg-fill-accent" : "dg-fill-warn"}>
+          {c.survives ? `${C.survives}: ${C.yes}` : C.survivesNo}
+        </text>
+        {c.note && <text x={c.x + 106} y={216} text-anchor="middle" class="dg-faint" font-size="9">{c.note}</text>}
+      </g>
+    ))}
+
+    <text x="122" y="248" text-anchor="middle" class="dg-faint" font-size="9.5">{C.host}</text>
+    <text x="350" y="248" text-anchor="middle" class="dg-faint" font-size="9.5">{C.host}</text>
+    <text x="578" y="240" text-anchor="middle" class="dg-faint" font-size="9.5">RAM</text>
+  </svg>
+</Figure>

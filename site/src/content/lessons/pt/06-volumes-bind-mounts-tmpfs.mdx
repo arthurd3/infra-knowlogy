@@ -16,6 +16,8 @@ sources:
     url: "https://docs.docker.com/engine/storage/bind-mounts/"
 ---
 
+import MountKinds from "../../../components/diagrams/MountKinds.astro";
+
 A camada gravável do container some quando ele é removido. Para qualquer dado que
 precise sobreviver a isso, existem três mecanismos — e eles não são
 intercambiáveis.
@@ -100,6 +102,8 @@ Vive na RAM e desaparece quando o container para. Três usos:
 As opções não são decorativas: `noexec` impede executar o que for escrito ali, e
 `nosuid` desliga bits setuid. Se um invasor conseguir escrever no `/tmp`, ele não
 consegue rodar o que escreveu.
+
+<MountKinds />
 
 ## O `--read-only` e o que ele quebra
 

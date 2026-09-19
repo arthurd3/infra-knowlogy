@@ -18,6 +18,9 @@ sources:
     url: "https://man7.org/linux/man-pages/man7/cgroups.7.html"
 ---
 
+import ContainerVsVm from "../../../components/diagrams/ContainerVsVm.astro";
+import IsolationPrimitives from "../../../components/diagrams/IsolationPrimitives.astro";
+
 A explicação mais comum é também a mais enganosa: *"container é tipo uma máquina
 virtual, só que mais leve"*. Essa frase leva você a decisões erradas sobre
 segurança, sobre desempenho e sobre o que pode dar errado.
@@ -31,6 +34,8 @@ A definição correta é bem menos glamourosa:
 Não há kernel convidado. Não há emulação de hardware. Não há hipervisor. Se você
 rodar `ps aux` no **host** enquanto um container está de pé, você vê o processo
 dele ali, na lista, junto com todos os outros.
+
+<ContainerVsVm />
 
 ## Prove agora, em dez segundos
 
@@ -135,6 +140,8 @@ Isso explica dois comportamentos que confundem quem está começando:
 Quando o Compose desta stack diz `read_only: true`, ele monta a raiz sem essa
 camada gravável — e escrever em `/` passa a falhar. É por isso que o `/tmp`
 precisa vir como `tmpfs` separado.
+
+<IsolationPrimitives />
 
 ## Quem faz o quê: a cadeia até o processo
 

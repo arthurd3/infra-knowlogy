@@ -18,6 +18,9 @@ sources:
     url: "https://man7.org/linux/man-pages/man7/cgroups.7.html"
 ---
 
+import ContainerVsVm from "../../../components/diagrams/ContainerVsVm.astro";
+import IsolationPrimitives from "../../../components/diagrams/IsolationPrimitives.astro";
+
 The most common explanation is also the most misleading: *"a container is like a
 VM, just lighter"*. That sentence leads you to bad decisions about security,
 about performance, and about what can go wrong.
@@ -31,6 +34,8 @@ The accurate definition is far less glamorous:
 There is no guest kernel. No hardware emulation. No hypervisor. Run `ps aux` on
 the **host** while a container is up and you will see its process sitting right
 there in the list, alongside everything else.
+
+<ContainerVsVm />
 
 ## Prove it in ten seconds
 
@@ -134,6 +139,8 @@ This explains two behaviours that confuse newcomers:
 When this stack's Compose says `read_only: true`, it mounts the root without
 that writable layer — and writing to `/` starts failing. That is why `/tmp` has
 to come back as a separate `tmpfs`.
+
+<IsolationPrimitives />
 
 ## Who does what: the chain down to your process
 
