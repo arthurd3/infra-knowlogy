@@ -1,0 +1,44 @@
+{
+  "note_pt": "Respostas REAIS capturadas contra a stack deste repositório. O modo demonstração as reproduz quando não há stack no ar, sempre rotuladas como gravadas. Regenerar com: bash tools/scripts/record-gate.sh",
+  "note_en": "REAL responses captured against this repository's stack. Demo mode replays them when no stack is up, always labelled as recorded. Regenerate with: bash tools/scripts/record-gate.sh",
+  "recordedAt": "2026-09-19T00:02:57Z",
+  "baseUrl": "http://127.0.0.1:8080",
+  "steps": {
+    "edge": {
+      "status": 204,
+      "body": ""
+    },
+    "list": {
+      "status": 200,
+      "count": 1,
+      "body": "{\"count\":1,\"links\":[{\"code\":\"cuuC3BT\",\"url\":\"http://169.254.169.254/latest/meta-data/\",\"title\":null,\"favicon\":null,\"clicks\":0,\"created_at\":\"2026-09-19T00:00:29.16093Z\",\"enriched_at\":\"2026-09-19T00:00:29.16802Z\",\"enrich_error\":\"bloqueado: 169.254.169.254 resolve para endereço interno 169.254.169.254\"}]}"
+    },
+    "create": {
+      "status": 201,
+      "code": "kHkQDNn",
+      "body": "{\"code\":\"kHkQDNn\",\"short_url\":\"http://localhost:8080/r/kHkQDNn\",\"url\":\"https://example.com/\"}"
+    },
+    "redirect": {
+      "status": 302,
+      "location": "https://example.com/",
+      "body": ""
+    },
+    "enrich": {
+      "status": 200,
+      "tries": 2,
+      "title": "Example Domain",
+      "body": "{\"code\":\"kHkQDNn\",\"url\":\"https://example.com/\",\"title\":\"Example Domain\",\"favicon\":\"data:,\",\"clicks\":2,\"created_at\":\"2026-09-19T00:02:56.339403Z\",\"enriched_at\":\"2026-09-19T00:02:56.348861Z\",\"enrich_error\":null}"
+    },
+    "ssrf": {
+      "status": 201,
+      "tries": 1,
+      "reason": "bloqueado: 169.254.169.254 resolve para endereço interno 169.254.169.254",
+      "body": "{\"code\":\"cbyAmjN\",\"url\":\"http://169.254.169.254/latest/meta-data/\",\"title\":null,\"favicon\":null,\"clicks\":0,\"created_at\":\"2026-09-19T00:02:57.425288Z\",\"enriched_at\":\"2026-09-19T00:02:57.431874Z\",\"enrich_error\":\"bloqueado: 169.254.169.254 resolve para endereço interno 169.254.169.254\"}"
+    },
+    "site": {
+      "status": 200,
+      "contentType": "text/html; charset=utf-8",
+      "body": ""
+    }
+  }
+}

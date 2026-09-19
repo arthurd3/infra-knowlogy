@@ -1,7 +1,9 @@
 ---
 import { getCollection } from "astro:content";
 import Base from "../../layouts/Base.astro";
-import { useTranslations, otherLang, type Lang } from "../../i18n/ui";
+import GateRunner from "../../components/islands/GateRunner.tsx";
+import { useTranslations, otherLang, repoUrl, type Lang } from "../../i18n/ui";
+import measured from "../../data/measured.json";
 
 export async function getStaticPaths() {
   return [{ params: { lang: "pt" } }, { params: { lang: "en" } }];
@@ -20,6 +22,16 @@ const tracks = [
   { id: "kubernetes" as const, badge: "badge--k8s", lessons: byTrack("kubernetes") },
 ];
 const first = tracks[0].lessons[0];
+
+// Os números da vitrine saem dos dados medidos, não de um literal na página.
+// Um número escrito à mão aqui começa certo e envelhece errado sem avisar.
+const smallest = Math.min(...measured.images.map((i) => i.bytes));
+const stats = [
+  { value: String(all.length), label: t("home.lessons") },
+  { value: String(measured.images.length), label: t("home.stats.images") },
+  { value: `${(smallest / 1_048_576).toFixed(1)} MB`, label: lang === "pt" ? "a menor imagem" : "the smallest image" },
+  { value: String(new Set(measured.images.map((i) => i.language)).size), label: t("home.stats.langs") },
+];
 ---
 
 <Base
@@ -27,43 +39,88 @@ const first = tracks[0].lessons[0];
   title={`${t("site.title")} — ${t("site.tagline")}`}
   altPath={`/${otherLang(lang)}/`}
 >
-  <section style="padding: 3.5rem 0 2rem; max-width: 46rem;">
-    <h1>{t("site.tagline")}</h1>
-    <p style="font-size: 1.0625rem; color: var(--text-muted);">{t("home.intro")}</p>
-    {first && (
-      <p style="margin-top: 1.5rem;">
-        <a class="btn-ghost" style="padding: 0.55rem 1.1rem; font-size: 0.9375rem;"
-           href={`/${lang}/lessons/${first.data.key}/`}>
-          {t("home.start")} →
+  <section class="hero">
+    <div class="hero__inner">
+      <span class="hero__eyebrow">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="m5 13 4 4L19 7"></path>
+        </svg>
+        {lang === "pt" ? "medido, não copiado de blog" : "measured, not copied from a blog"}
+      </span>
+      <h1>{t("site.tagline")}</h1>
+      <p class="hero__lead">{t("home.intro")}</p>
+
+      <div class="hero__actions">
+        {first && (
+          <a class="btn btn--primary btn--lg" href={`/${lang}/lessons/${first.data.key}/`}>
+            {t("home.start")}
+            <span aria-hidden="true">→</span>
+          </a>
+        )}
+        <a class="btn btn--secondary btn--lg" href="#verify">
+          {t("home.verify.title")}
         </a>
-      </p>
-    )}
+        <a class="btn btn--lg" href={repoUrl} rel="noopener noreferrer" target="_blank">
+          GitHub
+        </a>
+      </div>
+    </div>
+
+    <div class="stats">
+      {stats.map((s) => (
+        <div class="stat">
+          <span class="stat__value">{s.value}</span>
+          <span class="stat__label">{s.label}</span>
+        </div>
+      ))}
+    </div>
   </section>
 
-  {tracks.map((track) => track.lessons.length > 0 && (
-    <section style="margin-bottom: 3rem;">
-      <h2 style="margin-bottom: 0.25rem;">
+  {tracks.map((track) => (
+    <section class={`track-section ${track.lessons.length === 0 ? "track-section--empty" : ""}`} id={track.id}>
+      <h2 class="track-section__head">
         <span class={`badge ${track.badge}`}>{t(`track.${track.id}`)}</span>
-        <span style="margin-left: 0.6rem; font-size: 0.8125rem; color: var(--text-faint); font-weight: 400;">
-          {track.lessons.length} {t("home.lessons")}
+        <span class="track-section__count">
+          {track.lessons.length > 0 ? `${track.lessons.length} ${t("home.lessons")}` : "—"}
         </span>
       </h2>
-      <p style="color: var(--text-muted); margin: 0 0 1.25rem; max-width: 46rem;">
-        {t(`track.${track.id}.desc`)}
-      </p>
-      <div class="grid grid--2">
-        {track.lessons.map((lesson) => (
-          <a class="card" href={`/${lang}/lessons/${lesson.data.key}/`}>
-            <div class="card__meta">
-              <span>{t("lesson.lesson")} {lesson.data.order}</span>
-              <span>·</span>
-              <span>{lesson.data.minutes} {t("lesson.minutes")}</span>
-            </div>
-            <h3 class="card__title">{lesson.data.title}</h3>
-            <p class="card__summary">{lesson.data.summary}</p>
-          </a>
-        ))}
-      </div>
+      <p class="track-section__desc">{t(`track.${track.id}.desc`)}</p>
+
+      {track.lessons.length > 0 ? (
+        <div class="grid grid--2">
+          {track.lessons.map((lesson) => (
+            <a class="card" href={`/${lang}/lessons/${lesson.data.key}/`}>
+              <div class="card__meta">
+                <span>{t("lesson.lesson")} {lesson.data.order}</span>
+                <span>·</span>
+                <span>{lesson.data.minutes} {t("lesson.minutes")}</span>
+              </div>
+              <h3 class="card__title">{lesson.data.title}</h3>
+              <p class="card__summary">{lesson.data.summary}</p>
+              {lesson.data.tags.length > 0 && (
+                <div class="card__tags">
+                  {lesson.data.tags.slice(0, 4).map((tag) => <span class="tag">{tag}</span>)}
+                </div>
+              )}
+              <span class="card__foot">
+                {lesson.data.title.length > 0 && (lang === "pt" ? "Ler" : "Read")}
+                <span class="card__arrow" aria-hidden="true">→</span>
+              </span>
+            </a>
+          ))}
+        </div>
+      ) : (
+        <p class="soon">{t("home.soon")}</p>
+      )}
     </section>
   ))}
+
+  <!-- As checagens do portão, disparadas pelo navegador. Com a stack no ar
+       elas são requisições de verdade; sem ela, a gravação do último portão. -->
+  <section class="track-section" id="verify">
+    <h2 class="track-section__head">{t("home.verify.title")}</h2>
+    <p class="track-section__desc">{t("home.verify.desc")}</p>
+    <GateRunner client:visible lang={lang} />
+  </section>
 </Base>
