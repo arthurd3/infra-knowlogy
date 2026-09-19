@@ -1,0 +1,240 @@
+---
+key: what-a-port-is
+lang: en
+track: seguranca
+order: 1
+title: What a port actually is
+summary: Before talking about the most attacked ports you have to know what a port is — and the answer alone explains why scanning the internet is cheap, why changing the number protects nothing, and why this stack has exactly one port reaching the host.
+minutes: 13
+tags: [security, ports, scanning, tcp, attack-surface]
+sources:
+  - label: "IANA — Service Name and Transport Protocol Port Number Registry"
+    url: "https://www.iana.org/assignments/service-names-port-numbers/service-names-port-numbers.xhtml"
+    kind: spec
+  - label: "RFC 9293 — Transmission Control Protocol"
+    url: "https://www.rfc-editor.org/rfc/rfc9293"
+    kind: spec
+  - label: "Nmap — Port Scanning Basics"
+    url: "https://nmap.org/book/man-port-scanning-basics.html"
+    kind: docs
+  - label: "SANS Internet Storm Center — Port Trends"
+    url: "https://isc.sans.edu/data/trends.html"
+    kind: blog
+    accessed: "2026-09-19"
+---
+
+import PortAnatomy from "../../../components/diagrams/PortAnatomy.astro";
+import AttackSurface from "../../../components/diagrams/AttackSurface.astro";
+
+There is a poster that circulates a lot, and it is the reason this track exists:
+**"the most attacked ports"**, eight rows, number, service, use and "common
+attacks". It is a good hook. It is also a table that only makes sense to someone
+who already knows what a port is — and to someone who does not, it becomes a
+list of numbers to memorise.
+
+This lesson is the foundation. By the end of it you will be able to answer,
+without looking anything up: what a port is, why an attacker can sweep the
+entire internet, what he learns from each answer, and why changing your port
+number is nearly useless.
+
+## What a port is not
+
+It is not a hole in your computer. It is not a place. It is not something you
+open and close like a window.
+
+<Term word="port" alt="porta" open>
+A port is a **16-bit number** — 0 to 65,535 — that travels inside every network
+packet, next to the address. The address says *which machine*; the port says
+*which conversation inside that machine*.
+
+The operating system keeps a table: "who asked to receive whatever arrives on
+port 8080?". When a packet comes in, it reads the number, consults the table and
+hands the data to the right process. If nobody claimed that number, there is
+nobody to hand it to.
+
+Which is why "port 80 is open" really means: **there is a process running that
+asked the system to receive whatever arrives on port 80**. The port has no
+existence of its own — it is a row in a table.
+</Term>
+
+The building analogy works as a start: the IP address is the building, the port
+is the apartment number. But it breaks at one important point, and that point is
+this whole track's subject: **in a building, apartment 402 exists even if nobody
+lives there.** On a network, it does not. If no process is listening, there is
+no apartment — only a number nobody claimed.
+
+<PortAnatomy />
+
+## The three answers, and the map they draw
+
+When somebody sends a packet to one of your ports, the answer is one of three —
+and the three say different things:
+
+| What comes back | What it means | What the attacker concludes |
+|---|---|---|
+| `SYN-ACK` | a process accepted the connection | **there is a service here** |
+| `RST` | the machine exists, nobody is listening | the machine is alive |
+| nothing | a firewall swallowed the packet | **somebody is filtering** |
+
+Notice that the third answer is the **absence** of an answer, and it informs
+too. It is the difference between "nobody is home" and "somebody is home and
+does not want to talk" — and that difference is exactly what separates closing a
+port from filtering it.
+
+<Term word="port scan" alt="varredura de portas">
+Sending a "hello" packet to every port of an address and writing down what
+answers. Sweeping all 65,535 ports of **one** address takes seconds.
+
+And this is where most people's intuition fails: the attacker does not sweep
+65,535 ports of one target. He does the opposite — he picks **one** port and
+sweeps millions of addresses with it, which is cheaper still. Mass-scanning
+tools can cover the entire IPv4 address space on a single port in a matter of
+minutes, from one machine.
+
+Which is why the question "who would want to attack me?" is badly formed. Nobody
+picked you. You were one of the addresses on the list.
+</Term>
+
+## Why "most attacked port" is even a thing
+
+If scanning happens per port rather than per target, the attacker has to choose
+**which** port to sweep. And he chooses on the same logic as any business: the
+one with the best chance of paying off per attempt.
+
+That explains the poster's entire list. Port 23 (Telnet) is on it not because
+Telnet is especially fragile today, but because millions of cheap devices still
+run it with the factory password. Port 3389 (RDP) is on it because one hit is
+worth an administrator session inside a corporate network. Port 445 (SMB) is on
+it because it produced a worm once.
+
+<FieldNote kind="blog" source="SANS Internet Storm Center" url="https://isc.sans.edu/data/trends.html" when="accessed 2026-09-19">
+The ranking of most-scanned ports is **measured**, not opined: the Internet
+Storm Center aggregates firewall logs from sensors worldwide and publishes which
+ports take the most attempts, with today's numbers.
+
+It is worth opening and comparing against the poster. Positions shift from week
+to week — it is a live phenomenon that responds to every new CVE and every
+botnet that switches targets. Any printed list of "the most attacked ports" is a
+photograph, and its value lies in explaining *why* those ports, not in
+memorising the order.
+</FieldNote>
+
+## Changing the number is not a defense
+
+It is the most repeated piece of advice and the most misunderstood: "move SSH
+from 22 to 2222".
+
+<Callout type="trap" label="Why that barely helps">
+Two reasons, and the second one settles the argument:
+
+1. **Sweeping every port of one target takes seconds.** If somebody has already
+   decided to attack you specifically, the number does not slow them down
+   meaningfully.
+2. **The service introduces itself.** As soon as the connection opens, the SSH
+   server sends a line that literally reads `SSH-2.0-OpenSSH_9.6`. The attacker
+   does not have to infer from the port — he asks and receives the name and the
+   version. This is called *banner grabbing*, and it holds for nearly every
+   service.
+
+There is a gain, and it is a different one: **less log noise**. Moving the
+service off the standard port stops the large-scale automated sweeps, and
+whatever is left in the log stands a chance of being somebody actually looking
+at you. That is valuable for *detection*. Just do not mistake being quiet for
+being protected.
+</Callout>
+
+## Three different things called "port"
+
+Anyone working with containers trips over this weekly, and the lesson
+[Networking, internal DNS and the port that bypasses your firewall](/en/lessons/networking-and-dns/)
+unpacks it from the builder's side. From the attacker's side, the summary is:
+
+- **`EXPOSE 8080`** in a Dockerfile — documentation. It opens nothing.
+- **The port the process listens on** — this is the one that truly exists,
+  inside the container.
+- **`ports:` in Compose** — publishing: it brings the container's port onto a
+  host interface. **It is the only one of the three that grows your attack
+  surface.**
+
+<Callout type="danger" label="The prefix that decides everything">
+```yaml
+ports:
+  - "8080:8080"              # listens on 0.0.0.0 — the entire internet
+  - "127.0.0.1:8080:8080"    # the local host only
+```
+
+And do not count on the firewall: Docker writes NAT rules into a chain evaluated
+**before** UFW's or firewalld's rules. `ufw status` says "deny incoming" and the
+port is open anyway, because the firewall is never consulted.
+
+Every `ports:` in this stack carries the `127.0.0.1:` prefix, and step 1 of
+`make attack-lab` fails if any of them loses it.
+</Callout>
+
+## This stack's surface, measured
+
+Six services running. One reaches the host.
+
+<AttackSurface />
+
+<RunIt title="Look at your own machine's ports, and at this stack's">
+
+```bash
+# 1. Everything listening on YOUR host, with the process owning each socket.
+#    You will probably find something you forgot was running.
+ss -ltnp
+
+# 2. What the stack publishes. Look at the prefix: 127.0.0.1 is loopback,
+#    0.0.0.0 is the entire internet.
+make up
+docker compose -f stack/compose.yaml -f stack/compose.prod.yaml ps
+
+# 3. The three answers, live. From inside the proxy, against two neighbours:
+docker compose -f stack/compose.yaml -f stack/compose.prod.yaml \
+  exec edge sh -c 'nc -z -w2 api 8080 && echo "api:8080 OPEN"'
+docker compose -f stack/compose.yaml -f stack/compose.prod.yaml \
+  exec edge sh -c 'nc -z -w2 db 5432 || echo "db:5432 unreachable — not even a route"'
+```
+
+</RunIt>
+
+<LabExercise check="1/11 — host port sweep" file="stack/compose.yaml">
+Without looking at `compose.yaml`: the stack has six services and every one of
+them listens on some port. How many of those ports can an attacker on the
+internet reach, and which command answers that with certainty?
+
+<Fragment slot="hint">
+The question is not how many ports exist — it is how many were **published**,
+and on which interface. Two different things.
+</Fragment>
+
+<Fragment slot="answer">
+**None.** The stack's only publication is `127.0.0.1:8080`, which is loopback:
+reachable only from inside the host itself. Everything else talks over Docker's
+internal network, on the container's port, with no publishing at all.
+
+```bash
+docker compose -f stack/compose.yaml -f stack/compose.prod.yaml ps --format json \
+  | grep -o '"URL":"[^"]*"' | sort -u
+```
+
+If `0.0.0.0` shows up on any line, that port is published to the world. Step 1
+of `make attack-lab` runs exactly this check and fails when the prefix
+disappears from any service.
+</Fragment>
+</LabExercise>
+
+## What sticks
+
+- A port is a **number in a system table**, not a place. With no process
+  listening, there is no port.
+- The attacker sweeps **one port across millions of addresses**, not the other
+  way round. You were not chosen; you were on the list.
+- The three answers — open, closed, filtered — are the map. The absence of an
+  answer informs too.
+- Changing the number reduces **noise**, not risk: the service introduces itself
+  on the first line of the conversation.
+- The defense that works is the port **not existing from the outside**. Which is
+  what the next lesson shows holding for 22, 23 and 3389.
+
+<Quiz set="what-a-port-is" />

@@ -1,0 +1,239 @@
+---
+key: what-a-port-is
+lang: pt
+track: seguranca
+order: 1
+title: O que é uma porta, de verdade
+summary: Antes de falar das portas mais atacadas é preciso saber o que uma porta é — e a resposta explica sozinha por que varrer a internet é barato, por que trocar o número não protege nada, e por que esta stack tem exatamente uma porta chegando ao host.
+minutes: 13
+tags: [seguranca, portas, varredura, tcp, superficie-de-ataque]
+sources:
+  - label: "IANA — Service Name and Transport Protocol Port Number Registry"
+    url: "https://www.iana.org/assignments/service-names-port-numbers/service-names-port-numbers.xhtml"
+    kind: spec
+  - label: "RFC 9293 — Transmission Control Protocol"
+    url: "https://www.rfc-editor.org/rfc/rfc9293"
+    kind: spec
+  - label: "Nmap — Port Scanning Basics"
+    url: "https://nmap.org/book/man-port-scanning-basics.html"
+    kind: docs
+  - label: "SANS Internet Storm Center — Port Trends"
+    url: "https://isc.sans.edu/data/trends.html"
+    kind: blog
+    accessed: "2026-09-19"
+---
+
+import PortAnatomy from "../../../components/diagrams/PortAnatomy.astro";
+import AttackSurface from "../../../components/diagrams/AttackSurface.astro";
+
+Existe um cartaz que circula muito, e ele é o motivo desta trilha existir:
+**"as portas mais atacadas"**, oito linhas, número, serviço, uso e "ataques
+comuns". É um bom gancho. Também é uma tabela que só faz sentido para quem já
+sabe o que é uma porta — e para quem não sabe, ela vira uma lista de números
+para decorar.
+
+Esta lição é a base. No fim dela você vai conseguir responder, sem consultar
+nada: o que é uma porta, por que um invasor consegue varrer a internet inteira,
+o que ele aprende com cada resposta, e por que mudar o número da sua porta é
+quase inútil.
+
+## O que uma porta não é
+
+Não é um buraco no seu computador. Não é um lugar. Não é uma coisa que se abre
+e se fecha como uma janela.
+
+<Term word="porta" alt="port" open>
+Uma porta é um **número de 16 bits** — de 0 a 65.535 — que viaja dentro de cada
+pacote de rede, ao lado do endereço. O endereço diz *qual máquina*; a porta diz
+*qual conversa dentro daquela máquina*.
+
+O sistema operacional mantém uma tabela: "quem pediu para receber o que chegar
+na porta 8080?". Quando um pacote chega, ele olha o número, consulta a tabela e
+entrega os dados ao processo certo. Se ninguém pediu aquele número, não há a
+quem entregar.
+
+É por isso que "a porta 80 está aberta" na verdade quer dizer: **existe um
+processo rodando que pediu ao sistema para receber o que chegar na porta 80**.
+A porta não tem existência própria — ela é uma entrada numa tabela.
+</Term>
+
+A analogia do prédio funciona para começar: o endereço IP é o prédio, a porta é
+o número do apartamento. Mas ela quebra num ponto importante, e o ponto é o
+assunto inteiro desta trilha: **no prédio, o apartamento 402 existe mesmo que
+ninguém more nele.** Na rede, não. Se nenhum processo estiver escutando, não há
+apartamento nenhum — há só um número que ninguém reclamou.
+
+<PortAnatomy />
+
+## As três respostas, e o mapa que elas desenham
+
+Quando alguém manda um pacote para uma porta sua, a resposta é uma de três — e
+as três dizem coisas diferentes:
+
+| O que volta | O que significa | O que o invasor conclui |
+|---|---|---|
+| `SYN-ACK` | um processo aceitou a conexão | **tem serviço aqui** |
+| `RST` | a máquina existe, ninguém escuta | a máquina está viva |
+| nada | um firewall engoliu o pacote | **alguém está filtrando** |
+
+Repare que a terceira resposta é a **ausência** de resposta, e ela também
+informa. É a diferença entre "não tem ninguém" e "tem alguém que não quer
+falar" — e essa diferença é exatamente o que separa fechar uma porta de
+filtrá-la.
+
+<Term word="varredura de portas" alt="port scan">
+Mandar um pacote de "olá" para cada porta de um endereço e anotar o que
+responde. Uma varredura das 65.535 portas de **um** endereço leva segundos.
+
+E é aí que a intuição da maioria das pessoas falha: o invasor não varre as
+65.535 portas de um alvo. Ele faz o contrário — escolhe **uma** porta e varre
+milhões de endereços com ela, o que é ainda mais barato. Ferramentas de
+varredura em massa conseguem percorrer todo o espaço de endereços IPv4 numa
+única porta em questão de minutos, de uma máquina só.
+
+Por isso a pergunta "quem iria querer me atacar?" está mal formulada. Ninguém
+escolheu você. Você foi um dos endereços da lista.
+</Term>
+
+## Por que existe "porta mais atacada"
+
+Se a varredura é por porta e não por alvo, então o invasor precisa escolher
+**qual** porta varrer. E ele escolhe pela mesma lógica de qualquer negócio: a
+que tem mais chance de dar retorno por tentativa.
+
+Isso explica a lista do cartaz inteira. A 23 (Telnet) está lá não porque o
+Telnet seja especialmente frágil hoje, mas porque existem milhões de aparelhos
+baratos que ainda o rodam com a senha de fábrica. A 3389 (RDP) está lá porque um
+acerto vale uma sessão de administrador numa rede corporativa. A 445 (SMB) está
+lá porque um dia deu um verme.
+
+<FieldNote kind="blog" source="SANS Internet Storm Center" url="https://isc.sans.edu/data/trends.html" when="consultado em 2026-09-19">
+O ranking de portas mais varridas é **medido**, não opinado: o Internet Storm
+Center agrega logs de firewall de sensores no mundo inteiro e publica quais
+portas recebem mais tentativas, com os números do dia.
+
+Vale abrir e comparar com o cartaz. As posições mudam de semana para semana — é
+um fenômeno vivo, que responde a cada CVE nova e a cada botnet que troca de
+alvo. Qualquer lista impressa de "as portas mais atacadas" é uma fotografia, e
+o valor dela está em explicar *por que* aquelas portas, não em memorizar a
+ordem.
+</FieldNote>
+
+## Trocar o número não é defesa
+
+É o conselho mais repetido e o mais mal compreendido: "mude o SSH da 22 para a
+2222".
+
+<Callout type="trap" label="Por que isso quase não ajuda">
+Duas razões, e a segunda é a que resolve a discussão:
+
+1. **Varrer todas as portas de um alvo leva segundos.** Se alguém já decidiu
+   atacar especificamente você, o número não o atrasa de forma significativa.
+2. **O serviço se identifica sozinho.** Assim que a conexão abre, o servidor SSH
+   manda uma linha que diz literalmente `SSH-2.0-OpenSSH_9.6`. O invasor não
+   precisa supor pela porta — ele pergunta e recebe o nome e a versão. Isso se
+   chama *banner grabbing*, e vale para quase todo serviço.
+
+O ganho existe, e é outro: **menos ruído no log**. Tirando o serviço da porta
+padrão, você para de receber as varreduras automáticas de larga escala, e o que
+sobrar no log tem chance de ser alguém olhando para você de verdade. Isso é
+valioso para *detecção*. Só não confunda ficar quieto com estar protegido.
+</Callout>
+
+## Três coisas diferentes chamadas "porta"
+
+Quem trabalha com container tropeça nisto toda semana, e a lição
+[Redes, DNS interno e a porta que fura o firewall](/pt/lessons/networking-and-dns/)
+destrincha o assunto pelo lado de quem constrói. Do lado de quem ataca, o resumo
+é:
+
+- **`EXPOSE 8080`** no Dockerfile — documentação. Não abre nada.
+- **A porta que o processo escuta** — é esta que existe de verdade, dentro do
+  container.
+- **`ports:` no Compose** — publicação: traz a porta do container para uma
+  interface do host. **É a única das três que aumenta a sua superfície de
+  ataque.**
+
+<Callout type="danger" label="O prefixo que decide tudo">
+```yaml
+ports:
+  - "8080:8080"              # escuta em 0.0.0.0 — a internet inteira
+  - "127.0.0.1:8080:8080"    # só o host local
+```
+
+E não adianta contar com o firewall: o Docker escreve regras de NAT numa cadeia
+avaliada **antes** das regras do UFW ou do firewalld. O `ufw status` diz "deny
+incoming" e a porta está aberta mesmo assim, porque o firewall nunca chega a ser
+consultado.
+
+Todo `ports:` desta stack tem o prefixo `127.0.0.1:`, e o passo 1 do
+`make attack-lab` reprova se algum deixar de ter.
+</Callout>
+
+## A superfície desta stack, medida
+
+Seis serviços rodando. Um chega ao host.
+
+<AttackSurface />
+
+<RunIt title="Veja as portas da sua própria máquina, e as desta stack">
+
+```bash
+# 1. Tudo que escuta no SEU host, com o processo dono de cada socket.
+#    Provavelmente vai aparecer coisa que você esqueceu que estava rodando.
+ss -ltnp
+
+# 2. O que a stack publica. Procure o prefixo: 127.0.0.1 é loopback,
+#    0.0.0.0 é a internet inteira.
+make up
+docker compose -f stack/compose.yaml -f stack/compose.prod.yaml ps
+
+# 3. As três respostas, ao vivo. De dentro do proxy, contra dois vizinhos:
+docker compose -f stack/compose.yaml -f stack/compose.prod.yaml \
+  exec edge sh -c 'nc -z -w2 api 8080 && echo "api:8080 ABERTA"'
+docker compose -f stack/compose.yaml -f stack/compose.prod.yaml \
+  exec edge sh -c 'nc -z -w2 db 5432 || echo "db:5432 inalcançável — nem rota existe"'
+```
+
+</RunIt>
+
+<LabExercise check="1/11 — varredura das portas do host" file="stack/compose.yaml">
+Sem olhar o `compose.yaml`: a stack tem seis serviços e todos escutam em alguma
+porta. Quantas dessas portas um invasor na internet consegue alcançar, e qual
+comando responde isso com certeza?
+
+<Fragment slot="hint">
+A pergunta não é quantas portas existem — é quantas foram **publicadas**, e em
+qual interface. Duas coisas diferentes.
+</Fragment>
+
+<Fragment slot="answer">
+**Nenhuma.** A única publicação da stack é `127.0.0.1:8080`, que é loopback: só
+alcançável de dentro do próprio host. Todo o resto fala pela rede interna do
+Docker, na porta do container, sem publicação nenhuma.
+
+```bash
+docker compose -f stack/compose.yaml -f stack/compose.prod.yaml ps --format json \
+  | grep -o '"URL":"[^"]*"' | sort -u
+```
+
+Se aparecer `0.0.0.0` em qualquer linha, aquela porta está publicada para o
+mundo. O passo 1 do `make attack-lab` faz exatamente esta checagem e falha se o
+prefixo sumir de algum serviço.
+</Fragment>
+</LabExercise>
+
+## O que fica
+
+- Uma porta é um **número numa tabela do sistema**, não um lugar. Sem processo
+  escutando, não há porta.
+- O invasor varre **uma porta em milhões de endereços**, não o contrário. Você
+  não foi escolhido; você estava na lista.
+- As três respostas — aberta, fechada, filtrada — são o mapa. A ausência de
+  resposta também informa.
+- Trocar o número reduz **ruído**, não risco: o serviço se apresenta sozinho na
+  primeira linha da conversa.
+- A defesa que funciona é a porta **não existir do lado de fora**. É o que a
+  próxima lição vai mostrar valendo para 22, 23 e 3389.
+
+<Quiz set="what-a-port-is" />

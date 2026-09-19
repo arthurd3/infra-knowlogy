@@ -1,0 +1,152 @@
+{
+  "note_pt": "Perguntas da lição 1 da trilha de Segurança.",
+  "note_en": "Questions for lesson 1 of the Security track.",
+  "pt": [
+    {
+      "q": "Um invasor quer achar servidores SSH. O que ele faz?",
+      "options": [
+        {
+          "text": "Escolhe a porta 22 e varre milhões de endereços com ela.",
+          "correct": true,
+          "why": "A varredura é por PORTA, não por alvo. Percorrer o espaço IPv4 inteiro numa única porta leva minutos com uma ferramenta de varredura em massa, de uma máquina só. É por isso que 'quem iria querer me atacar?' é a pergunta errada: ninguém escolheu você, você estava na lista."
+        },
+        {
+          "text": "Escolhe um alvo e varre as 65.535 portas dele.",
+          "why": "Isso ele também sabe fazer, e leva segundos — mas é o que se faz DEPOIS de escolher um alvo. Para encontrar alvos em massa, varrer uma porta em muitos endereços rende muito mais por segundo de trabalho."
+        },
+        {
+          "text": "Consulta um registro público de quem roda SSH.",
+          "why": "Existem buscadores que indexam serviços expostos e pouparia trabalho — mas eles próprios são construídos varrendo. O mecanismo primário continua sendo a varredura; o buscador é só ela, feita antes e vendida pronta."
+        }
+      ]
+    },
+    {
+      "q": "Você move o SSH da porta 22 para a 2222. O que de fato melhorou?",
+      "options": [
+        {
+          "text": "O ruído no log: as varreduras automáticas de larga escala param de aparecer.",
+          "correct": true,
+          "why": "É um ganho real e de DETECÇÃO: o que sobrar no log tem chance de ser alguém olhando para você de propósito, em vez de mil bots batendo na 22. O risco em si muda pouco — quem varrer todas as portas acha em segundos."
+        },
+        {
+          "text": "A segurança: o serviço ficou escondido.",
+          "why": "Não ficou. Varrer todas as portas de um alvo leva segundos, e, pior, o sshd se apresenta na primeira linha da conversa com `SSH-2.0-OpenSSH_9.6`. Nem é preciso supor pela porta — basta conectar e ler (banner grabbing)."
+        },
+        {
+          "text": "Nada: é uma mudança puramente cosmética.",
+          "why": "Vai longe demais na direção oposta. A mudança não protege, mas limpar o log é valioso de verdade — um log cheio de ruído é um log que ninguém lê, e aí o ataque real passa despercebido."
+        }
+      ]
+    },
+    {
+      "q": "Uma porta sua não responde absolutamente nada a um pacote. O que o invasor conclui?",
+      "options": [
+        {
+          "text": "Que há um firewall filtrando na frente — o silêncio é informação.",
+          "correct": true,
+          "why": "São três respostas possíveis e as três informam: `SYN-ACK` diz que há serviço, `RST` diz que a máquina está viva sem serviço ali, e silêncio diz que alguém está engolindo os pacotes. A AUSÊNCIA de resposta é o que separa 'fechada' de 'filtrada'."
+        },
+        {
+          "text": "Que a porta está fechada.",
+          "why": "Porta fechada responde — com `RST`, que quer dizer 'a máquina existe, ninguém escuta aqui'. Silêncio é outra coisa e denuncia a presença de um filtro, o que é mais informação, não menos."
+        },
+        {
+          "text": "Que a máquina não existe.",
+          "why": "Pode ser, e é justamente por isso que o invasor não para aí: ele cruza com outras portas do mesmo endereço. Se alguma responder `RST`, a máquina está viva e as caladas são filtradas."
+        }
+      ]
+    },
+    {
+      "q": "Na stack deste repositório, o `db` escuta na 5432 e o `compose.yaml` não tem `ports:` para ele. Um invasor na internet alcança esse banco?",
+      "options": [
+        {
+          "text": "Não: sem publicação, a porta só existe dentro da rede do Docker.",
+          "correct": true,
+          "why": "`ports:` é a ÚNICA das três coisas chamadas 'porta' que aumenta a superfície de ataque — ela traz a porta do container para uma interface do host. Sem ela, o `db` continua escutando normalmente, e só quem divide rede com ele consegue falar."
+        },
+        {
+          "text": "Sim, porque o processo está escutando na 5432.",
+          "why": "Escutar e estar publicado são coisas diferentes. O processo escuta dentro do namespace de rede do container; para alguém de fora do Docker chegar até lá, é preciso um mapeamento no host, que é o que o `ports:` faz."
+        },
+        {
+          "text": "Só se o firewall do host permitir a porta 5432.",
+          "why": "Inverte a ordem do problema — e há uma armadilha aqui: quando você publica uma porta, o Docker escreve regras de NAT avaliadas ANTES do firewall, então o firewall sequer é consultado. Sem publicação não há o que permitir nem o que bloquear."
+        }
+      ]
+    }
+  ],
+  "en": [
+    {
+      "q": "An attacker wants to find SSH servers. What does he do?",
+      "options": [
+        {
+          "text": "Picks port 22 and sweeps millions of addresses with it.",
+          "correct": true,
+          "why": "Scanning happens per PORT, not per target. Covering the whole IPv4 space on a single port takes minutes with a mass-scanning tool, from one machine. Which is why 'who would want to attack me?' is the wrong question: nobody picked you, you were on the list."
+        },
+        {
+          "text": "Picks a target and sweeps its 65,535 ports.",
+          "why": "He knows how to do that too, and it takes seconds — but it is what you do AFTER choosing a target. To find targets in bulk, sweeping one port across many addresses pays far more per second of work."
+        },
+        {
+          "text": "Looks it up in a public registry of who runs SSH.",
+          "why": "Search engines that index exposed services do exist and would save effort — but they are themselves built by scanning. The primary mechanism is still the sweep; the search engine is just that sweep, done earlier and sold ready-made."
+        }
+      ]
+    },
+    {
+      "q": "You move SSH from port 22 to 2222. What genuinely improved?",
+      "options": [
+        {
+          "text": "Log noise: the large-scale automated sweeps stop showing up.",
+          "correct": true,
+          "why": "That is a real gain, and it is about DETECTION: whatever is left in the log stands a chance of being somebody deliberately looking at you, instead of a thousand bots knocking on 22. The risk itself barely moves — anyone sweeping every port finds it in seconds."
+        },
+        {
+          "text": "Security: the service is now hidden.",
+          "why": "It is not. Sweeping every port of one target takes seconds and, worse, sshd introduces itself on the first line of the conversation with `SSH-2.0-OpenSSH_9.6`. There is no need to infer from the port — just connect and read (banner grabbing)."
+        },
+        {
+          "text": "Nothing: it is a purely cosmetic change.",
+          "why": "That overshoots in the other direction. The change does not protect, but cleaning up the log is genuinely valuable — a log full of noise is a log nobody reads, and that is how the real attack goes unnoticed."
+        }
+      ]
+    },
+    {
+      "q": "One of your ports answers absolutely nothing to a packet. What does the attacker conclude?",
+      "options": [
+        {
+          "text": "That a firewall is filtering in front of it — the silence is information.",
+          "correct": true,
+          "why": "There are three possible answers and all three inform: `SYN-ACK` says there is a service, `RST` says the machine is alive with nothing listening there, and silence says somebody is swallowing the packets. The ABSENCE of an answer is what separates 'closed' from 'filtered'."
+        },
+        {
+          "text": "That the port is closed.",
+          "why": "A closed port answers — with `RST`, which means 'the machine exists, nobody is listening here'. Silence is something else and gives away the presence of a filter, which is more information, not less."
+        },
+        {
+          "text": "That the machine does not exist.",
+          "why": "It might not, which is exactly why the attacker does not stop there: he cross-checks with other ports on the same address. If any of them answers `RST`, the machine is alive and the quiet ones are filtered."
+        }
+      ]
+    },
+    {
+      "q": "In this repository's stack, `db` listens on 5432 and `compose.yaml` has no `ports:` for it. Can an attacker on the internet reach that database?",
+      "options": [
+        {
+          "text": "No: with no publishing, the port exists only inside Docker's network.",
+          "correct": true,
+          "why": "`ports:` is the ONLY one of the three things called 'port' that grows your attack surface — it brings the container's port onto a host interface. Without it, `db` keeps listening normally, and only whoever shares a network with it can talk."
+        },
+        {
+          "text": "Yes, because the process is listening on 5432.",
+          "why": "Listening and being published are different things. The process listens inside the container's network namespace; for somebody outside Docker to get there, a mapping on the host is required, and that is what `ports:` does."
+        },
+        {
+          "text": "Only if the host firewall allows port 5432.",
+          "why": "That inverts the problem — and there is a trap here: when you publish a port, Docker writes NAT rules evaluated BEFORE the firewall, so the firewall is never consulted. With no publishing there is nothing to allow and nothing to block."
+        }
+      ]
+    }
+  ]
+}

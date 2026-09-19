@@ -31,9 +31,10 @@ now_ms() { date +%s%3N; }
 # entre "zero" e "não rodou".
 M_BOOT_S=null; M_AGENT_S=null; M_PIPE_S=null; M_LINT_S=null; M_BUILD_S=null
 M_WARM_S=null; M_PLUGINS=null; M_BIN_MATCH=null; M_DIGEST_MATCH=null
+M_SCAN_S=null; M_SIGN_S=null
 
 # ─── 1. Estático, sem subir nada ─────────────────────────────────────────────
-step "1/7  Lint estático e pins"
+step "1/8  Lint estático e pins"
 
 if "${COMPOSE[@]}" config -q 2>/dev/null; then ok "compose config"; else bad "compose config"; fi
 
@@ -75,7 +76,7 @@ else
 fi
 
 # ─── 2. O controller nasce pronto ────────────────────────────────────────────
-step "2/7  O controller sobe do casc, sem clique"
+step "2/8  O controller sobe do casc, sem clique"
 
 t0=$(now_ms)
 if bash "$ROOT/tools/scripts/cicd-up.sh" >/tmp/cicd-up.txt 2>&1; then
@@ -100,9 +101,14 @@ JK_TOKEN=$(jk_mint_token)
   || ok "nenhum assistente: initialAdminPassword não existe"
 
 # A armadilha que mais custa: chave errada no JCasC é IGNORADA em silêncio.
-if "${COMPOSE[@]}" logs controller 2>&1 | grep -qiE "unknown key|Unable to configure"; then
+# Log para variável antes do grep, pelo mesmo motivo do console mais abaixo:
+# com pipefail, `comando | grep -q` inverte o resultado quando o grep acerta e
+# fecha o pipe. Aqui a inversão seria PIOR que no outro caso — ela reportaria
+# "nenhuma chave ignorada" justamente quando houvesse uma.
+cascalog=$("${COMPOSE[@]}" logs controller 2>&1)
+if printf '%s' "$cascalog" | grep -qiE "unknown key|Unable to configure"; then
   bad "o JCasC ignorou alguma chave em silêncio"
-  "${COMPOSE[@]}" logs controller 2>&1 | grep -iE "unknown key|Unable to configure" | head -4 | sed 's/^/       /'
+  printf '%s' "$cascalog" | grep -iE "unknown key|Unable to configure" | head -4 | sed 's/^/       /'
 else
   ok "o JCasC aplicou tudo (nenhum 'Unknown key' no log)"
 fi
@@ -115,7 +121,7 @@ else
 fi
 
 # ─── 3. Isolamento controller/agente ─────────────────────────────────────────
-step "3/7  O controller não constrói nada"
+step "3/8  O controller não constrói nada"
 
 n=$(jk_json '/computer/(built-in)/api/json' 'numExecutors' | jk_field numExecutors)
 [ "$n" = "0" ] && ok "built-in com 0 executores" || bad "built-in com $n executores (esperado 0)"
@@ -148,14 +154,15 @@ lbl=$(docker inspect -f '{{.ProcessLabel}}' "$("${COMPOSE[@]}" ps -q buildkitd)"
 [ "$lbl" = "container_engine_t" ] && ok "buildkitd confinado como container_engine_t" \
   || bad "buildkitd com rótulo '$lbl' (esperado container_engine_t)"
 
-if "${COMPOSE[@]}" ps --format '{{.Ports}}' 2>/dev/null | grep -q '0\.0\.0\.0'; then
+portas=$("${COMPOSE[@]}" ps --format '{{.Ports}}' 2>/dev/null)
+if printf '%s' "$portas" | grep -q '0\.0\.0\.0'; then
   bad "algo publicado em 0.0.0.0"
 else
   ok "tudo publicado só em 127.0.0.1"
 fi
 
 # ─── 4. Os jobs nascem do seed ───────────────────────────────────────────────
-step "4/7  Os jobs vêm de código, não de clique"
+step "4/8  Os jobs vêm de código, não de clique"
 
 declarados=$(grep -oE "pipelineJob\('([^']+)'\)" "$CICD/controller/jobs/seed.groovy" | sed "s/pipelineJob('\(.*\)')/\1/" | sort | tr '\n' ' ')
 
@@ -180,7 +187,7 @@ printf '%s' "$val" | grep -q "successfully validated" \
   || { bad "Jenkinsfile recusado pelo linter"; printf '       %s\n' "$val" | head -4; }
 
 # ─── 5. O pipeline roda ──────────────────────────────────────────────────────
-step "5/7  O pipeline, de ponta a ponta"
+step "5/8  O pipeline, de ponta a ponta"
 
 if [ "${SKIP_BUILD:-0}" = "1" ]; then
   skip "pipeline completo (SKIP_BUILD=1)"
@@ -198,7 +205,14 @@ else
   # O `builtOn` de um build de Pipeline é string vazia MESMO quando tudo rodou
   # no agente — ele reporta o executor flyweight, que fica no controller. Quem
   # prova que o build saiu de lá é o console.
-  if jk_console stack-pipeline "$numero" 2>/dev/null | grep -q "Running on builder"; then
+  #
+  # O console vai para uma VARIÁVEL antes do grep, e isso não é estilo: com
+  # `set -o pipefail`, `curl … | grep -q` inverte o resultado. O `grep -q` sai
+  # no primeiro acerto e fecha o pipe; o curl morre de SIGPIPE; o pipefail
+  # propaga o não-zero. Ou seja, ACHAR vira "não achei". Custou um `✗` que
+  # parecia defeito do pipeline e era do portão.
+  console=$(jk_console stack-pipeline "$numero" 2>/dev/null)
+  if printf '%s' "$console" | grep -q "Running on builder"; then
     ok "o build rodou no agente, não no controller"
   else
     bad "não encontrei 'Running on builder' no console"
@@ -211,9 +225,17 @@ except Exception: print("null")' 2>/dev/null)
   M_BUILD_S=$(printf '%s' "$est" | python3 -c 'import sys,json
 try: print(next(s["durationMillis"]/1000 for s in json.load(sys.stdin)["stages"] if s["name"]=="build"))
 except Exception: print("null")' 2>/dev/null)
+  for etapa in scan sign; do
+    v=$(printf '%s' "$est" | python3 -c "
+import sys, json
+try: print(next(s['durationMillis']/1000 for s in json.load(sys.stdin)['stages'] if s['name']=='$etapa'))
+except Exception: print('null')" 2>/dev/null)
+    [ "$etapa" = "scan" ] && M_SCAN_S="$v" || M_SIGN_S="$v"
+  done
   nomes=$(printf '%s' "$est" | python3 -c 'import sys,json;print(",".join(s["name"] for s in json.load(sys.stdin).get("stages",[])))' 2>/dev/null)
   case "$nomes" in
-    *lint*build*archive*) ok "estágios na ordem esperada: lint, build, archive" ;;
+    *lint*build*scan*sign*verify*archive*)
+      ok "estágios na ordem esperada: lint, build, scan, sign, verify, archive" ;;
     *) bad "estágios inesperados: $nomes" ;;
   esac
 
@@ -234,7 +256,7 @@ except Exception: print("null")' 2>/dev/null)
 fi
 
 # ─── 6. O pipeline reprova quando deve ───────────────────────────────────────
-step "6/7  A prova negativa"
+step "6/8  A prova negativa"
 
 if [ "${SKIP_NEGATIVE:-0}" = "1" ]; then
   skip "prova negativa (SKIP_NEGATIVE=1)"
@@ -242,7 +264,8 @@ else
   read -r rneg nneg <<<"$(jk_build stack-negative-lint 900)"
   if [ "$rneg" = "FAILURE" ]; then
     ok "stack-negative-lint REPROVOU, como tem que reprovar"
-    jk_console stack-negative-lint "$nneg" 2>/dev/null | grep -qE "DL3006|DL3009|DL3015" \
+    negcon=$(jk_console stack-negative-lint "$nneg" 2>/dev/null)
+    printf '%s' "$negcon" | grep -qE "DL3006|DL3009|DL3015" \
       && ok "e reprovou pelo motivo certo (violação de hadolint no console)" \
       || bad "reprovou, mas o console não mostra a violação de hadolint"
   else
@@ -250,8 +273,42 @@ else
   fi
 fi
 
-# ─── 7. O artefato é o mesmo do build local ──────────────────────────────────
-step "7/7  Reprodutibilidade"
+# ─── 7. Credenciais e assinatura ─────────────────────────────────────────────
+step "7/8  O que o mascaramento faz, e o que não faz"
+
+if [ "${SKIP_BUILD:-0}" = "1" ]; then
+  skip "sonda de credencial (SKIP_BUILD=1)"
+else
+  segredo=$(cat "$CICD/secrets/registry_token" 2>/dev/null)
+  b64=$(printf '%s' "$segredo" | base64)
+  invertido=$(printf '%s' "$segredo" | rev)
+
+  read -r rcred ncred <<<"$(jk_build credential-probe 600)"
+  if [ "$rcred" = "SUCCESS" ]; then
+    log=$(jk_console credential-probe "$ncred" 2>/dev/null)
+    printf '%s' "$log" | grep -q -- "$segredo" \
+      && bad "o valor literal da credencial aparece no console" \
+      || ok "o valor literal da credencial sai mascarado"
+
+    # Este aqui contraria o exemplo que mais se repete na internet. Se um dia
+    # o Jenkins parar de registrar o base64, esta checagem avisa — e a lição
+    # que afirma o contrário precisa ser reescrita.
+    printf '%s' "$log" | grep -q -- "$b64" \
+      && bad "o base64 da credencial vazou — a lição afirma que ele é mascarado" \
+      || ok "o base64 também sai mascarado (contra o que se repete por aí)"
+
+    # E este prova que mascaramento NÃO é fronteira: basta sair do conjunto de
+    # representações que o plugin conhece.
+    printf '%s' "$log" | grep -q -- "$invertido" \
+      && ok "o segredo INVERTIDO passa inteiro — mascaramento não é fronteira" \
+      || bad "o invertido não apareceu; a lição afirma que ele passa"
+  else
+    bad "credential-probe terminou $rcred"
+  fi
+fi
+
+# ─── 8. O artefato é o mesmo do build local ──────────────────────────────────
+step "8/8  Reprodutibilidade"
 
 if [ "${SKIP_REPRO:-0}" = "1" ] || [ "${SKIP_BUILD:-0}" = "1" ]; then
   skip "comparação com o build local (SKIP_REPRO/SKIP_BUILD)"
@@ -285,7 +342,7 @@ fi
 
 # ─── Medições ────────────────────────────────────────────────────────────────
 python3 - "$M_BOOT_S" "$M_PIPE_S" "$M_WARM_S" "$M_LINT_S" "$M_BUILD_S" "$M_PLUGINS" \
-         "$M_BIN_MATCH" "$M_DIGEST_MATCH" <<'PY'
+         "$M_BIN_MATCH" "$M_DIGEST_MATCH" "$M_SCAN_S" "$M_SIGN_S" <<'PY'
 import json, subprocess, sys, pathlib, datetime
 
 def num(v):
@@ -296,7 +353,7 @@ def num(v):
 def boolean(v):
     return {"true": True, "false": False}.get(str(v), None)
 
-boot, pipe, warm, lint, build, plugins, binmatch, digestmatch = sys.argv[1:9]
+boot, pipe, warm, lint, build, plugins, binmatch, digestmatch, scan, sign = sys.argv[1:11]
 jenkins = subprocess.run(
     ["docker", "compose", "-f", "cicd/compose.yaml", "exec", "-T", "controller",
      "sh", "-c", "curl -sI http://localhost:8080/login | awk '/^[Xx]-[Jj]enkins:/{print $2}' | tr -d '\\r'"],
@@ -312,6 +369,8 @@ doc = {
         "pipelineWarmSeconds": num(warm),
         "lintStageSeconds": num(lint),
         "buildStageSeconds": num(build),
+        "scanStageSeconds": num(scan),
+        "signStageSeconds": num(sign),
         "goBinaryIdentical": boolean(binmatch),
         "imageDigestIdentical": boolean(digestmatch),
     },
