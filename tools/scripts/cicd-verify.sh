@@ -106,7 +106,7 @@ JK_TOKEN=$(jk_mint_token)
 # fecha o pipe. Aqui a inversão seria PIOR que no outro caso — ela reportaria
 # "nenhuma chave ignorada" justamente quando houvesse uma.
 cascalog=$("${COMPOSE[@]}" logs controller 2>&1)
-if printf '%s' "$cascalog" | grep -qiE "unknown key|Unable to configure"; then
+if case "$cascalog" in *"Unknown key"*|*"unknown key"*|*"Unable to configure"*) true ;; *) false ;; esac; then
   bad "o JCasC ignorou alguma chave em silêncio"
   printf '%s' "$cascalog" | grep -iE "unknown key|Unable to configure" | head -4 | sed 's/^/       /'
 else
@@ -155,7 +155,7 @@ lbl=$(docker inspect -f '{{.ProcessLabel}}' "$("${COMPOSE[@]}" ps -q buildkitd)"
   || bad "buildkitd com rótulo '$lbl' (esperado container_engine_t)"
 
 portas=$("${COMPOSE[@]}" ps --format '{{.Ports}}' 2>/dev/null)
-if printf '%s' "$portas" | grep -q '0\.0\.0\.0'; then
+if case "$portas" in *0.0.0.0*) true ;; *) false ;; esac; then
   bad "algo publicado em 0.0.0.0"
 else
   ok "tudo publicado só em 127.0.0.1"
@@ -182,9 +182,10 @@ else
 fi
 
 val=$(jk_curl -X POST -F "jenkinsfile=<$CICD/Jenkinsfile" "$JENKINS_URL/pipeline-model-converter/validate")
-printf '%s' "$val" | grep -q "successfully validated" \
-  && ok "o Jenkinsfile passa no linter declarativo do Jenkins" \
-  || { bad "Jenkinsfile recusado pelo linter"; printf '       %s\n' "$val" | head -4; }
+case "$val" in
+  *"successfully validated"*) ok "o Jenkinsfile passa no linter declarativo do Jenkins" ;;
+  *) bad "Jenkinsfile recusado pelo linter"; printf '       %s\n' "$val" | head -4 ;;
+esac
 
 # ─── 5. O pipeline roda ──────────────────────────────────────────────────────
 step "5/8  O pipeline, de ponta a ponta"
@@ -206,17 +207,23 @@ else
   # no agente — ele reporta o executor flyweight, que fica no controller. Quem
   # prova que o build saiu de lá é o console.
   #
-  # O console vai para uma VARIÁVEL antes do grep, e isso não é estilo: com
-  # `set -o pipefail`, `curl … | grep -q` inverte o resultado. O `grep -q` sai
-  # no primeiro acerto e fecha o pipe; o curl morre de SIGPIPE; o pipefail
-  # propaga o não-zero. Ou seja, ACHAR vira "não achei". Custou um `✗` que
-  # parecia defeito do pipeline e era do portão.
+  # Casamento com `case`, SEM pipe — e isso não é estilo.
+  #
+  # Com `set -o pipefail`, `printf "$grande" | grep -q PADRÃO` INVERTE o
+  # resultado quando o padrão aparece cedo: o `grep -q` sai no primeiro acerto
+  # e fecha o pipe, o `printf` ainda tem dezenas de kB para escrever e morre de
+  # SIGPIPE, e o pipefail propaga esse não-zero. ACHAR vira "não achei".
+  #
+  # O detalhe que esconde o defeito: com uma entrada PEQUENA o printf termina
+  # de escrever antes de o grep sair, e o mesmo código funciona. Aqui "Running
+  # on builder" está na linha 20 de 571 — e a checagem negativa, cujo padrão
+  # aparece no fim do log, passava sem problema. O mesmo código, dois
+  # resultados, dependendo de onde o padrão está.
   console=$(jk_console stack-pipeline "$numero" 2>/dev/null)
-  if printf '%s' "$console" | grep -q "Running on builder"; then
-    ok "o build rodou no agente, não no controller"
-  else
-    bad "não encontrei 'Running on builder' no console"
-  fi
+  case "$console" in
+    *"Running on builder"*) ok "o build rodou no agente, não no controller" ;;
+    *) bad "não encontrei 'Running on builder' no console" ;;
+  esac
 
   est=$(jk_stages stack-pipeline "$numero" 2>/dev/null)
   M_LINT_S=$(printf '%s' "$est" | python3 -c 'import sys,json
@@ -265,9 +272,10 @@ else
   if [ "$rneg" = "FAILURE" ]; then
     ok "stack-negative-lint REPROVOU, como tem que reprovar"
     negcon=$(jk_console stack-negative-lint "$nneg" 2>/dev/null)
-    printf '%s' "$negcon" | grep -qE "DL3006|DL3009|DL3015" \
-      && ok "e reprovou pelo motivo certo (violação de hadolint no console)" \
-      || bad "reprovou, mas o console não mostra a violação de hadolint"
+    case "$negcon" in
+      *DL3006*|*DL3009*|*DL3015*) ok "e reprovou pelo motivo certo (violação de hadolint no console)" ;;
+      *) bad "reprovou, mas o console não mostra a violação de hadolint" ;;
+    esac
   else
     bad "stack-negative-lint terminou $rneg — o lint NÃO está recusando nada"
   fi
@@ -286,22 +294,25 @@ else
   read -r rcred ncred <<<"$(jk_build credential-probe 600)"
   if [ "$rcred" = "SUCCESS" ]; then
     log=$(jk_console credential-probe "$ncred" 2>/dev/null)
-    printf '%s' "$log" | grep -q -- "$segredo" \
-      && bad "o valor literal da credencial aparece no console" \
-      || ok "o valor literal da credencial sai mascarado"
+    case "$log" in
+      *"$segredo"*) bad "o valor literal da credencial aparece no console" ;;
+      *) ok "o valor literal da credencial sai mascarado" ;;
+    esac
 
     # Este aqui contraria o exemplo que mais se repete na internet. Se um dia
     # o Jenkins parar de registrar o base64, esta checagem avisa — e a lição
     # que afirma o contrário precisa ser reescrita.
-    printf '%s' "$log" | grep -q -- "$b64" \
-      && bad "o base64 da credencial vazou — a lição afirma que ele é mascarado" \
-      || ok "o base64 também sai mascarado (contra o que se repete por aí)"
+    case "$log" in
+      *"$b64"*) bad "o base64 da credencial vazou — a lição afirma que ele é mascarado" ;;
+      *) ok "o base64 também sai mascarado (contra o que se repete por aí)" ;;
+    esac
 
     # E este prova que mascaramento NÃO é fronteira: basta sair do conjunto de
     # representações que o plugin conhece.
-    printf '%s' "$log" | grep -q -- "$invertido" \
-      && ok "o segredo INVERTIDO passa inteiro — mascaramento não é fronteira" \
-      || bad "o invertido não apareceu; a lição afirma que ele passa"
+    case "$log" in
+      *"$invertido"*) ok "o segredo INVERTIDO passa inteiro — mascaramento não é fronteira" ;;
+      *) bad "o invertido não apareceu; a lição afirma que ele passa" ;;
+    esac
   else
     bad "credential-probe terminou $rcred"
   fi

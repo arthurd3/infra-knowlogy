@@ -88,7 +88,7 @@ Todo download acontece em tempo de **build da imagem**. Depois que ela existe,
 
 ### Portão independente
 
-`make cicd-verify`, 32 checagens, separado do `verify` e do `k8s-verify`
+`make cicd-verify`, 35 checagens, separado do `verify` e do `k8s-verify`
 (ADR 0007). Quem estuda só Docker não instala Jenkins.
 
 ## Consequências

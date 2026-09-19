@@ -1,0 +1,270 @@
+---
+key: web-ports-and-tls
+lang: pt
+track: seguranca
+order: 3
+title: "80 e 443: o alvo é a aplicação"
+summary: O cartaz diz que a porta 80 sofre injeção de SQL e que a 443 sofre SSL stripping. As duas linhas estão trocadas, e entender por quê é a coisa mais útil desta trilha inteira — inclusive medido aqui, com a senha aparecendo no fio.
+minutes: 16
+tags: [seguranca, http, https, tls, injecao, xss, hsts]
+sources:
+  - label: "OWASP Top 10 2021 — A03: Injection"
+    url: "https://owasp.org/Top10/A03_2021-Injection/"
+    kind: docs
+  - label: "OWASP — Cross Site Scripting Prevention Cheat Sheet"
+    url: "https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html"
+    kind: docs
+  - label: "RFC 6797 — HTTP Strict Transport Security"
+    url: "https://www.rfc-editor.org/rfc/rfc6797"
+    kind: spec
+  - label: "RFC 8446 — TLS 1.3"
+    url: "https://www.rfc-editor.org/rfc/rfc8446"
+    kind: spec
+  - label: "sslstrip — Moxie Marlinspike"
+    url: "https://github.com/moxie0/sslstrip"
+    kind: talk
+---
+
+import PlaintextVsTls from "../../../components/diagrams/PlaintextVsTls.astro";
+
+Duas linhas do cartaz, lado a lado:
+
+| Porta | Ataques comuns (segundo o cartaz) |
+|---|---|
+| **80** — HTTP | SQL Injection, XSS, directory traversal |
+| **443** — HTTPS | Man-in-the-middle, SSL stripping, exploração SSL/TLS |
+
+Lidas rápido, essas duas linhas ensinam uma coisa errada e perigosa: que HTTPS
+protege contra injeção de SQL. Não protege. **Nem um pouco.**
+
+Esta lição desfaz as duas trocas. E a correção não é implicância de vocabulário:
+ela muda onde você gasta o seu tempo.
+
+## O erro de categoria
+
+<Term word="erro de categoria" alt="category error" open>
+Atribuir a uma coisa uma propriedade que pertence a outra. "A porta 80 sofre
+injeção de SQL" é disso: a porta não sofre nada. Ela é um número que diz **por
+onde** a requisição entrou.
+
+Quem sofre injeção de SQL é a **aplicação** que atende naquela porta — e mais
+precisamente, a linha de código dessa aplicação que monta uma consulta juntando
+texto. Essa linha não sabe nem por qual porta a requisição chegou. Ela recebe
+uma string.
+
+A consequência prática: trocar a porta, fechar a porta ou cifrar a porta não
+mexe em nada dentro dessa linha.
+</Term>
+
+Os três ataques que o cartaz põe na 80 são, todos, ataques à aplicação:
+
+**Injeção de SQL.** A aplicação monta a consulta ao banco concatenando o que o
+usuário digitou. O usuário digita algo que o banco lê como comando em vez de
+dado. É o assunto inteiro da lição 5, com demonstração medida.
+
+**XSS**, de *cross-site scripting*. A aplicação recebe um texto do usuário
+(um comentário, um nome) e depois **devolve esse texto para outro visitante**
+sem tratar. Se o texto era `<script>…</script>`, o navegador da vítima executa
+aquilo como se fosse código do seu site — e, sendo do seu site, ele tem acesso
+aos cookies dela. O prêmio típico é o cookie de sessão: o atacante passa a ser
+a vítima, sem nunca saber a senha dela.
+
+**Directory traversal.** A aplicação monta um caminho de arquivo usando o nome
+que o usuário mandou: `/var/dados/` + `relatorio.pdf`. O usuário manda
+`../../../etc/passwd`, e o caminho resultante sai de `/var/dados/` e vai parar
+onde o atacante quiser. A defesa não é filtrar `..` — é **nunca concatenar**:
+o nome que chega do usuário vira uma chave numa lista de arquivos permitidos.
+
+<Callout type="why" label="A prova de que a porta não tem nada a ver">
+Pegue qualquer um dos três e mande pela 443, cifrado. O que acontece:
+
+1. o navegador cifra a requisição;
+2. ela atravessa a rede ilegível para quem estiver no caminho;
+3. o servidor **decifra**;
+4. e entrega à aplicação exatamente a mesma string hostil que entraria pela 80.
+
+O TLS termina no servidor. Do ponto em que ele termina para dentro, não existe
+diferença nenhuma entre uma requisição que veio cifrada e uma que veio em texto
+claro. Por isso todo site HTTPS do mundo continua precisando de consulta
+parametrizada, escape na saída e validação de caminho.
+</Callout>
+
+## O que o TLS entrega — e é bastante, só que outra coisa
+
+<Term word="TLS" alt="Transport Layer Security">
+O protocolo que põe a conversa dentro de um túnel. Entrega exatamente três
+garantias, e vale saber os nomes porque a confusão do cartaz nasce de misturá-las
+com uma quarta que não existe:
+
+1. **Confidencialidade** — quem está no caminho não consegue ler.
+2. **Integridade** — quem está no caminho não consegue alterar sem que o outro
+   lado perceba.
+3. **Autenticação do servidor** — você tem alguma garantia de estar falando com
+   quem controla aquele domínio, porque o certificado foi emitido por uma
+   autoridade em que o seu dispositivo confia.
+
+O que ele **não** entrega: nenhuma opinião sobre o conteúdo. O TLS não sabe o
+que é uma consulta SQL, não sabe o que é um comentário de blog, e não tem como
+saber se a string que passou por ele é hostil. Ele é o envelope, não o revisor.
+</Term>
+
+<PlaintextVsTls />
+
+## Medido aqui: a senha no fio, com e sem cifra
+
+Este é o experimento que torna a diferença concreta, e ele não precisa de
+privilégio nenhum — nada de `tcpdump`, nada de `sudo`. A ideia: pôr um
+"escutador" bobo no lugar do servidor e olhar **o que chega até ele**. É
+exatamente o que alguém no caminho vê.
+
+<RunIt title="Ponha-se no lugar de quem está no caminho" where="em dois terminais, em qualquer diretório">
+
+```bash
+# ── HTTP: o escutador recebe tudo em texto ────────────────────────────────
+nc -l 127.0.0.1 9099 > /tmp/claro.txt &
+curl -s -m 2 -H "Authorization: Bearer senha-secreta-123" \
+  http://127.0.0.1:9099/conta
+cat /tmp/claro.txt
+# GET /conta HTTP/1.1
+# Host: 127.0.0.1:9099
+# Authorization: Bearer senha-secreta-123   ← a credencial, legível
+
+# ── HTTPS: o MESMO cabeçalho, o MESMO escutador ───────────────────────────
+nc -l 127.0.0.1 9098 > /tmp/cifrado.bin &
+curl -s -m 2 -k -H "Authorization: Bearer senha-secreta-123" \
+  https://127.0.0.1:9098/conta
+head -c 16 /tmp/cifrado.bin | od -An -tx1
+# 16 03 01 …   ← 0x16 = registro de handshake TLS. Nada legível.
+
+# ── A pergunta que resolve: a senha aparece? ──────────────────────────────
+grep -c  'senha-secreta-123' /tmp/claro.txt     # 1  — aparece
+grep -ac 'senha-secreta-123' /tmp/cifrado.bin   # 0  — não aparece
+```
+
+</RunIt>
+
+Um e zero. É essa a diferença que o TLS faz, e ela é enorme — só que é sobre o
+**fio**, não sobre a aplicação.
+
+## O SSL stripping não mora na 443
+
+Agora a segunda troca do cartaz. O SSL stripping está listado como ataque da
+443, e ele acontece na **80**.
+
+<Callout type="danger" label="Como o rebaixamento realmente funciona">
+Você digita `exemplo.com` na barra de endereço — sem `https://`, como todo mundo
+faz. O navegador tenta **HTTP primeiro**. Essa primeira requisição sai em texto
+claro pela porta 80, e é ela que o atacante no caminho intercepta.
+
+A partir daí ele fala HTTPS com o site de verdade e HTTP com você, traduzindo no
+meio. O redirecionamento para HTTPS que o site mandou nunca chega até o seu
+navegador — o atacante o engole. Resultado: você navega, o site funciona, e o
+cadeado **simplesmente nunca aparece**.
+
+E aí está o que torna o ataque tão eficaz: ausência de cadeado é um sinal
+negativo, e as pessoas não procuram ausências. Moxie Marlinspike demonstrou e
+automatizou isso no Black Hat DC de 2009.
+
+A defesa é o **HSTS** (RFC 6797): um cabeçalho que o site manda dizendo "para
+este domínio, use HTTPS e mais nada, pelos próximos N segundos". O navegador
+passa a se recusar a tentar HTTP — nem chega a mandar a requisição que o
+atacante precisava interceptar.
+</Callout>
+
+<FieldNote kind="talk" source="Moxie Marlinspike, Black Hat DC 2009" url="https://github.com/moxie0/sslstrip" when="2009">
+O `sslstrip` é a ferramenta que automatizou o ataque e o tirou do campo teórico.
+O mecanismo dela é quase decepcionante de simples: interceptar o tráfego HTTP,
+reescrever todo `https://` que aparecer nos links e nos redirecionamentos para
+`http://`, e manter a conversa cifrada só do lado do servidor.
+
+Há um detalhe que o HSTS sozinho não resolve e que vale saber: a **primeira
+visita**. Se o navegador nunca recebeu o cabeçalho daquele domínio, ele não tem
+a regra guardada, e a primeira requisição ainda sai em HTTP. É para fechar essa
+janela que existe a lista de *preload*, embutida nos navegadores — e é por isso
+que entrar nela é uma decisão difícil de desfazer.
+</FieldNote>
+
+## O que esta stack manda, e o que cada cabeçalho faz
+
+O `edge` desta stack não faz TLS localmente (`AUTO_HTTPS: off`, porque o
+endereço é `127.0.0.1`), mas manda os cabeçalhos de segurança em toda resposta:
+
+```caddyfile
+header {
+	X-Content-Type-Options nosniff
+	X-Frame-Options DENY
+	Referrer-Policy strict-origin-when-cross-origin
+	-Server
+}
+```
+
+- **`nosniff`** — proíbe o navegador de adivinhar o tipo de um arquivo pelo
+  conteúdo. Sem ele, um upload que o servidor declarou como `text/plain` pode
+  ser executado como JavaScript se o navegador "achar" que parece JavaScript.
+- **`X-Frame-Options: DENY`** — proíbe outro site de embutir o seu num quadro
+  invisível para capturar cliques que o usuário acha que está dando em outro
+  lugar (*clickjacking*).
+- **`Referrer-Policy`** — limita o que vaza no cabeçalho `Referer` quando o
+  usuário sai do seu site. Sem isso, a URL inteira — com token, se houver — vai
+  junto para o site de destino.
+- **`-Server`** — remove o cabeçalho que anuncia qual servidor e qual versão
+  estão rodando. Vale o mesmo que trocar a porta na lição 1: reduz ruído de
+  varredura automática, não protege de ninguém determinado.
+
+<Callout type="trap" label="O que ESTA stack não tem, dito com todas as letras">
+Sem WAF. Sem limite de requisições por IP na API. Sem `Content-Security-Policy`.
+E a API **não tem autenticação nenhuma** — qualquer um cria um link.
+
+Isso é uma escolha de escopo, não um esquecimento, e ela está aqui para você não
+sair desta lição achando que a stack é completa. O que ela prova é outra coisa:
+que as injeções não passam, que o segredo não vaza e que o banco não é
+alcançável. A lição 6 lista o que falta, item por item.
+</Callout>
+
+<LabExercise check="5/11 — injeção de SQL pela API" file="stack/services/api-go/app.go">
+O `handleList` da API aceita `?limit=`. Mande `?limit=1;DROP TABLE links--` e
+veja o que acontece. Depois explique por que a tabela sobreviveu — e por que ela
+teria sobrevivido **mesmo** se o `limit` fosse concatenado na consulta.
+
+<Fragment slot="hint">
+Olhe o que o `handleList` faz com o valor antes de ele chegar perto do banco.
+São duas defesas, não uma.
+</Fragment>
+
+<Fragment slot="answer">
+A tabela sobrevive por **duas** razões independentes, e é isso que torna o
+exercício interessante:
+
+1. **O valor nunca chega ao banco como texto.** O `listLinks` usa
+   `LIMIT $1` — parâmetro, não concatenação. É a defesa que funciona sempre.
+2. **O valor nem chega a ser um texto.** Antes disso, o `handleList` faz
+   `strconv.Atoi(v)` e só aceita o resultado se for um inteiro entre 1 e 100.
+   `1;DROP TABLE links--` não é um inteiro, então o `Atoi` falha e o `limit`
+   fica no padrão 20.
+
+A segunda é validação de entrada, a primeira é consulta parametrizada, e a ordem
+de importância entre elas é a lição: **a validação é uma rede de proteção, a
+parametrização é a defesa.** Validação sozinha envelhece mal — um dia alguém
+aceita um campo de texto livre, e aí só a parametrização segura.
+
+```bash
+curl -s "http://127.0.0.1:8080/api/links?limit=1;DROP%20TABLE%20links--" | head -c 120
+# devolve a listagem normal, com o limite padrão
+```
+</Fragment>
+</LabExercise>
+
+## O que fica
+
+- Injeção de SQL, XSS e travessia atacam a **aplicação**, não a porta — e
+  atravessam a 443 exatamente iguais.
+- O TLS entrega três coisas: confidencialidade, integridade e autenticação do
+  servidor. Nenhuma delas é sobre o conteúdo.
+- Medido aqui: a credencial aparece **uma vez** no fio em HTTP e **zero** vezes
+  em HTTPS.
+- O SSL stripping mora na **80**, e o HSTS é a defesa. A primeira visita é a
+  janela que só o preload fecha.
+- Cabeçalho de segurança é barato e vale a pena — e não substitui nenhuma das
+  defesas da aplicação.
+
+<Quiz set="web-ports-and-tls" />

@@ -7,7 +7,7 @@ num Jenkins que é seu. A aplicação é a de sempre: os três Dockerfiles de
 ```bash
 make cicd-prereqs   # checa o host e prova que dá para construir sem daemon
 make cicd-up        # sobe controller, buildkitd, agente, scm e registry
-make cicd-verify    # o portão — 32 checagens. Estado bom: 32 passaram · 0 falharam
+make cicd-verify    # o portão — 35 checagens. Estado bom: 35 passaram · 0 falharam
 make cicd-down      # derruba (mantém os volumes)
 make cicd-nuke      # derruba E apaga os volumes
 ```
@@ -63,8 +63,16 @@ Os plugins de primeiro nível ficam no topo de
 pinadas, porque pinar só a decisão e deixar as dependências soltas é pin
 decorativo.
 
-## O que ainda não tem
+## O pipeline
 
-`scan` e `sign` no pipeline. O `ci.yml` já assina com cosign keyless via OIDC
-do GitHub; num Jenkins self-hosted isso custa uma chave gerenciada, e essa
-assimetria é justamente o assunto da lição sobre cadeia de suprimentos.
+`lint → build → scan → sign → verify → archive`, tudo pelo `buildctl`, sem
+daemon em lugar nenhum.
+
+O `sign` é onde a assimetria com o GitHub Actions aparece: lá a assinatura é
+**keyless** — a identidade é o token OIDC do próprio workflow e não existe
+chave privada para guardar. Aqui ela custa exatamente um par de chaves que
+alguém precisa gerar, proteger e rotacionar. O `cicd-up.sh` gera; num ambiente
+de verdade a chave vive num KMS.
+
+E o `verify` existe porque assinar sem verificar é fé: o pipeline prova a
+própria assinatura antes de chamar o artefato de confiável.

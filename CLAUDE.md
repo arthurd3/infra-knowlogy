@@ -149,13 +149,23 @@ justamente por isso.
     instrução.** Com qualquer comentário entre as duas ela é ignorada em
     silêncio, e você acha que suprimiu.
 
+29. **Com `pipefail`, `texto | grep -q PADRÃO` INVERTE o resultado quando o
+    padrão aparece cedo.** O `grep -q` sai no primeiro acerto e fecha o pipe;
+    quem escreve (`curl`, `printf`, `cat`) ainda tem dezenas de kB pela frente
+    e morre de SIGPIPE; o `pipefail` propaga esse não-zero. **Achar vira "não
+    achei".** O que esconde o defeito é que com entrada PEQUENA o escritor
+    termina antes de o leitor sair, e o mesmo código funciona: no
+    `cicd-verify` a checagem cujo padrão estava na linha 20 de 571 falhava, e a
+    do padrão no fim do log passava. Use `case "$texto" in *PADRÃO*)` — sem
+    pipe, sem sinal, sem depender de onde o padrão está.
+
 ## Ao mexer na stack
 
 - Rode `make verify` antes de considerar qualquer coisa pronta. Para iterar
   rápido: `SKIP_SCAN=1 SKIP_OBS=1 make verify`. O estado bom conhecido é
   **32 passaram · 0 falharam** (25 + as 4 checagens do site + scan + obs; com
   os dois SKIP, **27 passaram**).
-- O módulo CI/CD também: `make cicd-verify` (estado bom: **32 passaram ·
+- O módulo CI/CD também: `make cicd-verify` (estado bom: **35 passaram ·
   0 falharam**). Para iterar sem reconstruir tudo:
   `KEEP_JENKINS=1 SKIP_BUILD=1 SKIP_NEGATIVE=1 make cicd-verify`. Antes de
   qualquer coisa nele, `make cicd-prereqs` — a sonda que prova que este host
@@ -259,7 +269,7 @@ via `docker history` virou o `<LabExercise>` da lição 3.
 O módulo 3 (`cicd/`) está **de pé e verde**: controller com JCasC e 67 plugins
 pinados, buildkitd rootless, agente sem socket, `git daemon` servindo o
 repositório, registry local, pipeline lint → build → archive e o portão
-`make cicd-verify` (**32 passaram · 0 falharam**). Faltam **as 8 lições** da
+`make cicd-verify` (**35 passaram · 0 falharam**). Faltam **as 8 lições** da
 trilha `cicd`, que está cadastrada e vazia, e dois estágios no pipeline: `scan`
 com Trivy e `sign` com cosign.
 

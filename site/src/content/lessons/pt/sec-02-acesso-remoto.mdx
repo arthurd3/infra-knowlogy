@@ -1,0 +1,234 @@
+---
+key: remote-access-ports
+lang: pt
+track: seguranca
+order: 2
+title: "Acesso remoto: 22, 23 e 3389"
+summary: Três portas do cartaz são a mesma história contada três vezes — alguém entra com uma credencial que funciona. Aqui está o que cada ataque dessa família realmente faz, por que o prêmio é tão alto, e a ordem real de eficácia das defesas.
+minutes: 15
+tags: [seguranca, ssh, telnet, rdp, forca-bruta, credenciais]
+sources:
+  - label: "OpenBSD — sshd_config(5)"
+    url: "https://man.openbsd.org/sshd_config"
+    kind: docs
+  - label: "Qualys — regreSSHion (CVE-2024-6387)"
+    url: "https://www.qualys.com/regresshion-cve-2024-6387"
+    kind: blog
+    accessed: "2026-09-19"
+  - label: "NVD — CVE-2019-0708 (BlueKeep)"
+    url: "https://nvd.nist.gov/vuln/detail/CVE-2019-0708"
+    kind: docs
+  - label: "Antonakakis et al. — Understanding the Mirai Botnet (USENIX Security 2017)"
+    url: "https://www.usenix.org/conference/usenixsecurity17/technical-sessions/presentation/antonakakis"
+    kind: talk
+  - label: "Sophos — Active Adversary Report"
+    url: "https://www.sophos.com/en-us/content/security-operations/active-adversary-report"
+    kind: blog
+    accessed: "2026-09-19"
+---
+
+import PortExplorer from "../../../components/PortExplorer.astro";
+
+Olhe de novo as oito linhas do cartaz e repare numa coisa: três delas — 22, 23 e
+3389 — listam quase os mesmos "ataques comuns". Força bruta, senha, engenharia
+social. Não é coincidência nem falta de criatividade do autor. **São a mesma
+porta, em três décadas diferentes.**
+
+As três dão a mesma coisa quando alguém entra: uma sessão interativa. Um
+terminal ou uma tela. É o prêmio mais alto da lista inteira, porque não é um
+dado que vaza — é a máquina que passa a obedecer outra pessoa.
+
+## A família inteira, com os nomes certos
+
+Os três termos abaixo são usados como sinônimos e não são. A diferença importa
+porque cada um pede uma defesa diferente.
+
+<Term word="força bruta" alt="brute force" open>
+Tentar senha atrás de senha **na mesma conta**, do jeito mais direto possível:
+uma lista de senhas comuns, ou todas as combinações de caracteres.
+
+A defesa clássica é o bloqueio após N tentativas erradas — e ela funciona bem
+justamente porque o ataque se concentra numa conta só, que é o que dispara o
+contador.
+</Term>
+
+<Term word="credential stuffing" alt="reúso de credencial vazada">
+Pegar pares de e-mail e senha que **já vazaram** de algum outro serviço e testá-los
+no seu. Não há adivinhação nenhuma: as senhas são reais e pertencem a pessoas
+reais. O ataque funciona porque a mesma senha é reusada em vários lugares.
+
+Bloqueio por tentativa erra ajuda pouco aqui: o atacante acerta na primeira
+tentativa de cada conta. A defesa é o segundo fator, que torna a senha correta
+insuficiente sozinha.
+</Term>
+
+<Term word="password spraying" alt="pulverização de senha">
+O inverso da força bruta: **uma** senha muito provável (`Outono2026!`,
+`Empresa@123`) testada contra **milhares de contas diferentes**.
+
+É desenhado para passar por baixo do bloqueio: como cada conta recebe uma ou
+duas tentativas, nenhum contador chega ao limite. Detectar isso exige olhar o
+agregado — "muitas contas distintas falharam uma vez cada, no mesmo minuto" —
+e não a conta individual. É o motivo de bloqueio por conta ser necessário e não
+ser suficiente.
+</Term>
+
+## O cartaz inteiro, navegável
+
+Abaixo está a tabela do cartaz com o que faltava nela: o **mecanismo** de cada
+ataque, a **defesa** com o preço que ela cobra, e o **mito** — a coisa que
+parece defesa e não é. As portas de banco vêm junto porque a lição 5 vai
+precisar delas.
+
+<PortExplorer />
+
+## 23: a porta que já foi atacada em escala, e como
+
+O Telnet é a porta mais fácil de explicar porque não há sutileza nenhuma: ele
+manda a senha em texto legível e aceita conexão de qualquer um. O que faz dele
+matéria de estudo é o que aconteceu quando alguém industrializou o óbvio.
+
+<FieldNote kind="talk" source="Antonakakis et al., USENIX Security 2017" url="https://www.usenix.org/conference/usenixsecurity17/technical-sessions/presentation/antonakakis" when="2017">
+O estudo do botnet Mirai mediu a coisa toda a partir do código publicado e de
+honeypots. O mecanismo, em números:
+
+- varria **TCP/23 e TCP/2323** mandando SYN às cegas para endereços pseudoaleatórios;
+- ao achar quem atendesse, tentava **10 pares** sorteados de uma lista de
+  **62 credenciais de fábrica**;
+- chegou a **600 mil aparelhos** infectados no pico, com **76 minutos** de
+  tempo de duplicação no início.
+
+Sessenta e duas senhas. Não houve exploração de falha, nem dia zero, nem nada
+que se pareça com pesquisa de segurança — só uma lista de senhas que vieram de
+fábrica e nunca foram trocadas, aplicada em escala industrial.
+</FieldNote>
+
+## 22: o que "exploit de falha SSH" quer dizer de verdade
+
+O cartaz diz "exploits de falhas SSH" e a frase assusta mais do que informa. Na
+prática, a esmagadora maioria dos incidentes em SSH é credencial, não falha de
+software. Mas a minoria existe e vale conhecer pelo formato dela.
+
+<Callout type="why" label="regreSSHion, e por que o nome tem um trocadilho">
+Em 2024, a CVE-2024-6387 mostrou uma falha no `sshd` que dava **execução de
+código como root, sem autenticar**. O mecanismo era uma corrida de sinal: se o
+cliente não autentica dentro do `LoginGraceTime`, o servidor dispara um
+tratador de `SIGALRM` que chama funções que não podem ser chamadas de dentro de
+um tratador de sinal.
+
+O trocadilho do nome é o ensino: era uma **regressão**. A mesma falha tinha sido
+corrigida em 2006 (CVE-2006-5051) e voltou num commit de 2020, ficando de pé nas
+versões 8.5p1 a 9.7p1 em Linux com glibc.
+
+Duas coisas para levar. Primeira: patch não é tarefa que termina, porque o
+código anda para os dois lados. Segunda: mesmo essa falha exigia **alcançar a
+porta**. Um sshd atrás de VPN não estava exposto a ela.
+</Callout>
+
+## 3389: por que o RDP lidera as estatísticas de incidente
+
+<FieldNote kind="scale" source="Sophos, Active Adversary Report" url="https://www.sophos.com/en-us/content/security-operations/active-adversary-report" when="edição de 2025, sobre incidentes de 2024">
+Nos casos de resposta a incidente e detecção gerenciada da Sophos em 2024,
+**credencial comprometida foi a causa-raiz número um**, em 41% dos casos — o
+segundo ano seguido na primeira posição. E o RDP apareceu em **84%** dos casos
+como ferramenta usada pelo invasor depois de entrar.
+
+A leitura que importa: na maior parte das vezes ninguém "invadiu" nada no
+sentido técnico. Alguém **entrou**, com uma credencial que funcionava. É por
+isso que a defesa com melhor retorno quase nunca é um produto novo — é tirar o
+serviço da internet e exigir um segundo fator.
+</FieldNote>
+
+## A ordem real de eficácia
+
+Toda lista de boas práticas de SSH traz os mesmos cinco itens, sem dizer quanto
+cada um vale. Valem coisas muito diferentes:
+
+| Defesa | O que ela elimina | O que ela custa |
+|---|---|---|
+| **Não publicar** (VPN, bastião) | o ataque inteiro: não há serviço alcançável | um componente a mais, que vira o novo alvo |
+| **Só chave, sem senha** | força bruta e spraying — não há o que adivinhar | gerenciar chaves: distribuir, revogar, proteger |
+| **Segundo fator** | credential stuffing e chave roubada sozinha | atrito em toda automação |
+| **Limite de tentativas** | o ruído, e encarece a força bruta ingênua | nada, e não impede quem distribui a origem |
+| **Trocar a porta** | quase nada (ver a lição 1) | nada, e dá falsa sensação de proteção |
+
+<Tradeoff
+  a="Não publicar: VPN ou bastião na frente"
+  b="Publicar, com chave, MFA e limite de tentativas"
+  whenA="Quando existe um perímetro para atravessar e uma equipe pequena e conhecida. É a única defesa que <b>zera</b> o ataque em vez de encarecê-lo: o que não é alcançável não é atacável."
+  whenB="Quando o acesso precisa vir de qualquer lugar, de gente que entra e sai, ou de automação de terceiros — e manter uma VPN custaria mais atenção do que ela devolveria em segurança."
+  chose="a"
+  verdict="Esta stack não publica SSH nem RDP: não há nenhum dos dois. O acesso a um container é <code>docker exec</code>, que fala com o daemon local e não abre porta. É a forma extrema da opção A — o serviço <b>não existe</b>."
+/>
+
+<Callout type="trap" label="A defesa que as pessoas esquecem de medir">
+Todas as cinco linhas da tabela acima tratam de impedir a entrada. Nenhuma trata
+do que acontece **depois** que alguém entra — e como o dado da Sophos mostra,
+entrar com credencial válida é o caso comum.
+
+É por isso que a lição 6 fecha a trilha com camadas: quem entra num container
+desta stack encontra um rootfs read-only, nenhum shell na imagem da api, e uma
+rede sem saída a partir do banco. Impedir a entrada é a primeira camada, não a
+única.
+</Callout>
+
+<RunIt title="Uma força bruta em miniatura, contra o seu próprio banco">
+
+```bash
+make up
+
+# A senha errada, de dentro da rede interna. O scram-sha-256 recusa:
+docker run --rm -i --network infra-knowlogy_data \
+  -e PGPASSWORD=nao-e-essa postgres:17-alpine \
+  psql -h db -U links -d links -c 'SELECT 1'
+# FATAL: password authentication failed for user "links"
+
+# O controle positivo — sem ele você não sabe se a recusa foi da senha
+# ou de um nome de host errado:
+docker run --rm -i --network infra-knowlogy_data \
+  -e PGPASSWORD="$(cat stack/secrets/postgres_password)" postgres:17-alpine \
+  psql -h db -U links -d links -c 'SELECT 1'
+
+# O passo 4 do laboratório faz exatamente esses dois, nesta ordem:
+make attack-lab
+```
+
+</RunIt>
+
+<LabExercise check="4/11 — senha errada no banco" file="tools/scripts/attack-lab.sh">
+O passo 4 do `make attack-lab` testa a senha **errada** e, logo depois, a
+**certa**. O segundo teste parece redundante — a defesa já foi provada pelo
+primeiro. Por que ele está lá?
+
+<Fragment slot="hint">
+Pergunte-se o que mais poderia fazer o primeiro comando falhar, além da senha
+estar errada.
+</Fragment>
+
+<Fragment slot="answer">
+Porque sem ele o portão **mentiria a favor da própria stack**.
+
+Um nome de host trocado, uma rede que não existe, um container parado — qualquer
+um desses faz o `psql` falhar, e a falha se pareceria com "a defesa funcionou".
+O teste passaria enquanto a autenticação poderia estar desligada.
+
+O segundo comando é o **controle positivo**: ele prova que o caminho até o banco
+funciona e que a única diferença entre os dois foi a senha. É a mesma disciplina
+que o `verify.sh` aplica ao separar "o scanner quebrou" de "o scanner achou CVE":
+uma checagem que não distingue os motivos da falha não é uma checagem.
+</Fragment>
+</LabExercise>
+
+## O que fica
+
+- 22, 23 e 3389 são a mesma família: quem acerta a credencial ganha uma **sessão
+  interativa**, que é o prêmio mais alto do cartaz.
+- Força bruta, credential stuffing e spraying são **três ataques diferentes**, e
+  bloqueio por tentativa só atrapalha o primeiro.
+- O Mirai não explorou falha nenhuma: **62 senhas de fábrica** e escala.
+- "Exploit de SSH" existe e é raro — e mesmo o regreSSHion precisava **alcançar
+  a porta**.
+- A defesa com melhor retorno continua sendo tirar o serviço da internet. Todo o
+  resto encarece o ataque; só essa o elimina.
+
+<Quiz set="remote-access-ports" />

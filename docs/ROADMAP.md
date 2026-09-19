@@ -13,7 +13,7 @@ lado a lado só é honesta porque a aplicação é a mesma.
 |---|---|---|---|---|
 | 1 | **Docker** — imagens, Compose, hardening OWASP, observabilidade | `stack/` | `make verify` (32 checagens) | **feito** · pendência: Trilha Produção (12 lições) |
 | 2 | **Kubernetes** — a mesma stack portada para um cluster kind | `k8s/` | `make k8s-verify` (33 checagens) | **feito (v1)** · [ADR 0007](adr/0007-kind-e-o-porte-para-kubernetes.md) · pendências: lições 4+, Ingress, HPA, kind no CI |
-| 3 | **CI/CD self-hosted (Jenkins)** — o mesmo pipeline do GitHub Actions rodando num Jenkins que é seu, sobre a mesma stack | `cicd/` | `make cicd-verify` (32 checagens) | **feito (v1)** · [ADR 0011](adr/0011-como-o-agente-de-build-constroi-imagens.md) e [0012](adr/0012-jenkins-conteinerizado.md) · pendências: as 8 lições, scan e assinatura no pipeline |
+| 3 | **CI/CD self-hosted (Jenkins)** — o mesmo pipeline do GitHub Actions rodando num Jenkins que é seu, sobre a mesma stack | `cicd/` | `make cicd-verify` (35 checagens) | **feito (v1)** · [ADR 0011](adr/0011-como-o-agente-de-build-constroi-imagens.md) e [0012](adr/0012-jenkins-conteinerizado.md) · pendências: as 8 lições, scan e assinatura no pipeline |
 | 4 | **IaC (Terraform/OpenTofu)** — provisionar o host (ou o cluster) que os módulos 1–2 assumem existir | `iac/` | a definir | reservado |
 | 5 | **Configuração (Ansible)** — preparar um host Fedora real: Docker, SELinux, firewall, usuários — as coisas que o módulo 1 encontrou na marra | `config/` | a definir | reservado |
 | 6 | **Observabilidade avançada** — SLOs, alerting e tracing por cima do profile `obs` já existente | `stack/` (profile) | a definir | reservado |

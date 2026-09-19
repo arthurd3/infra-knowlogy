@@ -1,0 +1,152 @@
+{
+  "note_pt": "Perguntas da lição 2 da trilha de Segurança.",
+  "note_en": "Questions for lesson 2 of the Security track.",
+  "pt": [
+    {
+      "q": "Você ligou bloqueio de conta após 5 tentativas erradas. Contra qual destes ataques isso ajuda POUCO?",
+      "options": [
+        {
+          "text": "Password spraying — uma senha provável testada em milhares de contas.",
+          "correct": true,
+          "why": "O spraying é desenhado exatamente para passar por baixo do bloqueio: cada conta recebe uma ou duas tentativas e nenhum contador chega a 5. Detectar exige olhar o AGREGADO — muitas contas distintas falhando uma vez cada, no mesmo minuto — e não a conta individual."
+        },
+        {
+          "text": "Força bruta clássica contra uma conta específica.",
+          "why": "É justamente o caso em que o bloqueio funciona bem: o ataque se concentra numa conta só, que é o que dispara o contador. O bloqueio foi inventado para este ataque."
+        },
+        {
+          "text": "Uma varredura de portas procurando o serviço.",
+          "why": "A varredura acontece antes de qualquer tentativa de login — ela procura onde tentar. Bloqueio de conta não tem relação com ela; nem chega a haver uma conta envolvida."
+        }
+      ]
+    },
+    {
+      "q": "O botnet Mirai infectou 600 mil aparelhos. Que falha de software ele explorou?",
+      "options": [
+        {
+          "text": "Nenhuma: ele testava 62 pares de usuário e senha que vinham de fábrica.",
+          "correct": true,
+          "why": "O estudo da USENIX mediu o código publicado: varredura em TCP/23 e TCP/2323, 10 pares sorteados de uma lista de 62 credenciais por tentativa. Sem dia zero, sem exploração — só senha de fábrica nunca trocada, aplicada em escala industrial."
+        },
+        {
+          "text": "Uma falha de execução remota no serviço de Telnet dos aparelhos.",
+          "why": "Variantes posteriores passaram a incluir exploração de falhas, mas o Mirai original não precisou de nenhuma. É o que torna o caso tão desconfortável: a defesa era trocar a senha."
+        },
+        {
+          "text": "Uma falha no protocolo Telnet que permite ler a senha no fio.",
+          "why": "O Telnet realmente manda a senha em texto claro, e isso é um problema sério — mas não é o que o Mirai usava. Ler o fio exige estar no caminho; o Mirai atacava de qualquer lugar da internet, tentando senhas conhecidas."
+        }
+      ]
+    },
+    {
+      "q": "O regreSSHion (CVE-2024-6387) dava root sem autenticação no sshd. Qual é a lição mais útil dessa história?",
+      "options": [
+        {
+          "text": "Era uma regressão de uma falha já corrigida em 2006 — patch não é tarefa que termina.",
+          "correct": true,
+          "why": "A falha foi corrigida em 2006 (CVE-2006-5051) e voltou num commit de 2020, ficando de pé até 2024. Código anda para os dois lados, e é por isso que pinar versão e reescanear periodicamente vale mais que uma auditoria única."
+        },
+        {
+          "text": "Que o SSH é inseguro e deveria ser substituído.",
+          "why": "Conclusão exagerada a partir de um caso: foi a primeira falha desse porte no OpenSSH em quase duas décadas, e o histórico dele é excepcionalmente bom. A frequência de falhas importa tanto quanto a existência delas."
+        },
+        {
+          "text": "Que autenticação por chave teria evitado o problema.",
+          "why": "Não teria: a falha acontecia ANTES da autenticação, na janela do `LoginGraceTime`. O que reduzia a exposição era outra coisa — não ter a porta alcançável, o que a lição chama de primeira defesa."
+        }
+      ]
+    },
+    {
+      "q": "Das defesas para acesso remoto, qual é a única que ELIMINA o ataque em vez de encarecê-lo?",
+      "options": [
+        {
+          "text": "Não publicar o serviço: VPN ou bastião na frente.",
+          "correct": true,
+          "why": "Chave, MFA e limite de tentativas aumentam o custo do atacante — todos são bons e nenhum zera o problema. Já um serviço que não é alcançável não é atacável: a força bruta contra ele não é difícil, é impossível. É a mesma forma extrema que esta stack usa ao não ter SSH nenhum."
+        },
+        {
+          "text": "Autenticação só por chave, com `PasswordAuthentication no`.",
+          "why": "É excelente e derruba força bruta e spraying — mas não protege contra chave privada roubada, nem contra falha pré-autenticação no próprio servidor. Encarece muito; não elimina."
+        },
+        {
+          "text": "Segundo fator em toda conta.",
+          "why": "Resolve credential stuffing e a chave roubada sozinha, que é muito — mas o serviço continua alcançável, e continua exposto a qualquer falha pré-autenticação. Camada valiosa, não a raiz."
+        }
+      ]
+    }
+  ],
+  "en": [
+    {
+      "q": "You enabled account lockout after 5 failed attempts. Which of these attacks does that barely help against?",
+      "options": [
+        {
+          "text": "Password spraying — one likely password tried against thousands of accounts.",
+          "correct": true,
+          "why": "Spraying is designed precisely to slip under lockout: each account takes one or two attempts and no counter ever reaches 5. Detecting it means looking at the AGGREGATE — many distinct accounts failing once each in the same minute — rather than at the individual account."
+        },
+        {
+          "text": "Classic brute force against one specific account.",
+          "why": "That is exactly the case lockout handles well: the attack concentrates on a single account, which is what trips the counter. Lockout was invented for this attack."
+        },
+        {
+          "text": "A port scan looking for the service.",
+          "why": "The scan happens before any login attempt — it is looking for where to try. Account lockout has no bearing on it; there is not even an account involved yet."
+        }
+      ]
+    },
+    {
+      "q": "The Mirai botnet infected 600,000 devices. Which software flaw did it exploit?",
+      "options": [
+        {
+          "text": "None: it tried 62 username/password pairs that shipped from the factory.",
+          "correct": true,
+          "why": "The USENIX study measured the released code: sweeping TCP/23 and TCP/2323, 10 pairs drawn from a list of 62 credentials per attempt. No zero day, no exploitation — just factory passwords never changed, applied at industrial scale."
+        },
+        {
+          "text": "A remote code execution flaw in the devices' Telnet service.",
+          "why": "Later variants did add exploitation of flaws, but the original Mirai needed none. That is what makes the case so uncomfortable: the defense was changing the password."
+        },
+        {
+          "text": "A flaw in the Telnet protocol that lets you read the password on the wire.",
+          "why": "Telnet really does send the password in cleartext, and that is a serious problem — but it is not what Mirai used. Reading the wire requires being on the path; Mirai attacked from anywhere on the internet by trying known passwords."
+        }
+      ]
+    },
+    {
+      "q": "regreSSHion (CVE-2024-6387) granted root without authentication in sshd. What is the most useful lesson from that story?",
+      "options": [
+        {
+          "text": "It was a regression of a flaw already fixed in 2006 — patching is not a task that finishes.",
+          "correct": true,
+          "why": "The flaw was fixed in 2006 (CVE-2006-5051) and came back in a 2020 commit, standing until 2024. Code moves in both directions, which is why pinning versions and rescanning periodically is worth more than a one-off audit."
+        },
+        {
+          "text": "That SSH is insecure and should be replaced.",
+          "why": "An overreach from one case: it was the first flaw of that magnitude in OpenSSH in nearly two decades, and its track record is exceptionally good. How often flaws appear matters as much as the fact that they do."
+        },
+        {
+          "text": "That key-based authentication would have prevented it.",
+          "why": "It would not: the flaw happened BEFORE authentication, in the `LoginGraceTime` window. What reduced exposure was something else — not having the port reachable, which the lesson calls the first defense."
+        }
+      ]
+    },
+    {
+      "q": "Among the remote-access defenses, which is the only one that ELIMINATES the attack rather than making it expensive?",
+      "options": [
+        {
+          "text": "Not publishing the service: a VPN or bastion in front.",
+          "correct": true,
+          "why": "Keys, MFA and rate limiting raise the attacker's cost — all good, none of them zeroes the problem. A service that is not reachable is not attackable: brute force against it is not hard, it is impossible. It is the same extreme form this stack uses by having no SSH at all."
+        },
+        {
+          "text": "Key-only authentication, with `PasswordAuthentication no`.",
+          "why": "Excellent, and it kills brute force and spraying — but it does not protect against a stolen private key, nor against a pre-authentication flaw in the server itself. It raises the cost a lot; it does not eliminate."
+        },
+        {
+          "text": "A second factor on every account.",
+          "why": "It solves credential stuffing and a lone stolen key, which is a great deal — but the service stays reachable, and stays exposed to any pre-authentication flaw. A valuable layer, not the root."
+        }
+      ]
+    }
+  ]
+}

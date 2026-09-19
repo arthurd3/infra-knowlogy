@@ -1,0 +1,275 @@
+---
+key: web-ports-and-tls
+lang: en
+track: seguranca
+order: 3
+title: "80 and 443: the application is the target"
+summary: The poster says port 80 suffers SQL injection and port 443 suffers SSL stripping. Both lines are swapped, and understanding why is the most useful thing in this whole track — measured here too, with the password showing up on the wire.
+minutes: 16
+tags: [security, http, https, tls, injection, xss, hsts]
+sources:
+  - label: "OWASP Top 10 2021 — A03: Injection"
+    url: "https://owasp.org/Top10/A03_2021-Injection/"
+    kind: docs
+  - label: "OWASP — Cross Site Scripting Prevention Cheat Sheet"
+    url: "https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html"
+    kind: docs
+  - label: "RFC 6797 — HTTP Strict Transport Security"
+    url: "https://www.rfc-editor.org/rfc/rfc6797"
+    kind: spec
+  - label: "RFC 8446 — TLS 1.3"
+    url: "https://www.rfc-editor.org/rfc/rfc8446"
+    kind: spec
+  - label: "sslstrip — Moxie Marlinspike"
+    url: "https://github.com/moxie0/sslstrip"
+    kind: talk
+---
+
+import PlaintextVsTls from "../../../components/diagrams/PlaintextVsTls.astro";
+
+Two of the poster's rows, side by side:
+
+| Port | Common attacks (according to the poster) |
+|---|---|
+| **80** — HTTP | SQL Injection, XSS, directory traversal |
+| **443** — HTTPS | Man-in-the-middle, SSL stripping, SSL/TLS exploitation |
+
+Read quickly, those two rows teach something wrong and dangerous: that HTTPS
+protects against SQL injection. It does not. **Not in the slightest.**
+
+This lesson undoes both swaps. And the correction is not vocabulary pedantry: it
+changes where you spend your time.
+
+## The category error
+
+<Term word="category error" alt="erro de categoria" open>
+Attributing to one thing a property that belongs to another. "Port 80 suffers
+SQL injection" is exactly that: the port suffers nothing. It is a number saying
+**where** the request came in.
+
+What suffers SQL injection is the **application** listening on that port — and
+more precisely, the line of code in that application which builds a query by
+gluing text together. That line does not even know which port the request
+arrived on. It receives a string.
+
+The practical consequence: changing the port, closing the port or encrypting the
+port touches nothing inside that line.
+</Term>
+
+All three attacks the poster files under 80 are attacks on the application:
+
+**SQL injection.** The application builds its database query by concatenating
+what the user typed. The user types something the database reads as a command
+instead of as data. It is the whole subject of lesson 5, with a measured
+demonstration.
+
+**XSS**, for *cross-site scripting*. The application takes text from a user (a
+comment, a name) and later **hands that text to another visitor** without
+treating it. If the text was `<script>…</script>`, the victim's browser runs it
+as though it came from your site — and since it came from your site, it has
+access to their cookies. The typical prize is the session cookie: the attacker
+becomes the victim, never learning their password.
+
+**Directory traversal.** The application builds a file path using the name the
+user sent: `/var/data/` + `report.pdf`. The user sends `../../../etc/passwd`,
+and the resulting path walks out of `/var/data/` and lands wherever the attacker
+wants. The defense is not filtering `..` — it is **never concatenating**: the
+name arriving from the user becomes a key into a list of allowed files.
+
+<Callout type="why" label="The proof that the port has nothing to do with it">
+Take any of the three and send it over 443, encrypted. What happens:
+
+1. the browser encrypts the request;
+2. it crosses the network unreadable to anyone on the path;
+3. the server **decrypts** it;
+4. and hands the application exactly the same hostile string that would have
+   come in over 80.
+
+TLS terminates at the server. From that termination point inwards, there is no
+difference whatsoever between a request that arrived encrypted and one that
+arrived in the clear. Which is why every HTTPS site in the world still needs
+parameterised queries, output escaping and path validation.
+</Callout>
+
+## What TLS does deliver — and it is plenty, just something else
+
+<Term word="TLS" alt="Transport Layer Security">
+The protocol that puts the conversation inside a tunnel. It delivers exactly
+three guarantees, and the names are worth knowing because the poster's confusion
+comes from mixing them up with a fourth that does not exist:
+
+1. **Confidentiality** — whoever is on the path cannot read it.
+2. **Integrity** — whoever is on the path cannot alter it without the other end
+   noticing.
+3. **Server authentication** — you have some assurance of talking to whoever
+   controls that domain, because the certificate was issued by an authority your
+   device trusts.
+
+What it does **not** deliver: any opinion about the content. TLS does not know
+what a SQL query is, does not know what a blog comment is, and has no way of
+telling whether the string that passed through it is hostile. It is the
+envelope, not the editor.
+</Term>
+
+<PlaintextVsTls />
+
+## Measured here: the password on the wire, with and without encryption
+
+This is the experiment that makes the difference concrete, and it needs no
+privileges at all — no `tcpdump`, no `sudo`. The idea: put a dumb "listener"
+where the server would be and look at **what reaches it**. That is exactly what
+somebody on the path sees.
+
+<RunIt title="Put yourself in the position of whoever is on the path" where="in two terminals, in any directory">
+
+```bash
+# ── HTTP: the listener receives everything as text ────────────────────────
+nc -l 127.0.0.1 9099 > /tmp/clear.txt &
+curl -s -m 2 -H "Authorization: Bearer secret-password-123" \
+  http://127.0.0.1:9099/account
+cat /tmp/clear.txt
+# GET /account HTTP/1.1
+# Host: 127.0.0.1:9099
+# Authorization: Bearer secret-password-123   ← the credential, readable
+
+# ── HTTPS: the SAME header, the SAME listener ─────────────────────────────
+nc -l 127.0.0.1 9098 > /tmp/encrypted.bin &
+curl -s -m 2 -k -H "Authorization: Bearer secret-password-123" \
+  https://127.0.0.1:9098/account
+head -c 16 /tmp/encrypted.bin | od -An -tx1
+# 16 03 01 …   ← 0x16 = a TLS handshake record. Nothing readable.
+
+# ── The question that settles it: does the password show up? ──────────────
+grep -c  'secret-password-123' /tmp/clear.txt      # 1  — it does
+grep -ac 'secret-password-123' /tmp/encrypted.bin  # 0  — it does not
+```
+
+</RunIt>
+
+One and zero. That is the difference TLS makes, and it is enormous — it is just
+about the **wire**, not about the application.
+
+## SSL stripping does not live on 443
+
+Now the poster's second swap. SSL stripping is listed as an attack on 443, and
+it happens on **80**.
+
+<Callout type="danger" label="How the downgrade actually works">
+You type `example.com` into the address bar — without `https://`, like everybody
+does. The browser tries **HTTP first**. That first request leaves in the clear
+over port 80, and it is the one the attacker on the path intercepts.
+
+From there he speaks HTTPS to the real site and HTTP to you, translating in the
+middle. The redirect to HTTPS that the site sent never reaches your browser —
+the attacker swallows it. The result: you browse, the site works, and the
+padlock **simply never appears**.
+
+And there is what makes the attack so effective: a missing padlock is a negative
+signal, and people do not look for absences. Moxie Marlinspike demonstrated and
+automated this at Black Hat DC in 2009.
+
+The defense is **HSTS** (RFC 6797): a header the site sends saying "for this
+domain, use HTTPS and nothing else, for the next N seconds". The browser starts
+refusing to try HTTP — it never even sends the request the attacker needed to
+intercept.
+</Callout>
+
+<FieldNote kind="talk" source="Moxie Marlinspike, Black Hat DC 2009" url="https://github.com/moxie0/sslstrip" when="2009">
+`sslstrip` is the tool that automated the attack and moved it out of theory. Its
+mechanism is almost disappointingly simple: intercept the HTTP traffic, rewrite
+every `https://` appearing in links and redirects into `http://`, and keep the
+conversation encrypted on the server side only.
+
+There is one detail HSTS alone does not solve and it is worth knowing: the
+**first visit**. If the browser has never received the header for that domain,
+it holds no rule, and the first request still goes out over HTTP. Closing that
+window is what the browser-embedded *preload* list is for — and it is why
+joining it is a decision that is hard to undo.
+</FieldNote>
+
+## What this stack sends, and what each header does
+
+This stack's `edge` does no TLS locally (`AUTO_HTTPS: off`, because the address
+is `127.0.0.1`), but it does send security headers on every response:
+
+```caddyfile
+header {
+	X-Content-Type-Options nosniff
+	X-Frame-Options DENY
+	Referrer-Policy strict-origin-when-cross-origin
+	-Server
+}
+```
+
+- **`nosniff`** — forbids the browser from guessing a file's type from its
+  content. Without it, an upload the server declared as `text/plain` can be run
+  as JavaScript if the browser "feels" it looks like JavaScript.
+- **`X-Frame-Options: DENY`** — forbids another site from embedding yours in an
+  invisible frame to capture clicks the user believes they are giving somewhere
+  else (*clickjacking*).
+- **`Referrer-Policy`** — limits what leaks in the `Referer` header when the
+  user leaves your site. Without it, the whole URL — token included, if there is
+  one — travels to the destination site.
+- **`-Server`** — removes the header announcing which server and which version
+  are running. It is worth what changing the port was worth in lesson 1: less
+  noise from automated scanning, no protection from anyone determined.
+
+<Callout type="trap" label="What THIS stack does not have, spelled out">
+No WAF. No per-IP request limit on the API. No `Content-Security-Policy`. And
+the API has **no authentication at all** — anyone can create a link.
+
+That is a scope choice, not an oversight, and it is here so you do not leave
+this lesson thinking the stack is complete. What it does prove is something
+else: that the injections do not get through, that the secret does not leak, and
+that the database is not reachable. Lesson 6 lists what is missing, item by
+item.
+</Callout>
+
+<LabExercise check="5/11 — SQL injection through the API" file="stack/services/api-go/app.go">
+The API's `handleList` accepts `?limit=`. Send `?limit=1;DROP TABLE links--` and
+watch what happens. Then explain why the table survived — and why it would have
+survived **even** if `limit` had been concatenated into the query.
+
+<Fragment slot="hint">
+Look at what `handleList` does with the value before it goes anywhere near the
+database. There are two defenses, not one.
+</Fragment>
+
+<Fragment slot="answer">
+The table survives for **two** independent reasons, and that is what makes the
+exercise interesting:
+
+1. **The value never reaches the database as text.** `listLinks` uses
+   `LIMIT $1` — a parameter, not concatenation. That is the defense that always
+   works.
+2. **The value never even becomes text.** Before that, `handleList` calls
+   `strconv.Atoi(v)` and accepts the result only if it is an integer between 1
+   and 100. `1;DROP TABLE links--` is not an integer, so `Atoi` fails and
+   `limit` stays at its default of 20.
+
+The second is input validation, the first is a parameterised query, and the
+order of importance between them is the lesson: **validation is a safety net,
+parameterisation is the defense.** Validation alone ages badly — one day
+somebody accepts a free-text field, and then only parameterisation holds.
+
+```bash
+curl -s "http://127.0.0.1:8080/api/links?limit=1;DROP%20TABLE%20links--" | head -c 120
+# returns the normal listing, at the default limit
+```
+</Fragment>
+</LabExercise>
+
+## What sticks
+
+- SQL injection, XSS and traversal attack the **application**, not the port —
+  and they cross 443 completely unchanged.
+- TLS delivers three things: confidentiality, integrity and server
+  authentication. None of them is about the content.
+- Measured here: the credential shows up **once** on the wire over HTTP and
+  **zero** times over HTTPS.
+- SSL stripping lives on **80**, and HSTS is the defense. The first visit is the
+  window only preload closes.
+- Security headers are cheap and worth it — and they replace none of the
+  application's defenses.
+
+<Quiz set="web-ports-and-tls" />

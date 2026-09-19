@@ -1,0 +1,238 @@
+---
+key: remote-access-ports
+lang: en
+track: seguranca
+order: 2
+title: "Remote access: 22, 23 and 3389"
+summary: Three of the poster's ports are the same story told three times — somebody walks in with a credential that works. Here is what each attack in that family actually does, why the prize is so high, and the real order of effectiveness of the defenses.
+minutes: 15
+tags: [security, ssh, telnet, rdp, brute-force, credentials]
+sources:
+  - label: "OpenBSD — sshd_config(5)"
+    url: "https://man.openbsd.org/sshd_config"
+    kind: docs
+  - label: "Qualys — regreSSHion (CVE-2024-6387)"
+    url: "https://www.qualys.com/regresshion-cve-2024-6387"
+    kind: blog
+    accessed: "2026-09-19"
+  - label: "NVD — CVE-2019-0708 (BlueKeep)"
+    url: "https://nvd.nist.gov/vuln/detail/CVE-2019-0708"
+    kind: docs
+  - label: "Antonakakis et al. — Understanding the Mirai Botnet (USENIX Security 2017)"
+    url: "https://www.usenix.org/conference/usenixsecurity17/technical-sessions/presentation/antonakakis"
+    kind: talk
+  - label: "Sophos — Active Adversary Report"
+    url: "https://www.sophos.com/en-us/content/security-operations/active-adversary-report"
+    kind: blog
+    accessed: "2026-09-19"
+---
+
+import PortExplorer from "../../../components/PortExplorer.astro";
+
+Look at the poster's eight rows again and notice something: three of them — 22,
+23 and 3389 — list nearly the same "common attacks". Brute force, passwords,
+social engineering. That is neither coincidence nor a lack of imagination on the
+author's part. **They are the same port, in three different decades.**
+
+All three hand over the same thing when somebody gets in: an interactive
+session. A terminal or a screen. It is the highest prize on the whole list,
+because it is not data leaking — it is the machine starting to take orders from
+somebody else.
+
+## The whole family, with the right names
+
+The three terms below get used as synonyms and are not. The difference matters
+because each one calls for a different defense.
+
+<Term word="brute force" alt="força bruta" open>
+Trying password after password **against the same account**, in the most direct
+way possible: a list of common passwords, or every combination of characters.
+
+The classic defense is lockout after N failed attempts — and it works well
+precisely because the attack concentrates on one account, which is what trips
+the counter.
+</Term>
+
+<Term word="credential stuffing" alt="reuse of leaked credentials">
+Taking email/password pairs that **have already leaked** from some other service
+and trying them on yours. There is no guessing at all: the passwords are real
+and belong to real people. The attack works because the same password gets
+reused in several places.
+
+Lockout on failed attempts barely helps here: the attacker gets it right on the
+first try for each account. The defense is a second factor, which makes the
+correct password insufficient on its own.
+</Term>
+
+<Term word="password spraying" alt="pulverização de senha">
+The inverse of brute force: **one** highly likely password (`Autumn2026!`,
+`Company@123`) tried against **thousands of different accounts**.
+
+It is designed to slip under lockout: since each account gets one or two
+attempts, no counter ever reaches its limit. Detecting it means looking at the
+aggregate — "many distinct accounts failed once each, in the same minute" —
+rather than at the individual account. Which is why per-account lockout is
+necessary and not sufficient.
+</Term>
+
+## The whole poster, navigable
+
+Below is the poster's table with what it was missing: the **mechanism** of each
+attack, the **defense** with the price it charges, and the **myth** — the thing
+that looks like a defense and is not. The database ports come along because
+lesson 5 will need them.
+
+<PortExplorer />
+
+## 23: the port that was attacked at scale, and how
+
+Telnet is the easiest port to explain because there is no subtlety to it: it
+sends the password as readable text and accepts a connection from anyone. What
+makes it worth studying is what happened when somebody industrialised the
+obvious.
+
+<FieldNote kind="talk" source="Antonakakis et al., USENIX Security 2017" url="https://www.usenix.org/conference/usenixsecurity17/technical-sessions/presentation/antonakakis" when="2017">
+The Mirai botnet study measured the whole thing from the released source code
+and from honeypots. The mechanism, in numbers:
+
+- it swept **TCP/23 and TCP/2323**, firing blind SYNs at pseudorandom addresses;
+- on finding something that answered, it tried **10 pairs** drawn at random from
+  a list of **62 factory credentials**;
+- it reached **600,000 infected devices** at its peak, with a **76-minute**
+  doubling time early on.
+
+Sixty-two passwords. There was no exploitation of a flaw, no zero day, nothing
+resembling security research — just a list of passwords that shipped from the
+factory and were never changed, applied at industrial scale.
+</FieldNote>
+
+## 22: what "an SSH exploit" actually means
+
+The poster says "exploits of SSH flaws", and the phrase frightens more than it
+informs. In practice the overwhelming majority of SSH incidents are credentials,
+not software flaws. But the minority exists and is worth knowing by its shape.
+
+<Callout type="why" label="regreSSHion, and why the name carries a pun">
+In 2024, CVE-2024-6387 revealed a flaw in `sshd` that granted **code execution
+as root, with no authentication**. The mechanism was a signal handler race: if
+the client does not authenticate within `LoginGraceTime`, the server fires a
+`SIGALRM` handler that calls functions which must not be called from inside a
+signal handler.
+
+The pun in the name is the lesson: it was a **regression**. The same flaw had
+been fixed in 2006 (CVE-2006-5051) and came back in a 2020 commit, standing in
+versions 8.5p1 through 9.7p1 on glibc Linux.
+
+Two things to take away. First: patching is not a task that finishes, because
+code moves in both directions. Second: even that flaw required **reaching the
+port**. An sshd behind a VPN was not exposed to it.
+</Callout>
+
+## 3389: why RDP leads the incident statistics
+
+<FieldNote kind="scale" source="Sophos, Active Adversary Report" url="https://www.sophos.com/en-us/content/security-operations/active-adversary-report" when="2025 edition, covering 2024 incidents">
+Across Sophos's incident response and managed detection cases in 2024,
+**compromised credentials were the number one root cause**, at 41% of cases —
+the second year running in first place. And RDP showed up in **84%** of cases as
+a tool the intruder used after getting in.
+
+The reading that matters: most of the time nobody "broke in" in any technical
+sense. Somebody **logged in**, with a credential that worked. Which is why the
+defense with the best return is almost never a new product — it is taking the
+service off the internet and requiring a second factor.
+</FieldNote>
+
+## The real order of effectiveness
+
+Every SSH best-practices list carries the same five items without saying what
+each one is worth. They are worth very different things:
+
+| Defense | What it eliminates | What it costs |
+|---|---|---|
+| **Do not publish** (VPN, bastion) | the whole attack: no reachable service | one more component, which becomes the new target |
+| **Keys only, no passwords** | brute force and spraying — nothing to guess | key management: distributing, revoking, protecting |
+| **Second factor** | credential stuffing and a lone stolen key | friction in every automation |
+| **Attempt rate limiting** | the noise, and it makes naive brute force costly | nothing, and it does not stop a distributed source |
+| **Changing the port** | almost nothing (see lesson 1) | nothing, and it creates false confidence |
+
+<Tradeoff
+  a="Do not publish: a VPN or bastion in front"
+  b="Publish, with keys, MFA and rate limiting"
+  whenA="When there is a perimeter to cross and a small, known team. It is the only defense that <b>zeroes</b> the attack instead of making it expensive: what is not reachable is not attackable."
+  whenB="When access has to come from anywhere, from people who come and go, or from third-party automation — and maintaining a VPN would cost more attention than it returns in security."
+  chose="a"
+  verdict="This stack publishes neither SSH nor RDP: neither exists. Getting into a container means <code>docker exec</code>, which talks to the local daemon and opens no port. It is the extreme form of option A — the service <b>does not exist</b>."
+/>
+
+<Callout type="trap" label="The defense people forget to measure">
+All five rows in the table above are about preventing entry. None of them is
+about what happens **after** somebody gets in — and as the Sophos data shows,
+walking in with a valid credential is the common case.
+
+Which is why lesson 6 closes the track with layers: whoever gets into a
+container in this stack finds a read-only rootfs, no shell in the api image, and
+a network with no way out from the database. Preventing entry is the first
+layer, not the only one.
+</Callout>
+
+<RunIt title="Brute force in miniature, against your own database">
+
+```bash
+make up
+
+# The wrong password, from inside the internal network. scram-sha-256 refuses:
+docker run --rm -i --network infra-knowlogy_data \
+  -e PGPASSWORD=not-this-one postgres:17-alpine \
+  psql -h db -U links -d links -c 'SELECT 1'
+# FATAL: password authentication failed for user "links"
+
+# The positive control — without it you do not know whether the refusal came
+# from the password or from a mistyped hostname:
+docker run --rm -i --network infra-knowlogy_data \
+  -e PGPASSWORD="$(cat stack/secrets/postgres_password)" postgres:17-alpine \
+  psql -h db -U links -d links -c 'SELECT 1'
+
+# Step 4 of the lab runs exactly those two, in that order:
+make attack-lab
+```
+
+</RunIt>
+
+<LabExercise check="4/11 — wrong password against the database" file="tools/scripts/attack-lab.sh">
+Step 4 of `make attack-lab` tries the **wrong** password and then, immediately,
+the **right** one. The second test looks redundant — the defense was already
+proven by the first. Why is it there?
+
+<Fragment slot="hint">
+Ask yourself what else could make the first command fail, besides the password
+being wrong.
+</Fragment>
+
+<Fragment slot="answer">
+Because without it the gate would be **lying in the stack's own favour**.
+
+A mistyped hostname, a network that does not exist, a stopped container — any of
+those makes `psql` fail, and the failure would look like "the defense worked".
+The test would pass while authentication might be switched off entirely.
+
+The second command is the **positive control**: it proves the path to the
+database works and that the only difference between the two was the password. It
+is the same discipline `verify.sh` applies when it separates "the scanner broke"
+from "the scanner found a CVE": a check that cannot distinguish the reasons for
+a failure is not a check.
+</Fragment>
+</LabExercise>
+
+## What sticks
+
+- 22, 23 and 3389 are one family: whoever gets the credential right wins an
+  **interactive session**, the highest prize on the poster.
+- Brute force, credential stuffing and spraying are **three different attacks**,
+  and per-attempt lockout only hinders the first.
+- Mirai exploited no flaw at all: **62 factory passwords** and scale.
+- "An SSH exploit" exists and is rare — and even regreSSHion had to **reach the
+  port**.
+- The defense with the best return is still taking the service off the internet.
+  Everything else makes the attack expensive; only that one removes it.
+
+<Quiz set="remote-access-ports" />
