@@ -1,0 +1,121 @@
+---
+/**
+ * Lição 1 da trilha de Segurança — o que uma porta é, e o que o invasor
+ * aprende batendo nela.
+ *
+ * O desenho tem que fazer duas coisas ao mesmo tempo: explicar a anatomia
+ * (endereço + número + processo que atende) para quem nunca viu, e mostrar
+ * por que uma varredura funciona — as TRÊS respostas possíveis são o que
+ * transforma "bater em 65.535 portas" em um mapa do que roda ali dentro.
+ */
+import Figure from "../Figure.astro";
+import type { Lang } from "../../i18n/ui";
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+const C = {
+  pt: {
+    packet: "o pacote que chega",
+    addr: "endereço + número",
+    host: "um host — UM endereço IP, 65.535 portas",
+    open: "ABERTA", closed: "FECHADA", filtered: "FILTRADA",
+    openWhy: "há processo escutando", closedWhy: "ninguém escutando", filteredWhy: "firewall engoliu",
+    openAns: "responde SYN-ACK", closedAns: "responde RST", filteredAns: "não responde nada",
+    learns: "o que o invasor conclui",
+    l1: "tem serviço aqui — e ele se apresenta",
+    l2: "a máquina existe, este serviço não",
+    l3: "alguém está filtrando na frente",
+    proc: "processo",
+    socket: "socket = IP + porta + protocolo",
+    caption:
+      "Uma porta não é um lugar: é um <b>número</b> num pacote, que o sistema usa para decidir qual processo recebe os dados. O que o invasor descobre não é a porta — é a <b>resposta</b>. As três respostas possíveis são o mapa inteiro, e é por isso que varrer é barato e esconder o número não é defesa.",
+    alt: "Um pacote chegando a um host e as três respostas possíveis de uma porta: aberta, fechada e filtrada.",
+  },
+  en: {
+    packet: "the arriving packet",
+    addr: "address + number",
+    host: "one host — ONE IP address, 65,535 ports",
+    open: "OPEN", closed: "CLOSED", filtered: "FILTERED",
+    openWhy: "a process is listening", closedWhy: "nobody listening", filteredWhy: "a firewall ate it",
+    openAns: "answers SYN-ACK", closedAns: "answers RST", filteredAns: "answers nothing at all",
+    learns: "what the attacker concludes",
+    l1: "there is a service here — and it introduces itself",
+    l2: "the machine exists, this service does not",
+    l3: "something is filtering in front of it",
+    proc: "process",
+    socket: "socket = IP + port + protocol",
+    caption:
+      "A port is not a place: it is a <b>number</b> in a packet, which the system uses to decide which process gets the data. What the attacker discovers is not the port — it is the <b>answer</b>. The three possible answers are the whole map, which is why scanning is cheap and hiding the number is not a defense.",
+    alt: "A packet arriving at a host and the three possible answers from a port: open, closed and filtered.",
+  },
+}[lang];
+---
+<Figure caption={C.caption} alt={C.alt}>
+  <svg viewBox="0 0 720 340" xmlns="http://www.w3.org/2000/svg" font-size="11">
+    <defs>
+      <marker id="pa-arrow" viewBox="0 0 10 10" refX="8" refY="5"
+              markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse">
+        <path d="M0 0 L10 5 L0 10 z" fill="var(--border-strong)" />
+      </marker>
+      <marker id="pa-arrow-a" viewBox="0 0 10 10" refX="8" refY="5"
+              markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse">
+        <path d="M0 0 L10 5 L0 10 z" class="dg-fill-accent" />
+      </marker>
+    </defs>
+
+    <!-- O pacote -->
+    <text x="14" y="26" class="dg-muted" font-weight="620">{C.packet}</text>
+    <rect x="14" y="36" width="132" height="46" rx={6} class="dg-box dg-box--raised" />
+    <text x="80" y="55" text-anchor="middle" class="dg-mono" font-size="11.5">203.0.113.9<tspan class="dg-fill-accent" font-weight="700">:8080</tspan></text>
+    <text x="80" y="71" text-anchor="middle" class="dg-faint" font-size="9">{C.addr}</text>
+    <path d="M148 59 L182 59" class="dg-line dg-line--accent" marker-end="url(#pa-arrow-a)" />
+
+    <!-- O host e as três portas -->
+    <rect x="186" y="18" width="268" height="252" rx={10} class="dg-box dg-box--dashed" />
+    <text x="200" y="36" class="dg-muted" font-weight="620" font-size="10.5">{C.host}</text>
+
+    <!-- aberta -->
+    <rect x="204" y="48" width="118" height="54" rx={6} class="dg-box dg-box--accent" />
+    <text x="263" y="68" text-anchor="middle" class="dg-mono" font-weight="700" font-size="13">8080</text>
+    <text x="263" y="83" text-anchor="middle" class="dg-fill-accent" font-size="9" font-weight="700">{C.open}</text>
+    <text x="263" y="95" text-anchor="middle" class="dg-faint" font-size="8.5">{C.openWhy}</text>
+    <rect x="340" y="56" width="96" height="38" rx={6} class="dg-box dg-box--raised" />
+    <text x="388" y="72" text-anchor="middle" class="dg-mono" font-size="9.5">{C.proc}</text>
+    <text x="388" y="85" text-anchor="middle" class="dg-faint" font-size="8.5">caddy</text>
+    <path d="M324 75 L338 75" class="dg-line dg-line--accent" marker-end="url(#pa-arrow-a)" />
+
+    <!-- fechada -->
+    <rect x="204" y="118" width="118" height="54" rx={6} class="dg-box" />
+    <text x="263" y="138" text-anchor="middle" class="dg-mono" font-weight="700" font-size="13">5432</text>
+    <text x="263" y="153" text-anchor="middle" class="dg-muted" font-size="9" font-weight="700">{C.closed}</text>
+    <text x="263" y="165" text-anchor="middle" class="dg-faint" font-size="8.5">{C.closedWhy}</text>
+    <path d="M324 145 L380 145" class="dg-line dg-line--dashed" />
+    <path d="M374 138 L388 152 M388 138 L374 152" class="dg-line" />
+
+    <!-- filtrada -->
+    <rect x="204" y="188" width="118" height="54" rx={6} class="dg-box dg-box--warn" />
+    <text x="263" y="208" text-anchor="middle" class="dg-mono" font-weight="700" font-size="13">22</text>
+    <text x="263" y="223" text-anchor="middle" class="dg-fill-warn" font-size="9" font-weight="700">{C.filtered}</text>
+    <text x="263" y="235" text-anchor="middle" class="dg-faint" font-size="8.5">{C.filteredWhy}</text>
+    <path d="M324 215 L370 215" class="dg-line dg-line--warn dg-line--dashed" />
+    <text x="378" y="219" class="dg-faint" font-size="9">…</text>
+
+    <!-- O que volta, e o que o invasor conclui -->
+    <text x="470" y="36" class="dg-muted" font-weight="620" font-size="10.5">{C.learns}</text>
+
+    <path d="M456 75 L482 75" class="dg-line" marker-end="url(#pa-arrow)" />
+    <text x="488" y="68" class="dg-mono dg-fill-accent" font-size="9">{C.openAns}</text>
+    <text x="488" y="82" class="dg-muted" font-size="9.5">{C.l1}</text>
+
+    <path d="M456 145 L482 145" class="dg-line" marker-end="url(#pa-arrow)" />
+    <text x="488" y="138" class="dg-mono dg-muted" font-size="9">{C.closedAns}</text>
+    <text x="488" y="152" class="dg-muted" font-size="9.5">{C.l2}</text>
+
+    <path d="M456 215 L482 215" class="dg-line dg-line--dashed" />
+    <text x="488" y="208" class="dg-mono dg-fill-warn" font-size="9">{C.filteredAns}</text>
+    <text x="488" y="222" class="dg-muted" font-size="9.5">{C.l3}</text>
+
+    <!-- O rodapé: a definição -->
+    <rect x="14" y="292" width="692" height="34" rx={8} class="dg-box dg-box--raised" />
+    <text x="360" y="313" text-anchor="middle" class="dg-mono dg-muted" font-size="11">{C.socket}</text>
+  </svg>
+</Figure>

@@ -1,0 +1,102 @@
+---
+/**
+ * Lição 3 — o que o TLS resolve, e o ponto exato em que o cartaz troca as
+ * bolas.
+ *
+ * Duas faixas em cima mostram a MESMA senha no fio, com e sem cifra. A faixa
+ * de baixo mostra o rebaixamento (SSL stripping), que o cartaz atribui à 443
+ * e que na verdade acontece na 80: o atacante intercepta a primeira
+ * requisição, em texto claro, e nunca deixa o redirecionamento chegar. A
+ * vítima nunca vê cadeado nenhum — e ausência de cadeado é um sinal que
+ * praticamente ninguém procura.
+ */
+import Figure from "../Figure.astro";
+import type { Lang } from "../../i18n/ui";
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+const C = {
+  pt: {
+    you: "você", server: "servidor", between: "quem está no caminho",
+    http: "porta 80 · sem cifra", https: "porta 443 · TLS",
+    reads: "lê", readsNothing: "lê",
+    clear: "senha=hunter2", cipher: "9f3a c1…e7 (ilegível)",
+    strip: "o rebaixamento — e ele mora na 80, não na 443",
+    s1: "você digita exemplo.com", s1n: "o navegador tenta HTTP primeiro",
+    s2: "o atacante intercepta", s2n: "e engole o redirecionamento p/ HTTPS",
+    s3: "fala HTTPS com o site", s3n: "e HTTP com você — sem cadeado nenhum",
+    fix: "HSTS (RFC 6797) fecha esta janela: o navegador se recusa a tentar HTTP de novo",
+    caption:
+      "O TLS resolve <b>uma</b> coisa: quem está no caminho deixa de ler e de alterar. Ele não resolve o que a aplicação faz com a requisição depois — a mesma injeção atravessa cifrada. E o rebaixamento não ataca a 443: ele impede a vítima de <b>chegar</b> nela, sequestrando a primeira requisição em texto claro que sai pela 80.",
+    alt: "A mesma senha no fio com e sem TLS, e as três etapas de um ataque de rebaixamento na porta 80.",
+  },
+  en: {
+    you: "you", server: "server", between: "whoever is on the path",
+    http: "port 80 · no encryption", https: "port 443 · TLS",
+    reads: "reads", readsNothing: "reads",
+    clear: "password=hunter2", cipher: "9f3a c1…e7 (unreadable)",
+    strip: "the downgrade — and it lives on 80, not on 443",
+    s1: "you type example.com", s1n: "the browser tries HTTP first",
+    s2: "the attacker intercepts", s2n: "and swallows the redirect to HTTPS",
+    s3: "speaks HTTPS to the site", s3n: "and HTTP to you — no padlock at all",
+    fix: "HSTS (RFC 6797) closes this window: the browser refuses to try HTTP again",
+    caption:
+      "TLS solves <b>one</b> thing: whoever is on the path stops reading and stops altering. It does not solve what the application does with the request afterwards — the same injection crosses it encrypted. And the downgrade does not attack 443: it stops the victim from <b>reaching</b> it, by hijacking the first cleartext request that leaves over 80.",
+    alt: "The same password on the wire with and without TLS, and the three steps of a downgrade attack on port 80.",
+  },
+}[lang];
+---
+<Figure caption={C.caption} alt={C.alt}>
+  <svg viewBox="0 0 720 388" xmlns="http://www.w3.org/2000/svg" font-size="11">
+    <defs>
+      <marker id="pt-arrow" viewBox="0 0 10 10" refX="8" refY="5"
+              markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse">
+        <path d="M0 0 L10 5 L0 10 z" fill="var(--border-strong)" />
+      </marker>
+    </defs>
+
+    <!-- Faixa 1: sem cifra -->
+    <text x="14" y="20" class="dg-fill-danger" font-weight="700" font-size="9.5">{C.http}</text>
+    <rect x="14" y="28" width="92" height="40" rx={6} class="dg-box dg-box--raised" />
+    <text x="60" y="53" text-anchor="middle" class="dg-muted">{C.you}</text>
+    <path d="M110 48 L246 48" class="dg-line dg-line--danger" marker-end="url(#pt-arrow)" />
+    <rect x="250" y="24" width="220" height="48" rx={6} class="dg-box dg-box--danger" />
+    <text x="360" y="42" text-anchor="middle" class="dg-faint" font-size="8.5">{C.between} {C.reads}:</text>
+    <text x="360" y="60" text-anchor="middle" class="dg-mono dg-fill-danger" font-weight="700" font-size="12">{C.clear}</text>
+    <path d="M474 48 L610 48" class="dg-line dg-line--danger" marker-end="url(#pt-arrow)" />
+    <rect x="614" y="28" width="92" height="40" rx={6} class="dg-box dg-box--raised" />
+    <text x="660" y="53" text-anchor="middle" class="dg-muted">{C.server}</text>
+
+    <!-- Faixa 2: com TLS -->
+    <text x="14" y="108" class="dg-fill-accent" font-weight="700" font-size="9.5">{C.https}</text>
+    <rect x="14" y="116" width="92" height="40" rx={6} class="dg-box dg-box--raised" />
+    <text x="60" y="141" text-anchor="middle" class="dg-muted">{C.you}</text>
+    <path d="M110 136 L246 136" class="dg-line dg-line--accent" marker-end="url(#pt-arrow)" />
+    <rect x="250" y="112" width="220" height="48" rx={6} class="dg-box dg-box--accent" />
+    <text x="360" y="130" text-anchor="middle" class="dg-faint" font-size="8.5">{C.between} {C.readsNothing}:</text>
+    <text x="360" y="148" text-anchor="middle" class="dg-mono dg-fill-accent" font-weight="700" font-size="12">{C.cipher}</text>
+    <path d="M474 136 L610 136" class="dg-line dg-line--accent" marker-end="url(#pt-arrow)" />
+    <rect x="614" y="116" width="92" height="40" rx={6} class="dg-box dg-box--raised" />
+    <text x="660" y="141" text-anchor="middle" class="dg-muted">{C.server}</text>
+
+    <!-- Faixa 3: o rebaixamento -->
+    <rect x="14" y="192" width="692" height="150" rx={10} class="dg-box dg-box--dashed" />
+    <text x="28" y="212" class="dg-fill-warn" font-weight="700" font-size="9.5">{C.strip}</text>
+
+    <rect x="28" y="224" width="200" height="56" rx={6} class="dg-box dg-box--raised" />
+    <text x="128" y="246" text-anchor="middle" class="dg-muted" font-size="10">{C.s1}</text>
+    <text x="128" y="263" text-anchor="middle" class="dg-faint" font-size="8.5">{C.s1n}</text>
+    <path d="M232 252 L256 252" class="dg-line" marker-end="url(#pt-arrow)" />
+
+    <rect x="260" y="224" width="200" height="56" rx={6} class="dg-box dg-box--warn" />
+    <text x="360" y="246" text-anchor="middle" class="dg-fill-warn" font-size="10" font-weight="700">{C.s2}</text>
+    <text x="360" y="263" text-anchor="middle" class="dg-faint" font-size="8.5">{C.s2n}</text>
+    <path d="M464 252 L488 252" class="dg-line" marker-end="url(#pt-arrow)" />
+
+    <rect x="492" y="224" width="200" height="56" rx={6} class="dg-box dg-box--warn" />
+    <text x="592" y="246" text-anchor="middle" class="dg-fill-warn" font-size="10" font-weight="700">{C.s3}</text>
+    <text x="592" y="263" text-anchor="middle" class="dg-faint" font-size="8.5">{C.s3n}</text>
+
+    <rect x="28" y="296" width="664" height="32" rx={6} class="dg-box dg-box--accent" />
+    <text x="360" y="316" text-anchor="middle" class="dg-fill-accent" font-size="10">{C.fix}</text>
+  </svg>
+</Figure>

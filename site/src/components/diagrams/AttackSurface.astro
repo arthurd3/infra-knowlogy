@@ -1,0 +1,118 @@
+---
+/**
+ * Lições 1 e 6 — a superfície de ataque real desta stack, e as oito portas do
+ * cartaz colocadas ao lado dela.
+ *
+ * O desenho existe para responder a uma pergunta que o cartaz provoca e não
+ * responde: "e quantas dessas eu tenho aberto?". Aqui a resposta é medida —
+ * nenhuma. O que chega ao host é uma porta só, em loopback, e depois dela
+ * vêm três barreiras que o `make attack-lab` atravessa (ou tenta) uma a uma.
+ *
+ * Os números nas barreiras são os passos do laboratório, para o leitor poder
+ * ir do desenho direto ao comando que o prova.
+ */
+import Figure from "../Figure.astro";
+import type { Lang } from "../../i18n/ui";
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+const C = {
+  pt: {
+    posterTitle: "as 8 portas do cartaz",
+    absent: "ausente", internal: "interna",
+    posterFoot: "nenhuma delas atende nesta stack",
+    net: "internet",
+    only: "a ÚNICA porta que chega ao host",
+    b1: "loopback", b1s: "passo 1",
+    b2: "sem rota", b2s: "passo 3",
+    b3: "sem saída", b3s: "passo 11",
+    edge: "edge", api: "api", db: "db",
+    edgeN: "rede edge", dataN: "rede data · internal",
+    caption:
+      "A pergunta que o cartaz provoca é “quantas dessas eu tenho abertas?”. Aqui a resposta é <b>nenhuma</b>: o que chega ao host é uma porta, em <code>127.0.0.1</code>. Depois dela vêm três barreiras, e cada uma tem um passo do <code>make attack-lab</code> que tenta atravessá-la — porque barreira que ninguém testou é suposição.",
+    alt: "As oito portas do cartaz, todas ausentes, ao lado da superfície real da stack: uma porta em loopback e três barreiras até o banco.",
+  },
+  en: {
+    posterTitle: "the poster's 8 ports",
+    absent: "absent", internal: "internal",
+    posterFoot: "none of them answers in this stack",
+    net: "internet",
+    only: "the ONLY port that reaches the host",
+    b1: "loopback", b1s: "step 1",
+    b2: "no route", b2s: "step 3",
+    b3: "no way out", b3s: "step 11",
+    edge: "edge", api: "api", db: "db",
+    edgeN: "edge network", dataN: "data network · internal",
+    caption:
+      "The question the poster provokes is “how many of these do I have open?”. Here the answer is <b>none</b>: what reaches the host is one port, on <code>127.0.0.1</code>. Past it come three barriers, and each one has a step in <code>make attack-lab</code> that tries to cross it — because a barrier nobody tested is an assumption.",
+    alt: "The poster's eight ports, all absent, beside the stack's real surface: one loopback port and three barriers down to the database.",
+  },
+}[lang];
+
+const POSTER = [
+  { n: 22, s: "SSH" }, { n: 23, s: "Telnet" }, { n: 25, s: "SMTP" }, { n: 53, s: "DNS" },
+  { n: 80, s: "HTTP" }, { n: 443, s: "HTTPS" }, { n: 445, s: "SMB" }, { n: 3389, s: "RDP" },
+];
+---
+<Figure caption={C.caption} alt={C.alt}>
+  <svg viewBox="0 0 720 346" xmlns="http://www.w3.org/2000/svg" font-size="11">
+    <defs>
+      <marker id="as-arrow" viewBox="0 0 10 10" refX="8" refY="5"
+              markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse">
+        <path d="M0 0 L10 5 L0 10 z" fill="var(--border-strong)" />
+      </marker>
+    </defs>
+
+    <!-- O cartaz, à esquerda -->
+    <rect x="14" y="14" width="186" height="318" rx={10} class="dg-box dg-box--dashed" />
+    <text x="28" y="34" class="dg-muted" font-weight="620" font-size="10.5">{C.posterTitle}</text>
+    {POSTER.map((p, i) => (
+      <>
+        <text x="34" y={56 + i * 29} class="dg-mono dg-muted" font-weight="700" font-size="11.5">{p.n}</text>
+        <text x="74" y={56 + i * 29} class="dg-faint" font-size="9.5">{p.s}</text>
+        <text x={p.n === 53 ? 128 : 140} y={56 + i * 29} class={p.n === 53 ? "dg-fill-accent" : "dg-faint"} font-size="9">
+          {p.n === 53 ? C.internal : C.absent}
+        </text>
+      </>
+    ))}
+    <text x="28" y="312" class="dg-faint" font-size="9">{C.posterFoot}</text>
+
+    <!-- A superfície real, à direita -->
+    <rect x="220" y="14" width="88" height="34" rx={6} class="dg-box" />
+    <text x="264" y="36" text-anchor="middle" class="dg-muted" font-size="10.5">{C.net}</text>
+
+    <path d="M264 50 L264 74" class="dg-line" marker-end="url(#as-arrow)" />
+    <rect x="220" y="76" width="200" height="40" rx={6} class="dg-box dg-box--accent" />
+    <text x="320" y="94" text-anchor="middle" class="dg-mono dg-fill-accent" font-weight="700" font-size="11.5">127.0.0.1:8080</text>
+    <text x="320" y="108" text-anchor="middle" class="dg-faint" font-size="8.5">{C.only}</text>
+    <text x="432" y="92" class="dg-mono dg-fill-warn" font-size="9" font-weight="700">{C.b1}</text>
+    <text x="432" y="104" class="dg-faint" font-size="8.5">{C.b1s}</text>
+
+    <path d="M320 118 L320 140" class="dg-line" marker-end="url(#as-arrow)" />
+
+    <!-- rede edge -->
+    <rect x="220" y="142" width="300" height="60" rx={8} class="dg-box dg-box--dashed" />
+    <text x="234" y="158" class="dg-faint" font-size="9">{C.edgeN}</text>
+    <rect x="238" y="162" width="96" height="32" rx={5} class="dg-box dg-box--raised" />
+    <text x="286" y="182" text-anchor="middle" class="dg-mono" font-weight="620">{C.edge}</text>
+    <rect x="354" y="162" width="96" height="32" rx={5} class="dg-box dg-box--raised" />
+    <text x="402" y="182" text-anchor="middle" class="dg-mono" font-weight="620">{C.api}</text>
+    <path d="M336 178 L352 178" class="dg-line" marker-end="url(#as-arrow)" />
+
+    <!-- a barreira entre as redes -->
+    <path d="M238 214 L520 214" class="dg-line dg-line--danger dg-line--dashed" />
+    <text x="532" y="212" class="dg-mono dg-fill-danger" font-size="9" font-weight="700">{C.b2}</text>
+    <text x="532" y="224" class="dg-faint" font-size="8.5">{C.b2s}</text>
+    <path d="M402 200 L402 234" class="dg-line dg-line--accent" marker-end="url(#as-arrow)" />
+
+    <!-- rede data -->
+    <rect x="220" y="236" width="300" height="62" rx={8} class="dg-box dg-box--dashed" />
+    <text x="234" y="252" class="dg-faint" font-size="9">{C.dataN}</text>
+    <rect x="354" y="256" width="96" height="32" rx={5} class="dg-box dg-box--warn" />
+    <text x="402" y="276" text-anchor="middle" class="dg-mono" font-weight="620">{C.db}</text>
+
+    <path d="M470 272 L520 272" class="dg-line dg-line--danger dg-line--dashed" />
+    <path d="M506 265 L520 279 M520 265 L506 279" class="dg-line dg-line--danger" />
+    <text x="532" y="270" class="dg-mono dg-fill-danger" font-size="9" font-weight="700">{C.b3}</text>
+    <text x="532" y="282" class="dg-faint" font-size="8.5">{C.b3s}</text>
+  </svg>
+</Figure>

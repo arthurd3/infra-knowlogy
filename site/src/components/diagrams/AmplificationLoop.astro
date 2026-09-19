@@ -1,0 +1,100 @@
+---
+/**
+ * Lição 4 — por que um servidor de DNS que responde a estranhos vira arma.
+ *
+ * O desenho carrega a conta, e a conta é o ensino: a pergunta é pequena, a
+ * resposta é grande, e o endereço de origem é forjado. O atacante não precisa
+ * de banda — ele precisa de servidores que respondam a qualquer um. O fator
+ * entre 28 e 54 é o medido pela CISA no boletim TA14-017A; não é um número
+ * desta máquina, e por isso a lição o traz num FieldNote.
+ */
+import Figure from "../Figure.astro";
+import type { Lang } from "../../i18n/ui";
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+const C = {
+  pt: {
+    attacker: "atacante", attackerNote: "banda modesta",
+    ask: "pergunta pequena", askSize: "≈ 60 bytes",
+    forged: "com o endereço de origem FORJADO: o da vítima",
+    resolvers: "servidores de DNS que respondem a qualquer um",
+    answer: "resposta grande", answerSize: "≈ 1.700–3.200 bytes",
+    victim: "vítima", victimNote: "nunca perguntou nada",
+    factor: "fator de amplificação do DNS",
+    factorVal: "28× a 54×",
+    factorSrc: "medido pela CISA (TA14-017A) — citado, não medido aqui",
+    math: "1 Gb/s saindo do atacante chega como 28 a 54 Gb/s na vítima, vindo de servidores legítimos",
+    caption:
+      "O atacante não precisa de banda: ele precisa de <b>servidores que respondam a estranhos</b>. A pergunta é pequena, a resposta é grande e o remetente é forjado — a conta inteira do ataque cabe nessas três frases. Por isso a defesa não é filtrar UDP: é o resolvedor deixar de atender quem não é da sua rede.",
+    alt: "Um atacante enviando perguntas pequenas com origem forjada a servidores DNS abertos, cujas respostas grandes chegam à vítima.",
+  },
+  en: {
+    attacker: "attacker", attackerNote: "modest bandwidth",
+    ask: "a small question", askSize: "≈ 60 bytes",
+    forged: "with the source address FORGED: the victim's",
+    resolvers: "DNS servers that answer anyone",
+    answer: "a large answer", answerSize: "≈ 1,700–3,200 bytes",
+    victim: "victim", victimNote: "never asked anything",
+    factor: "DNS amplification factor",
+    factorVal: "28× to 54×",
+    factorSrc: "measured by CISA (TA14-017A) — cited, not measured here",
+    math: "1 Gb/s leaving the attacker arrives as 28 to 54 Gb/s at the victim, from legitimate servers",
+    caption:
+      "The attacker does not need bandwidth: he needs <b>servers that answer strangers</b>. The question is small, the answer is large and the sender is forged — the whole arithmetic of the attack fits in those three clauses. Which is why the defense is not filtering UDP: it is the resolver refusing to serve anyone outside its own network.",
+    alt: "An attacker sending small, source-forged questions to open DNS servers whose large answers land on the victim.",
+  },
+}[lang];
+---
+<Figure caption={C.caption} alt={C.alt}>
+  <svg viewBox="0 0 720 312" xmlns="http://www.w3.org/2000/svg" font-size="11">
+    <defs>
+      <marker id="am-arrow" viewBox="0 0 10 10" refX="8" refY="5"
+              markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse">
+        <path d="M0 0 L10 5 L0 10 z" fill="var(--border-strong)" />
+      </marker>
+      <marker id="am-arrow-d" viewBox="0 0 10 10" refX="8" refY="5"
+              markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0 0 L10 5 L0 10 z" class="dg-fill-danger" />
+      </marker>
+    </defs>
+
+    <!-- Atacante -->
+    <rect x="14" y="88" width="108" height="52" rx={6} class="dg-box dg-box--raised" />
+    <text x="68" y="110" text-anchor="middle" class="dg-muted" font-weight="620">{C.attacker}</text>
+    <text x="68" y="126" text-anchor="middle" class="dg-faint" font-size="8.5">{C.attackerNote}</text>
+
+    <!-- A pergunta -->
+    <path d="M126 114 L236 114" class="dg-line" stroke-width="1.2" marker-end="url(#am-arrow)" />
+    <text x="181" y="104" text-anchor="middle" class="dg-muted" font-size="9">{C.ask}</text>
+    <text x="181" y="130" text-anchor="middle" class="dg-mono dg-faint" font-size="9">{C.askSize}</text>
+    <text x="181" y="152" text-anchor="middle" class="dg-fill-warn" font-size="8.5">{C.forged}</text>
+
+    <!-- Os resolvedores abertos -->
+    <rect x="240" y="40" width="180" height="150" rx={10} class="dg-box dg-box--dashed" />
+    <text x="330" y="32" text-anchor="middle" class="dg-muted" font-size="9">{C.resolvers}</text>
+    {[0, 1, 2, 3].map((i) => (
+      <rect x={256 + (i % 2) * 76} y={58 + Math.floor(i / 2) * 62} width="64" height="48" rx={5} class="dg-box dg-box--raised" />
+    ))}
+    {[0, 1, 2, 3].map((i) => (
+      <text x={288 + (i % 2) * 76} y={87 + Math.floor(i / 2) * 62} text-anchor="middle" class="dg-mono dg-faint" font-size="9">:53</text>
+    ))}
+
+    <!-- A resposta -->
+    <path d="M424 114 L560 114" class="dg-line dg-line--danger" stroke-width="4" marker-end="url(#am-arrow-d)" />
+    <text x="492" y="102" text-anchor="middle" class="dg-fill-danger" font-size="9" font-weight="700">{C.answer}</text>
+    <text x="492" y="134" text-anchor="middle" class="dg-mono dg-faint" font-size="9">{C.answerSize}</text>
+
+    <!-- Vítima -->
+    <rect x="564" y="88" width="142" height="52" rx={6} class="dg-box dg-box--danger" />
+    <text x="635" y="110" text-anchor="middle" class="dg-fill-danger" font-weight="700">{C.victim}</text>
+    <text x="635" y="126" text-anchor="middle" class="dg-faint" font-size="8.5">{C.victimNote}</text>
+
+    <!-- A conta -->
+    <rect x="14" y="212" width="692" height="86" rx={10} class="dg-box dg-box--raised" />
+    <text x="40" y="238" class="dg-faint" font-size="9.5">{C.factor}</text>
+    <text x="40" y="266" class="dg-mono dg-fill-danger" font-weight="700" font-size="22">{C.factorVal}</text>
+    <text x="40" y="284" class="dg-faint" font-size="8.5">{C.factorSrc}</text>
+    <path d="M232 226 L232 286" class="dg-line dg-line--dashed" />
+    <text x="256" y="258" class="dg-muted" font-size="10">{C.math}</text>
+  </svg>
+</Figure>

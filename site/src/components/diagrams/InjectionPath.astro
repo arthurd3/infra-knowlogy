@@ -1,0 +1,116 @@
+---
+/**
+ * Lição 5 — a única ideia que explica a injeção de SQL inteira.
+ *
+ * O banco recebe UMA cadeia de caracteres e decide sozinho o que ali é
+ * comando e o que é dado. Concatenar a entrada do usuário no texto da
+ * consulta apaga essa fronteira: o que o usuário escreveu passa a ser lido
+ * como comando. Passar a entrada como PARÂMETRO mantém a fronteira, porque a
+ * consulta e o valor viajam separados e o valor nunca é reinterpretado.
+ *
+ * Os dois números do rodapé não são ilustrativos: saíram do passo 6 do
+ * `make attack-lab`, na mesma tabela e com a mesma entrada hostil.
+ */
+import Figure from "../Figure.astro";
+import type { Lang } from "../../i18n/ui";
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+const C = {
+  pt: {
+    input: "o que o usuário digitou no campo “nome”",
+    laneA: "CONCATENADA — a entrada vira texto da consulta",
+    laneB: "PARAMETRIZADA — a entrada viaja como valor",
+    arrives: "o que chega ao banco",
+    sees: "o que o parser entende",
+    cmdA1: "compare nome com nada", cmdA2: "OU com uma verdade",
+    cmdB1: "compare nome com ESTE texto",
+    litB: "literal, nunca reinterpretado",
+    resA: "3", resB: "0",
+    rowsA: "linhas — a tabela inteira", rowsB: "linhas — não existe esse nome",
+    measured: "medido no passo 6 do make attack-lab, mesma tabela, mesma entrada",
+    boundary: "fronteira apagada", kept: "fronteira mantida",
+    caption:
+      "A injeção de SQL não é sobre aspas: é sobre <b>onde o valor entra</b>. À esquerda a entrada do usuário virou parte do comando, e o <code>OR</code> que ele escreveu é executado. À direita a mesma entrada é um parâmetro — o banco procura literalmente por alguém chamado <code>' OR '1'='1</code> e não acha ninguém. Duas linhas de código de distância, e os números são os do portão.",
+    alt: "A mesma entrada hostil percorrendo dois caminhos: concatenada no texto da consulta e passada como parâmetro.",
+  },
+  en: {
+    input: "what the user typed into the “name” field",
+    laneA: "CONCATENATED — the input becomes query text",
+    laneB: "PARAMETERISED — the input travels as a value",
+    arrives: "what reaches the database",
+    sees: "what the parser understands",
+    cmdA1: "compare name with nothing", cmdA2: "OR with a truth",
+    cmdB1: "compare name with THIS text",
+    litB: "a literal, never reinterpreted",
+    resA: "3", resB: "0",
+    rowsA: "rows — the whole table", rowsB: "rows — no such name exists",
+    measured: "measured in step 6 of make attack-lab, same table, same input",
+    boundary: "boundary erased", kept: "boundary kept",
+    caption:
+      "SQL injection is not about quotes: it is about <b>where the value enters</b>. On the left the user's input became part of the command, and the <code>OR</code> they wrote gets executed. On the right the same input is a parameter — the database looks literally for someone named <code>' OR '1'='1</code> and finds nobody. Two lines of code apart, and the numbers are the gate's own.",
+    alt: "The same hostile input taking two paths: concatenated into the query text, and passed as a parameter.",
+  },
+}[lang];
+---
+<Figure caption={C.caption} alt={C.alt}>
+  <svg viewBox="0 0 720 392" xmlns="http://www.w3.org/2000/svg" font-size="11">
+    <defs>
+      <marker id="ip-arrow" viewBox="0 0 10 10" refX="8" refY="5"
+              markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse">
+        <path d="M0 0 L10 5 L0 10 z" fill="var(--border-strong)" />
+      </marker>
+    </defs>
+
+    <!-- A entrada hostil, uma só -->
+    <text x="360" y="18" text-anchor="middle" class="dg-faint" font-size="9.5">{C.input}</text>
+    <rect x="248" y="26" width="224" height="34" rx={6} class="dg-box dg-box--danger" />
+    <text x="360" y="48" text-anchor="middle" class="dg-mono dg-fill-danger" font-weight="700" font-size="13">' OR '1'='1</text>
+    <path d="M300 62 L188 82" class="dg-line" marker-end="url(#ip-arrow)" />
+    <path d="M420 62 L532 82" class="dg-line" marker-end="url(#ip-arrow)" />
+
+    <!-- Faixa esquerda: concatenada -->
+    <rect x="14" y="88" width="336" height="238" rx={10} class="dg-box dg-box--dashed" />
+    <text x="28" y="106" class="dg-fill-danger" font-weight="700" font-size="9.5">{C.laneA}</text>
+
+    <text x="28" y="126" class="dg-faint" font-size="9">{C.arrives}</text>
+    <rect x="28" y="132" width="308" height="40" rx={5} class="dg-box dg-box--raised" />
+    <text x="40" y="149" class="dg-mono" font-size="10">
+      <tspan class="dg-muted">WHERE nome = ''</tspan><tspan class="dg-fill-danger" font-weight="700"> OR '1'='1'</tspan>
+    </text>
+    <text x="40" y="164" class="dg-fill-danger" font-size="8.5">↑ {C.boundary}</text>
+
+    <text x="28" y="192" class="dg-faint" font-size="9">{C.sees}</text>
+    <rect x="28" y="198" width="148" height="30" rx={5} class="dg-box" />
+    <text x="102" y="217" text-anchor="middle" class="dg-muted" font-size="9">{C.cmdA1}</text>
+    <rect x="188" y="198" width="148" height="30" rx={5} class="dg-box dg-box--danger" />
+    <text x="262" y="217" text-anchor="middle" class="dg-fill-danger" font-size="9" font-weight="700">{C.cmdA2}</text>
+
+    <text x="182" y="272" text-anchor="middle" class="dg-fill-danger dg-mono" font-weight="700" font-size="30">{C.resA}</text>
+    <text x="182" y="292" text-anchor="middle" class="dg-muted" font-size="9.5">{C.rowsA}</text>
+
+    <!-- Faixa direita: parametrizada -->
+    <rect x="370" y="88" width="336" height="238" rx={10} class="dg-box dg-box--dashed" />
+    <text x="384" y="106" class="dg-fill-accent" font-weight="700" font-size="9.5">{C.laneB}</text>
+
+    <text x="384" y="126" class="dg-faint" font-size="9">{C.arrives}</text>
+    <rect x="384" y="132" width="308" height="40" rx={5} class="dg-box dg-box--raised" />
+    <text x="396" y="149" class="dg-mono" font-size="10">
+      <tspan class="dg-muted">WHERE nome = </tspan><tspan class="dg-fill-accent" font-weight="700">$1</tspan>
+      <tspan class="dg-faint">  ◂ ' OR '1'='1</tspan>
+    </text>
+    <text x="396" y="164" class="dg-fill-accent" font-size="8.5">↑ {C.kept}</text>
+
+    <text x="384" y="192" class="dg-faint" font-size="9">{C.sees}</text>
+    <rect x="384" y="198" width="148" height="30" rx={5} class="dg-box dg-box--accent" />
+    <text x="458" y="217" text-anchor="middle" class="dg-fill-accent" font-size="9" font-weight="700">{C.cmdB1}</text>
+    <rect x="544" y="198" width="148" height="30" rx={5} class="dg-box" />
+    <text x="618" y="217" text-anchor="middle" class="dg-faint" font-size="9">{C.litB}</text>
+
+    <text x="538" y="272" text-anchor="middle" class="dg-fill-accent dg-mono" font-weight="700" font-size="30">{C.resB}</text>
+    <text x="538" y="292" text-anchor="middle" class="dg-muted" font-size="9.5">{C.rowsB}</text>
+
+    <!-- Rodapé: a procedência dos dois números -->
+    <rect x="14" y="344" width="692" height="32" rx={8} class="dg-box dg-box--raised" />
+    <text x="360" y="364" text-anchor="middle" class="dg-faint dg-mono" font-size="10">{C.measured}</text>
+  </svg>
+</Figure>

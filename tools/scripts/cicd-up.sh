@@ -98,6 +98,23 @@ step "2/4  Fase 1 — controller, buildkitd, scm e registry"
 secs=$(jk_wait_ready 180) || die "o controller não ficou pronto em 180s"
 ok "controller pronto em ${secs}s — $JENKINS_URL"
 
+# Um reload do JCasC com o Jenkins JÁ de pé.
+#
+# O seed do Job DSL roda durante a inicialização, e um job criado ali nem
+# sempre sobrevive: o Jenkins ainda vai carregar os jobs do disco depois, e o
+# recém-criado some sem erro nenhum no log — a linha
+# `createOrUpdateConfig for <job>` aparece, e o job não existe.
+# Observado aqui com o `credential-probe`, que os outros dois jobs não
+# mostraram porque já estavam gravados de uma subida anterior.
+#
+# O reload é idempotente e determinístico. Custa um segundo e tira a sorte do
+# caminho.
+JK_TOKEN=$(jk_mint_token)
+export JK_TOKEN
+jk_curl -o /dev/null -X POST "$JENKINS_URL/manage/configuration-as-code/reload" || true
+sleep 3
+ok "configuração recarregada com o Jenkins de pé"
+
 # ─── O segredo do agente ─────────────────────────────────────────────────────
 step "3/4  Segredo do nó builder"
 # O .jnlp do nó carrega o segredo no primeiro <argument>. É a via documentada
