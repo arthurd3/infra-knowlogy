@@ -1,0 +1,149 @@
+---
+key: jenkins-without-clicking
+lang: en
+track: cicd
+order: 2
+title: A Jenkins that boots ready
+summary: Configuration as Code, 67 pinned plugins and jobs born from a seed. Plus the trap that makes all of it look like it works when it does not.
+minutes: 15
+tags: [cicd, jenkins, jcasc, job-dsl, plugins, reprodutibilidade]
+sources:
+  - label: "Jenkins — Configuration as Code"
+    url: "https://www.jenkins.io/projects/jcasc/"
+    kind: docs
+  - label: "JCasC — Handling Secrets"
+    url: "https://github.com/jenkinsci/configuration-as-code-plugin/blob/master/docs/features/secrets.adoc"
+    kind: docs
+  - label: "job-dsl-plugin — JCasC"
+    url: "https://github.com/jenkinsci/job-dsl-plugin/blob/master/docs/JCasC.md"
+    kind: docs
+---
+
+import SeedFlow from "../../../components/diagrams/SeedFlow.astro";
+
+A Jenkins configured through its web UI is a **pet machine**: unique,
+irreplaceable and impossible to recreate. When it dies, the knowledge of how it
+was set up dies with it.
+
+This module's controller comes up in **13 seconds**, from nothing, already
+carrying authentication, authorisation, a build node, its jobs and 67 plugins —
+and nobody clicked anything.
+
+<SeedFlow />
+
+## Four files, four responsibilities
+
+```
+cicd/controller/Dockerfile      the image, with plugins downloaded at BUILD time
+cicd/controller/plugins.txt     67 plugins, pinned by version
+cicd/controller/casc/*.yaml     the whole Jenkins, declared
+cicd/controller/jobs/seed.groovy  the jobs, in Job DSL
+```
+
+Plugin downloads happen while **building the image**, never at container start.
+Once the image exists, `make cicd-verify` runs with no network — and a gate that
+depends on the internet is not a gate, it is a bet.
+
+## 67 plugins, not 7
+
+`plugins.txt` lists the **entire** transitive closure, not just the seven this
+module actually asks for.
+
+<Callout type="trap" label="Decorative pinning">
+Pinning `job-dsl:3732.v9a_c49a_61a_313` and leaving the dependencies floating
+looks sufficient and is not: `jenkins-plugin-cli` resolves every dependency to
+the newest version available **that day**. The same Dockerfile, built on two
+different Tuesdays, produces two different controllers.
+
+Same doctrine as pinning by digest (ADR 0004), and the mechanism for moving the
+pin deliberately exists too: `make cicd-plugins` rewrites the file, so the change
+shows up in a reviewable diff instead of happening quietly.
+
+`--latest false` on the `jenkins-plugin-cli` call is what makes the pin hold.
+Without it the tool bumps the transitives and the file becomes decoration.
+</Callout>
+
+## The trap that costs more time than all the others
+
+JCasC **ignores a misspelled key in silence**.
+
+Write `numExecutor` without the "s". The controller comes up, the configuration
+page looks right, and the built-in node keeps two executors — meaning the
+isolation the entire next lesson defends simply does not exist, and nothing warns
+you.
+
+<Callout type="danger" label="The cousin of kind accepting NetworkPolicy">
+It is exactly the same class of defect as trap 12 in this repository: the
+configuration is **accepted** and not **applied**. In both cases the system
+reports success and the effect never happens.
+
+Which is why the gate reads the controller log looking for `Unknown key`. It is
+the kind of check that looks like paranoia until the first time it catches
+something.
+</Callout>
+
+And there is a second, subtler one, which belongs to **our** stack rather than to
+Jenkins:
+
+<Callout type="trap" label="Configuration cannot live in /var/jenkins_home">
+`/var/jenkins_home` is a named volume. And a named volume is only populated from
+the image **while it is empty** — lesson 6 of this house, applied to ourselves.
+
+The result: the first boot works, you edit `casc.yaml`, rebuild the image, boot
+again… and nothing changes. The volume already has content, Docker copies
+nothing, and you spend the afternoon debugging a YAML file Jenkins never read.
+
+This module's configuration lives in `/opt`. There, the image is in charge.
+</Callout>
+
+## Jobs are reconciled, not created
+
+JCasC's `jobs:` block runs the seed on every boot **and every reload**. That is
+not "create if missing": it is reconciliation. A job edited through the UI snaps
+back to whatever the code says on the next reload.
+
+The gate exploits that property for a check that only makes sense in a declared
+system: the set of jobs must be **exactly** what the seed declares. No more, no
+fewer.
+
+<LabExercise check="the jobs are exactly the seed's" file="cicd/controller/jobs/seed.groovy">
+
+With Jenkins up, create any job through the UI — a "Freestyle project" called
+`my-job`, with no configuration at all. Then run `make cicd-verify`.
+
+The gate will fail. **Why does it fail, when the job you created broke nothing?**
+
+<Fragment slot="hint">
+The check does not ask "do the seed's jobs exist?". It asks something else.
+</Fragment>
+
+<Fragment slot="answer">
+
+Because the check compares the two sets, not whether one contains the other:
+
+```bash
+declared="stack-pipeline stack-negative-lint credential-probe"
+present="credential-probe my-job stack-negative-lint stack-pipeline"
+# different -> fail
+```
+
+"The seed's jobs exist" would pass with `my-job` in there, and the controller
+would carry state that lives nowhere in the repository — which is precisely what
+configuration as code exists to prevent.
+
+Note the happy side effect: a `make cicd-up` (which reloads JCasC) deletes
+`my-job` on its own. The system converges on what is written, without anyone
+remembering to tidy up.
+
+</Fragment>
+</LabExercise>
+
+## What to take away
+
+- Plugins downloaded at image build; gate running offline afterwards.
+- Pin the whole transitive closure, or the pin is decoration.
+- A misspelled JCasC key is ignored **silently** — hence the log check.
+- Configuration outside `/var/jenkins_home`, or the image stops being in charge.
+- The seed reconciles: hand-made jobs vanish, and the gate demands exact equality.
+
+<Quiz set="jenkins-without-clicking" />

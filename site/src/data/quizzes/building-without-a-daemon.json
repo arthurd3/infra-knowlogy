@@ -1,0 +1,116 @@
+{
+  "note_pt": "Perguntas da lição cicd-04.",
+  "note_en": "Questions for lesson cicd-04.",
+  "pt": [
+    {
+      "q": "Por que montar `/var/run/docker.sock` no agente equivale a dar root no host?",
+      "options": [
+        {
+          "text": "Porque o daemon roda como root, e quem fala com ele pede a criação de um container privilegiado com o disco do host montado.",
+          "correct": true,
+          "why": "Não é um exploit, é a API funcionando como documentada. Dois comandos bastam para ler o /etc/shadow do host de dentro de um container."
+        },
+        {
+          "text": "Porque o socket tem permissão 666 na maioria das instalações.",
+          "why": "A permissão do arquivo decide QUEM alcança o socket; o problema é o que se pode pedir depois de alcançá-lo. Mesmo com 600 e o grupo certo, quem chega lá tem o daemon inteiro."
+        },
+        {
+          "text": "Porque o Docker não autentica quem se conecta ao socket.",
+          "why": "Chega perto e inverte a ordem: o socket é autenticado por permissão de arquivo. O problema não é quem entra, é que quem entra pode tudo."
+        }
+      ]
+    },
+    {
+      "q": "Sob SELinux enforcing, o BuildKit rootless falha com `error mounting \"proc\" to rootfs`. Qual é a resposta certa?",
+      "options": [
+        {
+          "text": "`--security-opt label=type:container_engine_t`, o tipo que o Fedora criou para engine de container aninhada.",
+          "correct": true,
+          "why": "Ele mantém o SELinux enforcing E o processo confinado — o rótulo sai com categorias MCS, o que prova que não houve fallback. Medido: com container_t falha, com container_engine_t passa."
+        },
+        {
+          "text": "`--security-opt label=disable`, que é o que a maioria dos tutoriais mostra.",
+          "why": "Funciona e desliga o confinamento inteiro. É a mesma escolha que, no caminho do socket, remove a última barreira — e aqui ela nem é necessária."
+        },
+        {
+          "text": "`--privileged`, já que o buildkitd precisa montar sistemas de arquivos.",
+          "why": "Resolve e joga fora todo o argumento: `--privileged` roda o container como spc_t, e o confinamento não fica mais fraco, ele deixa de existir."
+        }
+      ]
+    },
+    {
+      "q": "O agente fala com o buildkitd por um socket Unix. Trocar `docker.sock` por `buildkitd.sock` mudou o quê?",
+      "options": [
+        {
+          "text": "Mudou quem está do outro lado: um processo não-root num user namespace, em vez de um daemon que é root no host.",
+          "correct": true,
+          "why": "A natureza do canal é a mesma — é um socket. O que muda é o raio de explosão de um RUN malicioso: deixa de ser a máquina e passa a ser um container rootless. E o BuildKit ainda tem entitlements, que o socket do Docker não tem."
+        },
+        {
+          "text": "Nada de substancial: continua sendo um socket com acesso total ao construtor.",
+          "why": "Acesso total ao CONSTRUTOR, sim — e é essa a diferença. Acesso total a um construtor rootless não é acesso total à máquina."
+        },
+        {
+          "text": "O socket do buildkitd é autenticado por TLS, o do Docker não.",
+          "why": "Nenhum dos dois usa TLS aqui — é justamente por isso que o socket fica num volume e não numa porta TCP, que a documentação do buildx desaconselha."
+        }
+      ]
+    }
+  ],
+  "en": [
+    {
+      "q": "Why does mounting `/var/run/docker.sock` into the agent amount to giving away root on the host?",
+      "options": [
+        {
+          "text": "Because the daemon runs as root, and whoever talks to it can ask for a privileged container with the host disk mounted.",
+          "correct": true,
+          "why": "It is not an exploit, it is the API working as documented. Two commands are enough to read the host's /etc/shadow from inside a container."
+        },
+        {
+          "text": "Because the socket is mode 666 on most installations.",
+          "why": "File permissions decide WHO reaches the socket; the problem is what can be asked once reached. Even at 600 with the right group, whoever gets there gets the whole daemon."
+        },
+        {
+          "text": "Because Docker does not authenticate whoever connects to the socket.",
+          "why": "Close, and it inverts the order: the socket is authenticated by file permissions. The problem is not who gets in, it is that whoever gets in can do everything."
+        }
+      ]
+    },
+    {
+      "q": "Under SELinux enforcing, rootless BuildKit fails with `error mounting \"proc\" to rootfs`. What is the right answer?",
+      "options": [
+        {
+          "text": "`--security-opt label=type:container_engine_t`, the type Fedora created for nested container engines.",
+          "correct": true,
+          "why": "It keeps SELinux enforcing AND the process confined — the label carries MCS categories, proving there was no fallback. Measured: with container_t it fails, with container_engine_t it passes."
+        },
+        {
+          "text": "`--security-opt label=disable`, which is what most tutorials show.",
+          "why": "It works and switches confinement off entirely. Same choice that, on the socket path, removes the last barrier — and here it is not even necessary."
+        },
+        {
+          "text": "`--privileged`, since buildkitd needs to mount filesystems.",
+          "why": "It works and throws away the whole argument: `--privileged` runs the container as spc_t, and confinement does not get weaker, it stops existing."
+        }
+      ]
+    },
+    {
+      "q": "The agent talks to buildkitd over a Unix socket. What did swapping `docker.sock` for `buildkitd.sock` actually change?",
+      "options": [
+        {
+          "text": "Who is on the other side: a non-root process in a user namespace, instead of a daemon that is root on the host.",
+          "correct": true,
+          "why": "The nature of the channel is the same — it is a socket. What changes is the blast radius of a malicious RUN: it stops being the machine and becomes a rootless container. And BuildKit has entitlements, which the Docker socket does not."
+        },
+        {
+          "text": "Nothing substantial: it is still a socket with full access to the builder.",
+          "why": "Full access to the BUILDER, yes — and that is the difference. Full access to a rootless builder is not full access to the machine."
+        },
+        {
+          "text": "buildkitd's socket is TLS-authenticated, Docker's is not.",
+          "why": "Neither uses TLS here — which is precisely why the socket lives in a volume rather than on a TCP port, something the buildx documentation advises against."
+        }
+      ]
+    }
+  ]
+}

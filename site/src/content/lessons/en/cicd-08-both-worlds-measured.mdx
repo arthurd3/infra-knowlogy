@@ -1,0 +1,150 @@
+---
+key: jenkins-vs-github-actions
+lang: en
+track: cicd
+order: 8
+title: Both worlds, measured
+summary: The same pipeline, over the same images, on both sides. The comparison the internet makes with adjectives, made here with numbers — and the conclusion is not the one the title suggests.
+minutes: 16
+tags: [cicd, jenkins, github-actions, tradeoff, dora, cache]
+sources:
+  - label: "DORA — 2025: Year in review"
+    url: "https://dora.dev/insights/dora-2025-year-in-review/"
+    kind: blog
+    accessed: "2026-09-19"
+  - label: "Jenkins — Scaling Jenkins"
+    url: "https://www.jenkins.io/doc/book/scaling/"
+    kind: docs
+  - label: "Wiz — tj-actions/changed-files, CVE-2025-30066"
+    url: "https://www.wiz.io/blog/github-action-tj-actions-changed-files-supply-chain-attack-cve-2025-30066"
+    kind: postmortem
+    accessed: "2026-09-19"
+---
+
+import CicdMeasurements from "../../../components/islands/CicdMeasurements.tsx";
+
+This repository has both. `.github/workflows/ci.yml` has run on GitHub Actions
+since module 1; `cicd/Jenkinsfile` runs on Jenkins as of this module. Both build
+**the same three images**, from the same Dockerfiles, with the same `target`s.
+
+That is the only condition under which this comparison is honest.
+
+<CicdMeasurements client:visible lang="en" />
+
+## The trade-off, with a rule
+
+<Tradeoff
+  a="Managed CI (GitHub Actions)"
+  b="Self-hosted CI (Jenkins)"
+  whenA="You want <b>keyless signing</b> and no key to administer; your build fits an ephemeral runner; the surface that worries you is yours, not your provider's; and nobody on the team wants to maintain a Jenkins."
+  whenB="Your build must reach an <b>internal network</b> you cannot expose; the warm cache is worth more than the operational cost; you already have large Groovy shared libraries that would be expensive to migrate; or compliance requires CI inside your walls."
+  chose="none"
+  verdict="this repository runs both on purpose. The comparison is only honest because the application is the same — and the answer changes with your context, not with the tool."
+  adr="0012-jenkins-conteinerizado"
+/>
+
+## Where each one wins, measured
+
+**The cache is self-hosting's structural advantage.** GitHub's runner is thrown
+away after every job: no disk survives, so **every build is cold**. `ci.yml`
+admits this in a comment and compensates with `cache-to: type=gha,mode=max` — an
+external cache backend, which is one more piece to configure and still pays the
+network cost.
+
+Here buildkitd has a volume. Cold and warm differ by more than a factor of two,
+and warm is what happens all day.
+
+**Signing is managed CI's structural advantage**, and it is not small: keyless
+via OIDC removes an entire class of risk. Here it costs a key somebody generates,
+protects and rotates.
+
+**Multi-architecture was left behind.** `ci.yml` builds amd64 and arm64 with
+QEMU. Here it is native amd64, and arm64 would need a second agent. Not a Jenkins
+limitation — just nobody built it.
+
+<Callout type="why" label="The attack surface is not smaller, it is different">
+On managed CI you inherit the surface of whoever operates it. In March 2025 the
+`tj-actions/changed-files` Action was compromised and exfiltrated secrets from
+over 23,000 repositories — none of which had done anything wrong.
+
+On self-hosted CI the surface is entirely yours: the controller, the agent, the
+67 plugins, the host. This module spent half its effort there — 0 executors, an
+agent with no socket, nothing privileged, SELinux still confining.
+
+The question is not "which is safer". It is **which risk you can administer**.
+</Callout>
+
+## The bill the timeline hides
+
+Comparing pipeline duration alone compares the easy part. What the table leaves
+out:
+
+| | managed | self-hosted |
+|---|---|---|
+| who patches the runner | the provider | you |
+| who answers when it breaks | the provider | you, at 3 a.m. |
+| cost per build minute | an invoice | hardware, idle or not |
+| who audits the plugins | there are none | you, all 67 |
+
+<FieldNote kind="blog" source="DORA — State of AI-assisted Software Development" url="https://dora.dev/insights/dora-2025-year-in-review/" when="2025">
+DORA's 2025 report found something that reframes this lesson: **90% of surveyed
+organisations have an internal platform**, and three quarters have a team
+dedicated to it. And the finding that matters here is the qualitative one —
+*high-quality platforms amplify the benefit of other practices, while low-quality
+ones show negligible impact*.
+
+Which is to say: the "managed or self-hosted" question matters less than "who
+looks after this, and how well". A well-run Jenkins and a well-run GitHub Actions
+deliver comparable results; an abandoned Jenkins delivers less than no CI at all,
+because it provides a false sense of a gate.
+</FieldNote>
+
+## What this module actually proves
+
+The gate runs 35 checks. None of them proves Jenkins is better or worse — they
+prove verifiable claims:
+
+- the controller is born from `casc.yaml`, with no clicks;
+- it builds nothing, and the agent is not root on the host;
+- the pipeline fails when it should, for the right reason;
+- credential masking catches two shapes and misses four;
+- and the artifact's Go binary is **byte for byte identical** to the local
+  `docker build`.
+
+That last one closes the comparison: we are not comparing a real pipeline against
+an approximation. It is the same build, with a different executor.
+
+<RunIt title="Run both sides and compare" file="tools/scripts/cicd-verify.sh">
+
+```bash
+# The home side: 35 checks, with the measurements written at the end.
+make cicd-verify
+cat site/src/data/cicd-measured.json
+
+# The other side, if you have gh authenticated:
+gh run list --workflow ci.yml --limit 20 \
+  --json conclusion,startedAt,updatedAt \
+  | python3 -c '
+import sys, json, datetime as dt
+rs = [r for r in json.load(sys.stdin) if r["conclusion"] == "success"]
+d = sorted((dt.datetime.fromisoformat(r["updatedAt"].replace("Z","+00:00"))
+          - dt.datetime.fromisoformat(r["startedAt"].replace("Z","+00:00"))).total_seconds()
+         for r in rs)
+print(f"{len(d)} runs · median {d[len(d)//2]:.0f}s") if d else print("no data")'
+```
+
+The numbers are not comparable line by line — GitHub's runner has different
+hardware and a different network. What is comparable is the **shape** of the
+difference: there every build is cold, here only the first one.
+
+</RunIt>
+
+## What to take away
+
+- The comparison is only honest because the application and Dockerfiles are the same.
+- A warm cache is self-hosting's structural advantage; keyless is managed CI's.
+- The attack surface does not disappear, it changes owner.
+- What matters most is not the tool, it is who looks after it — and how well.
+- A gate with 35 checks does not prove "better". It proves what it claims.
+
+<Quiz set="jenkins-vs-github-actions" />

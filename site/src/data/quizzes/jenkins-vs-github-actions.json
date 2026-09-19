@@ -1,0 +1,116 @@
+{
+  "note_pt": "Perguntas da lição cicd-08.",
+  "note_en": "Questions for lesson cicd-08.",
+  "pt": [
+    {
+      "q": "Qual é a vantagem ESTRUTURAL do CI self-hosted, medida neste módulo?",
+      "options": [
+        {
+          "text": "O cache quente: o runner gerenciado é descartado a cada job, então todo build lá é frio.",
+          "correct": true,
+          "why": "Medido: frio e quente diferem por mais do que o dobro, e o quente é o que acontece o dia inteiro. O ci.yml compensa com um backend externo de cache — mais uma peça para configurar, e ainda assim com custo de rede."
+        },
+        {
+          "text": "O custo: manter um Jenkins sai mais barato que pagar minutos de runner.",
+          "why": "Depende inteiramente do volume e de quanto vale a hora de quem opera. É a conta que a linha do tempo esconde, e este módulo não a mede."
+        },
+        {
+          "text": "A segurança: ter o CI em casa reduz a superfície de ataque.",
+          "why": "A superfície não some, ela troca de dono. Metade do esforço deste módulo foi em isolamento justamente porque, self-hosted, a superfície é sua inteira — controller, agente, 67 plugins e o host."
+        }
+      ]
+    },
+    {
+      "q": "E a vantagem estrutural do CI gerenciado?",
+      "options": [
+        {
+          "text": "Assinatura keyless: a identidade é o token OIDC do workflow, e não existe chave privada para guardar.",
+          "correct": true,
+          "why": "Remove uma classe inteira de risco. Self-hosted, isso custa uma chave que alguém gera, protege e rotaciona — e num ambiente de verdade ela viveria num KMS, não em disco."
+        },
+        {
+          "text": "Isolamento: o runner efêmero é destruído depois de cada job.",
+          "why": "É uma propriedade real e boa, e é a MESMA coisa que causa o cache sempre frio. Aqui ela aparece dos dois lados da balança, não só de um."
+        },
+        {
+          "text": "Velocidade: o hardware do provedor é melhor.",
+          "why": "Pode ser melhor ou pior, e não é comparável linha a linha. O que é comparável é a forma da diferença — lá todo build é frio, aqui só o primeiro."
+        }
+      ]
+    },
+    {
+      "q": "Segundo o relatório DORA de 2025, o que mais determina o resultado de uma plataforma interna?",
+      "options": [
+        {
+          "text": "A qualidade dela: plataformas boas amplificam as outras práticas, ruins têm impacto desprezível.",
+          "correct": true,
+          "why": "90% das organizações pesquisadas têm plataforma interna, então \"ter\" deixou de ser o diferencial. Um Jenkins abandonado entrega menos que nenhum CI, porque dá falsa sensação de portão."
+        },
+        {
+          "text": "Ser self-hosted em vez de gerenciada.",
+          "why": "O relatório não encontra isso. A pergunta \"gerenciado ou self-hosted\" importa menos do que \"quem cuida, e com que qualidade\"."
+        },
+        {
+          "text": "O número de estágios do pipeline.",
+          "why": "Mais estágios não é melhor — cada um precisa responder a uma pergunta que alguém use. Um pipeline com seis estágios ornamentais é pior que um com dois que importam."
+        }
+      ]
+    }
+  ],
+  "en": [
+    {
+      "q": "What is self-hosted CI's STRUCTURAL advantage, as measured in this module?",
+      "options": [
+        {
+          "text": "The warm cache: a managed runner is discarded after every job, so every build there is cold.",
+          "correct": true,
+          "why": "Measured: cold and warm differ by more than a factor of two, and warm is what happens all day. ci.yml compensates with an external cache backend — one more piece to configure, still paying network cost."
+        },
+        {
+          "text": "Cost: running a Jenkins is cheaper than paying for runner minutes.",
+          "why": "That depends entirely on volume and on what an operator's hour is worth. It is the bill the timeline hides, and this module does not measure it."
+        },
+        {
+          "text": "Security: keeping CI in house shrinks the attack surface.",
+          "why": "The surface does not disappear, it changes owner. Half this module's effort went into isolation precisely because, self-hosted, the surface is entirely yours — controller, agent, 67 plugins and the host."
+        }
+      ]
+    },
+    {
+      "q": "And managed CI's structural advantage?",
+      "options": [
+        {
+          "text": "Keyless signing: the identity is the workflow's OIDC token, and there is no private key to protect.",
+          "correct": true,
+          "why": "It removes an entire class of risk. Self-hosted, it costs a key somebody generates, protects and rotates — and in a real environment it would live in a KMS, not on disk."
+        },
+        {
+          "text": "Isolation: the ephemeral runner is destroyed after every job.",
+          "why": "A real and good property, and it is the SAME thing that makes the cache always cold. Here it lands on both sides of the scale, not just one."
+        },
+        {
+          "text": "Speed: the provider's hardware is better.",
+          "why": "It may be better or worse, and it is not comparable line by line. What is comparable is the shape of the difference — there every build is cold, here only the first."
+        }
+      ]
+    },
+    {
+      "q": "According to DORA's 2025 report, what most determines an internal platform's outcome?",
+      "options": [
+        {
+          "text": "Its quality: good platforms amplify the other practices, poor ones show negligible impact.",
+          "correct": true,
+          "why": "90% of surveyed organisations have an internal platform, so merely \"having\" one stopped being the differentiator. An abandoned Jenkins delivers less than no CI at all, because it gives a false sense of a gate."
+        },
+        {
+          "text": "Being self-hosted rather than managed.",
+          "why": "The report does not find that. The \"managed or self-hosted\" question matters less than \"who looks after it, and how well\"."
+        },
+        {
+          "text": "The number of pipeline stages.",
+          "why": "More stages is not better — each one has to answer a question somebody uses. A pipeline with six ornamental stages is worse than one with two that matter."
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,66 @@
+---
+/** Lição cicd-02 e cicd-05 — de onde vem cada peça de um Jenkins sem clique. */
+import Figure from "../Figure.astro";
+import type { Lang } from "../../i18n/ui";
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+const C = {
+  pt: {
+    passos: [
+      ["Dockerfile", "a imagem, com os plugins", "67 pinados por versão"],
+      ["casc/*.yaml", "o Jenkins inteiro", "0 executores, realm, nó"],
+      ["seed.groovy", "os jobs", "Job DSL, a cada reload"],
+      ["Jenkinsfile", "o pipeline", "versionado com o código"],
+    ],
+    fora: "fora de /var/jenkins_home",
+    foraNota: "volume só é populado quando está vazio",
+    caption:
+      "Nada nasce de clique, e cada peça mora onde ela pertence: a imagem traz os plugins, o casc traz o Jenkins, o seed traz os jobs, e o pipeline mora ao lado do código que ele constrói. <b>A configuração fica em <code>/opt</code></b> porque <code>/var/jenkins_home</code> é volume — e volume só copia da imagem quando está vazio, então toda alteração posterior seria ignorada em silêncio.",
+    alt: "Quatro arquivos e o que cada um declara num Jenkins configurado por código.",
+  },
+  en: {
+    passos: [
+      ["Dockerfile", "the image, with plugins", "67 pinned by version"],
+      ["casc/*.yaml", "the whole Jenkins", "0 executors, realm, node"],
+      ["seed.groovy", "the jobs", "Job DSL, on every reload"],
+      ["Jenkinsfile", "the pipeline", "versioned with the code"],
+    ],
+    fora: "outside /var/jenkins_home",
+    foraNota: "a volume is only populated while empty",
+    caption:
+      "Nothing is born from a click, and every piece lives where it belongs: the image carries the plugins, casc carries Jenkins, the seed carries the jobs, and the pipeline lives beside the code it builds. <b>Configuration sits in <code>/opt</code></b> because <code>/var/jenkins_home</code> is a volume — and a volume only copies from the image while empty, so every later change would be silently ignored.",
+    alt: "Four files and what each one declares in a Jenkins configured by code.",
+  },
+}[lang];
+const W = 158, GAP = 22;
+---
+<Figure caption={C.caption} alt={C.alt}>
+  <svg viewBox="0 0 700 166" xmlns="http://www.w3.org/2000/svg" font-size="11">
+    <defs>
+      <marker id="sf-arrow" viewBox="0 0 10 10" refX="8.5" refY="5"
+              markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+        <path d="M0 0 L10 5 L0 10 z" fill="var(--border-strong)" />
+      </marker>
+    </defs>
+    {C.passos.map(([arq, faz, nota], i) => {
+      const x = 6 + i * (W + GAP);
+      return (
+        <g>
+          <rect x={x} y={20} width={W} height={72} rx={7} class="dg-box dg-box--accent" />
+          <text x={x + W / 2} y={42} text-anchor="middle" class="dg-mono" font-weight="620" font-size="11">{arq}</text>
+          <text x={x + W / 2} y={60} text-anchor="middle" font-size="9.5">{faz}</text>
+          <text x={x + W / 2} y={76} text-anchor="middle" class="dg-faint" font-size="8.5">{nota}</text>
+          {i < 3 && <path d={`M${x + W} 56 L${x + W + GAP - 2} 56`} class="dg-line" marker-end="url(#sf-arrow)" />}
+        </g>
+      );
+    })}
+    <rect x={6} y={106} width={340} height={30} rx={6} class="dg-box dg-box--warn" />
+    <text x={176} y={120} text-anchor="middle" class="dg-mono" font-weight="620" font-size="10">{C.fora}</text>
+    <text x={176} y={132} text-anchor="middle" class="dg-faint" font-size="8.5">{C.foraNota}</text>
+    <text x={360} y={125} class="dg-faint" font-size="9">
+      {lang === "pt"
+        ? "Um job criado à mão pela UI some no próximo reload — é reconciliação, não \"criar se não existir\"."
+        : "A job created by hand in the UI vanishes on the next reload — it is reconciliation, not \"create if missing\"."}
+    </text>
+  </svg>
+</Figure>

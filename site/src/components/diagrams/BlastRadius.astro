@@ -1,0 +1,58 @@
+---
+/** Lição cicd-04 — o raio de explosão de cada jeito de construir imagem. */
+import Figure from "../Figure.astro";
+import type { Lang } from "../../i18n/ui";
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+const C = {
+  pt: {
+    cols: [
+      { t: "docker.sock montado", r: "a MÁQUINA", d: "quem fala com o socket cria um container privilegiado e lê o /etc/shadow do host", cls: "danger" },
+      { t: "dind --privileged", r: "a MÁQUINA", d: "o container roda como spc_t: o confinamento SELinux deixa de existir", cls: "danger" },
+      { t: "BuildKit rootless", r: "um container", d: "processo não-root, num user namespace, ainda confinado pelo SELinux", cls: "accent" },
+    ],
+    raio: "raio de explosão de um RUN malicioso",
+    caption:
+      "A pergunta não é \"qual é mais fácil\", é <b>o que um <code>RUN</code> escrito por quem abriu um pull request alcança</b>. As duas primeiras colunas respondem \"a máquina\" — e a segunda nem precisa de truque, ela desliga o confinamento por definição. Ver ADR 0011.",
+    alt: "Três colunas comparando o raio de explosão de socket, dind privilegiado e BuildKit rootless.",
+  },
+  en: {
+    cols: [
+      { t: "docker.sock mounted", r: "the MACHINE", d: "whoever talks to the socket starts a privileged container and reads the host's /etc/shadow", cls: "danger" },
+      { t: "dind --privileged", r: "the MACHINE", d: "the container runs as spc_t: SELinux confinement stops existing", cls: "danger" },
+      { t: "rootless BuildKit", r: "one container", d: "non-root process, inside a user namespace, still confined by SELinux", cls: "accent" },
+    ],
+    raio: "blast radius of a malicious RUN",
+    caption:
+      "The question is not \"which is easier\", it is <b>what a <code>RUN</code> written by whoever opened a pull request can reach</b>. The first two columns answer \"the machine\" — and the second does not even need a trick, it disables confinement by definition. See ADR 0011.",
+    alt: "Three columns comparing the blast radius of socket, privileged dind and rootless BuildKit.",
+  },
+}[lang];
+const W = 216, GAP = 16;
+---
+<Figure caption={C.caption} alt={C.alt}>
+  <svg viewBox="0 0 700 186" xmlns="http://www.w3.org/2000/svg" font-size="11">
+    <text x={6} y={16} class="dg-title" font-size="11">{C.raio}</text>
+    {C.cols.map((c, i) => {
+      const x = 6 + i * (W + GAP);
+      const box = c.cls === "danger" ? "dg-box dg-box--danger" : "dg-box dg-box--accent";
+      const fill = c.cls === "danger" ? "dg-fill-danger" : "dg-fill-accent";
+      return (
+        <g>
+          <rect x={x} y={28} width={W} height={124} rx={8} class={box} />
+          <text x={x + W / 2} y={50} text-anchor="middle" class="dg-mono" font-weight="620" font-size="11">{c.t}</text>
+          <circle cx={x + W / 2} cy={84} r={c.cls === "danger" ? 26 : 11} class={fill} opacity="0.22" />
+          <circle cx={x + W / 2} cy={84} r={c.cls === "danger" ? 16 : 6} class={fill} opacity="0.45" />
+          <text x={x + W / 2} y={120} text-anchor="middle" class={fill} font-weight="700" font-size="11">{c.r}</text>
+          <text x={x + W / 2} y={138} text-anchor="middle" class="dg-faint" font-size="8">{c.d.slice(0, 52)}</text>
+          <text x={x + W / 2} y={148} text-anchor="middle" class="dg-faint" font-size="8">{c.d.slice(52)}</text>
+        </g>
+      );
+    })}
+    <text x={6} y={174} class="dg-faint" font-size="9">
+      {lang === "pt"
+        ? "Medido neste host: com o socket, um container lê o /etc/shadow do host em dois comandos. Sem ele, o agente nem tem o binário docker."
+        : "Measured on this host: with the socket, a container reads the host's /etc/shadow in two commands. Without it, the agent has no docker binary at all."}
+    </text>
+  </svg>
+</Figure>

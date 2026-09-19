@@ -1,0 +1,116 @@
+{
+  "note_pt": "Perguntas da lição cicd-05.",
+  "note_en": "Questions for lesson cicd-05.",
+  "pt": [
+    {
+      "q": "Você edita o Jenkinsfile, salva, dispara o build — e ele roda a versão anterior. Por quê?",
+      "options": [
+        {
+          "text": "Porque o job clona do SCM: ele constrói o que está COMMITADO, não o que está no seu editor.",
+          "correct": true,
+          "why": "É a definição de CI, não um defeito. O commit é o que torna a mudança visível para todo mundo, inclusive para o pipeline — e é isso que faz o build ser reproduzível por outra pessoa."
+        },
+        {
+          "text": "O Jenkins guardou o Jenkinsfile em cache e precisa de um reload.",
+          "why": "Não há cache de Jenkinsfile: o checkout acontece a cada build. Se houvesse, o sintoma sumiria com um reload — e não some."
+        },
+        {
+          "text": "O workspace do agente está sujo e precisa de limpeza.",
+          "why": "Workspace sujo causa outros problemas — arquivo de build anterior sobrando. O Jenkinsfile nem vem do workspace do agente; ele é lido no controller, antes de o agente entrar."
+        }
+      ]
+    },
+    {
+      "q": "O plugin git recusa `url('/repo')` com \"references a local directory, which may be insecure\". Qual é a resposta certa?",
+      "options": [
+        {
+          "text": "Dar ao pipeline um remote de verdade — um git daemon, por exemplo.",
+          "correct": true,
+          "why": "O controle existe porque o checkout acontece no controller: um job capaz de escolher um caminho local leria qualquer coisa que o controller enxergue, e é lá que moram as credenciais. De quebra, a topologia fica igual à de produção."
+        },
+        {
+          "text": "Ligar `hudson.plugins.git.GitSCM.ALLOW_LOCAL_CHECKOUT=true`.",
+          "why": "Funciona, e desliga um controle de segurança para destravar o tutorial. Num módulo que ensina segurança de CI, é o pior começo possível — e o motivo do controle continua valendo depois de ele ser desligado."
+        },
+        {
+          "text": "Montar o repositório em outro caminho, fora de /repo.",
+          "why": "O plugin não olha o nome do caminho, olha se é diretório local. Qualquer caminho dá o mesmo erro."
+        }
+      ]
+    },
+    {
+      "q": "Dentro de um bloco `sh '''…'''`, uma continuação de linha com UMA barra invertida quebra o pipeline. Por quê?",
+      "options": [
+        {
+          "text": "Porque o bloco é uma string Groovy, e o Groovy consome a barra antes de o shell ver o texto.",
+          "correct": true,
+          "why": "O erro é de COMPILAÇÃO — `unexpected char: '\\'` — e não de execução. Para o shell receber uma barra, o arquivo precisa de duas. São duas linguagens empilhadas, e você está escrevendo na de fora."
+        },
+        {
+          "text": "Porque o shell do agente não aceita continuação de linha.",
+          "why": "Aceita, e é comum. A prova é que o mesmo pipeline funciona quando a barra é dobrada: aí o shell recebe uma e faz exatamente o esperado."
+        },
+        {
+          "text": "Porque `'''` não permite múltiplas linhas no Jenkins declarativo.",
+          "why": "Permite — é para isso que ele existe. O problema é específico do escape, não da quebra de linha."
+        }
+      ]
+    }
+  ],
+  "en": [
+    {
+      "q": "You edit the Jenkinsfile, save, trigger the build — and it runs the previous version. Why?",
+      "options": [
+        {
+          "text": "Because the job clones from SCM: it builds what is COMMITTED, not what is in your editor.",
+          "correct": true,
+          "why": "That is the definition of CI, not a defect. The commit is what makes the change visible to everyone, the pipeline included — and it is what makes the build reproducible by somebody else."
+        },
+        {
+          "text": "Jenkins cached the Jenkinsfile and needs a reload.",
+          "why": "There is no Jenkinsfile cache: the checkout happens on every build. If there were, the symptom would vanish after a reload — and it does not."
+        },
+        {
+          "text": "The agent workspace is dirty and needs cleaning.",
+          "why": "A dirty workspace causes other problems — leftovers from a previous build. The Jenkinsfile does not even come from the agent workspace; it is read on the controller, before the agent joins."
+        }
+      ]
+    },
+    {
+      "q": "The git plugin refuses `url('/repo')` with \"references a local directory, which may be insecure\". What is the right answer?",
+      "options": [
+        {
+          "text": "Give the pipeline a real remote — a git daemon, for example.",
+          "correct": true,
+          "why": "The control exists because the checkout happens on the controller: a job able to pick a local path would read anything the controller can see, and that is where the credentials live. As a bonus, the topology matches production."
+        },
+        {
+          "text": "Enable `hudson.plugins.git.GitSCM.ALLOW_LOCAL_CHECKOUT=true`.",
+          "why": "It works, and switches off a security control to unblock the tutorial. In a module teaching CI security that is the worst possible start — and the control's reason still holds after you disable it."
+        },
+        {
+          "text": "Mount the repository at a different path, outside /repo.",
+          "why": "The plugin does not look at the path's name, it looks at whether it is a local directory. Any path gives the same error."
+        }
+      ]
+    },
+    {
+      "q": "Inside a `sh '''…'''` block, a line continuation with ONE backslash breaks the pipeline. Why?",
+      "options": [
+        {
+          "text": "Because the block is a Groovy string, and Groovy consumes the backslash before the shell ever sees the text.",
+          "correct": true,
+          "why": "The error is at COMPILE time — `unexpected char: '\\'` — not at run time. For the shell to receive one backslash, the file needs two. Two languages are stacked, and you are writing in the outer one."
+        },
+        {
+          "text": "Because the agent's shell does not accept line continuations.",
+          "why": "It does, and they are common. The proof is that the same pipeline works when the backslash is doubled: then the shell receives one and behaves exactly as expected."
+        },
+        {
+          "text": "Because `'''` does not allow multiple lines in declarative Jenkins.",
+          "why": "It does — that is what it is for. The problem is specific to escaping, not to line breaks."
+        }
+      ]
+    }
+  ]
+}

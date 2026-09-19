@@ -1,0 +1,116 @@
+{
+  "note_pt": "Perguntas da lição cicd-01.",
+  "note_en": "Questions for lesson cicd-01.",
+  "pt": [
+    {
+      "q": "O estágio `scan` passou, sem nenhuma CVE HIGH ou CRITICAL. O que isso prova?",
+      "options": [
+        {
+          "text": "Que nenhuma das vulnerabilidades conhecidas por aquele banco de dados, naquele dia, está na imagem.",
+          "correct": true,
+          "why": "É exatamente o escopo da ferramenta, e é menos do que a frase \"passou no scanner\" sugere. Amanhã o banco de dados cresce e a mesma imagem, sem mudar um byte, pode reprovar."
+        },
+        {
+          "text": "Que a imagem está segura.",
+          "why": "Scanner não vê vulnerabilidade desconhecida, nem erro de lógica, nem configuração ruim. Ele compara uma lista de pacotes com uma lista de CVEs — é útil e é uma fatia estreita de \"seguro\"."
+        },
+        {
+          "text": "Que as dependências estão atualizadas.",
+          "why": "Uma dependência pode estar desatualizada e sem CVE publicada, ou atualizada e vulnerável a algo descoberto ontem. As duas coisas se correlacionam e não são a mesma."
+        }
+      ]
+    },
+    {
+      "q": "Por que o `sign` vem DEPOIS do `scan`, e não antes?",
+      "options": [
+        {
+          "text": "Porque assinar uma imagem que não passou no scanner acrescenta uma garantia falsa à vulnerabilidade.",
+          "correct": true,
+          "why": "A assinatura diz \"estes bytes são meus\". Colada numa imagem vulnerável, ela transforma um problema conhecido num problema com o seu selo — pior que não assinar, porque quem consome confia nela."
+        },
+        {
+          "text": "Porque o cosign precisa que a imagem já esteja no registry, e o scan é quem publica.",
+          "why": "Quem publica é o `build`, com uma segunda saída. O scan lê o tarball local e não toca no registry."
+        },
+        {
+          "text": "Por desempenho: o scan é mais rápido, então roda antes.",
+          "why": "É o contrário — medido aqui, o `scan` é o estágio mais caro dos seis. A ordem é por dependência lógica, não por custo."
+        }
+      ]
+    },
+    {
+      "q": "Por que este módulo tem um job que precisa FALHAR?",
+      "options": [
+        {
+          "text": "Porque um portão que só conhece o caminho feliz passaria igual com o lint desligado.",
+          "correct": true,
+          "why": "É a mesma classe da armadilha do kind aceitando NetworkPolicy sem aplicar: o sistema responde sucesso e o efeito não acontece. A única forma de saber que a regra vale é ver uma violação ser recusada."
+        },
+        {
+          "text": "Para medir quanto tempo o pipeline leva para falhar.",
+          "why": "O tempo de falha não é o ponto, e nem é medido. O que o portão exige é que ele falhe e que o console mostre o código da violação."
+        },
+        {
+          "text": "Para treinar a equipe a ler logs de erro.",
+          "why": "Efeito colateral simpático e não é a razão. A razão é que sem prova negativa o portão pode estar desligado sem ninguém saber."
+        }
+      ]
+    }
+  ],
+  "en": [
+    {
+      "q": "The `scan` stage passed, with no HIGH or CRITICAL CVEs. What does that prove?",
+      "options": [
+        {
+          "text": "That none of the vulnerabilities that database knew about, on that day, is in the image.",
+          "correct": true,
+          "why": "That is precisely the tool's scope, and it is less than \"passed the scanner\" suggests. Tomorrow the database grows and the same image, unchanged, may fail."
+        },
+        {
+          "text": "That the image is secure.",
+          "why": "A scanner sees no unknown vulnerability, no logic error, no bad configuration. It compares a package list against a CVE list — useful, and a narrow slice of \"secure\"."
+        },
+        {
+          "text": "That the dependencies are up to date.",
+          "why": "A dependency can be outdated with no published CVE, or current and vulnerable to something found yesterday. The two correlate and are not the same thing."
+        }
+      ]
+    },
+    {
+      "q": "Why does `sign` come AFTER `scan` rather than before?",
+      "options": [
+        {
+          "text": "Because signing an image that failed the scanner attaches a false guarantee to the vulnerability.",
+          "correct": true,
+          "why": "A signature says \"these bytes are mine\". Stuck on a vulnerable image it turns a known problem into a problem carrying your seal — worse than not signing, because consumers trust it."
+        },
+        {
+          "text": "Because cosign needs the image in the registry already, and scan is what publishes it.",
+          "why": "Publishing is `build`'s job, through a second output. The scan reads the local tarball and never touches the registry."
+        },
+        {
+          "text": "For performance: the scan is faster, so it runs first.",
+          "why": "The opposite — measured here, `scan` is the most expensive of the six. The order follows logical dependency, not cost."
+        }
+      ]
+    },
+    {
+      "q": "Why does this module have a job that must FAIL?",
+      "options": [
+        {
+          "text": "Because a gate that only knows the happy path would pass just the same with lint switched off.",
+          "correct": true,
+          "why": "Same class as the trap where kind accepted NetworkPolicy without enforcing it: the system reports success and the effect never happens. The only way to know a rule holds is watching a violation get refused."
+        },
+        {
+          "text": "To measure how long the pipeline takes to fail.",
+          "why": "Failure time is not the point and is not measured. What the gate demands is that it fail, and that the console show the violation code."
+        },
+        {
+          "text": "To train the team to read error logs.",
+          "why": "A pleasant side effect, not the reason. The reason is that without negative proof the gate may be switched off and nobody would know."
+        }
+      ]
+    }
+  ]
+}

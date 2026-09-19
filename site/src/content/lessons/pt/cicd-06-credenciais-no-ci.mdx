@@ -1,0 +1,155 @@
+---
+key: secrets-in-ci
+lang: pt
+track: cicd
+order: 6
+title: Credenciais no CI, e a promessa que o mascaramento não faz
+summary: O exemplo que todo mundo repete sobre vazamento de segredo no Jenkins está desatualizado. Medimos, e a conclusão certa é mais dura que a errada.
+minutes: 14
+tags: [cicd, jenkins, credenciais, mascaramento, oidc, supply-chain]
+sources:
+  - label: "Jenkins — Using credentials"
+    url: "https://www.jenkins.io/doc/book/using/using-credentials/"
+    kind: docs
+  - label: "Wiz — tj-actions/changed-files, CVE-2025-30066"
+    url: "https://www.wiz.io/blog/github-action-tj-actions-changed-files-supply-chain-attack-cve-2025-30066"
+    kind: postmortem
+    accessed: "2026-09-19"
+  - label: "OWASP — CICD-SEC-6: Insufficient Credential Hygiene"
+    url: "https://owasp.org/www-project-top-10-ci-cd-security-risks/CICD-SEC-06-Insufficient-Credential-Hygiene"
+    kind: spec
+    accessed: "2026-09-19"
+---
+
+import MaskingReality from "../../../components/diagrams/MaskingReality.astro";
+
+O Jenkins mascara credencial no console. Você vê `****` e conclui que o segredo
+está protegido.
+
+Está protegido **de aparecer naquela forma**. É uma promessa menor do que parece,
+e o exemplo que todo mundo usa para explicar isso está desatualizado.
+
+<MaskingReality />
+
+## O que medimos
+
+A versão que circula diz: *"`echo $TOK | base64` vaza o segredo, porque o Jenkins
+só procura o valor literal"*.
+
+No Jenkins 2.568.3 com `credentials-binding` 728 isso é **falso**. O plugin
+registra também as formas codificadas comuns, e o base64 sai mascarado.
+
+Mas inverter a string passa. Truncar passa. Tirar os hífens passa. Espaçar os
+bytes passa.
+
+<Callout type="why" label="A conclusão certa é pior que a errada">
+Se o problema fosse "o Jenkins só conhece o literal", a solução seria óbvia:
+ensinar mais formas a ele.
+
+O problema real é outro. Mascaramento é **casamento de padrão sobre um conjunto
+conhecido de representações**, e o conjunto de transformações possíveis é
+infinito. Não existe versão do plugin que feche isso.
+
+Mascaramento é higiene de log: ele impede o acidente, o `echo` distraído, o
+`set -x` esquecido. Tratá-lo como fronteira de segurança é confiar numa porta que
+só tranca quando o ladrão usa a maçaneta.
+</Callout>
+
+## Segredo é arquivo, nunca variável de ambiente
+
+Esta stack tem uma convenção só, e ela vale no `config.go`, no `config.py` e
+agora no Jenkins: `<VAR>_FILE` apontando para `/run/secrets/`.
+
+```yaml
+# cicd/controller/casc/credentials.yaml
+credentials:
+  system:
+    domainCredentials:
+      - credentials:
+          - string:
+              id: "registry-token"
+              secret: "${registry_token}"   # conteúdo de /run/secrets/registry_token
+```
+
+O `${registry_token}` é resolvido pelo SecretSource de arquivo do JCasC, porque o
+Dockerfile define `SECRETS=/run/secrets`. Nenhum segredo aparece em
+`environment:`, em `docker inspect` ou no `/proc/<pid>/environ`.
+
+<Callout type="trap" label="Quando o upstream não respeita a sua convenção">
+O entrypoint do `jenkins/inbound-agent` aceita `JENKINS_SECRET` com o **valor**
+na variável, e não tem suporte a `_FILE`.
+
+Havia duas saídas: escrever "menos aqui" na convenção, ou seis linhas de wrapper
+que leem o arquivo e exportam. Ficaram as seis linhas.
+
+Uma convenção de segurança com uma exceção documentada é uma convenção com uma
+exceção. Com duas, ela é uma sugestão.
+</Callout>
+
+## A assimetria com o CI gerenciado
+
+Aqui a chave do cosign é um arquivo que alguém gera, protege e rotaciona. No
+GitHub Actions a assinatura é **keyless**: a identidade é o token OIDC do próprio
+workflow, e não existe chave privada para vazar.
+
+Esse é o argumento mais forte a favor do CI gerenciado, e ele não é sobre
+conveniência.
+
+<Callout type="danger" label="E o argumento contra, com data">
+Em março de 2025 o Action `tj-actions/changed-files` foi comprometido: as tags v1
+a v45.0.7 foram reescritas para apontar para um commit malicioso, que varria a
+memória do processo do runner e imprimia AWS keys, PATs e chaves RSA no log —
+em base64, justamente porque o mascaramento do GitHub compara o valor literal.
+Mais de 23 mil repositórios afetados.
+
+Os dois modelos têm superfície. A do gerenciado é de quem você depende; a do
+self-hosted é sua, inteira. A escolha não é "qual é seguro", é **qual risco você
+prefere administrar**.
+</Callout>
+
+<LabExercise check="o segredo INVERTIDO passa inteiro — mascaramento não é fronteira" file="cicd/Jenkinsfile.credential">
+
+O job `credential-probe` imprime o mesmo segredo em seis formas. Rode-o e olhe o
+console.
+
+Antes de rodar: **qual das seis você esperaria que passasse?** E depois de ver o
+resultado — o que você mudaria num pipeline de verdade por causa disso?
+
+<Fragment slot="hint">
+A segunda pergunta é a que importa. Se o mascaramento não é fronteira, o que é?
+</Fragment>
+
+<Fragment slot="answer">
+
+Passam quatro: invertido, truncado, sem hífens e espaçado. Base64 e literal são
+mascarados.
+
+O que muda num pipeline de verdade não é tentar adivinhar transformações. É parar
+de depender do mascaramento:
+
+- **Reduzir a janela.** Credencial de curta duração vale mais que credencial
+  mascarada. O que não existe mais não vaza.
+- **Reduzir o escopo.** Um token que só publica num repositório não serve para
+  mais nada quando vaza.
+- **Não pôr o segredo onde ele pode ser impresso.** O `withCredentials` do
+  Jenkins e o `--mount=type=secret` do BuildKit existem para o segredo nunca
+  virar variável visível nem camada de imagem.
+- **Assumir que o log é público.** Se essa suposição derruba o seu desenho, o
+  desenho é que precisa mudar.
+
+E o portão deste módulo trava as três afirmações desta lição: que o literal é
+mascarado, que o base64 também é, e que o invertido passa. Se qualquer uma mudar
+numa versão futura do Jenkins, ele reprova — e a lição para de mentir.
+
+</Fragment>
+</LabExercise>
+
+## O que fica
+
+- Mascaramento pega o literal e as formas codificadas comuns. Não pega o resto.
+- Não é fronteira de segurança: é higiene de log contra acidente.
+- Segredo é arquivo montado. Uma convenção com duas exceções é uma sugestão.
+- Keyless (OIDC) é a vantagem real do CI gerenciado; `tj-actions` é o preço dele.
+- Curta duração e escopo estreito valem mais que qualquer mascaramento.
+
+<Quiz set="secrets-in-ci" />

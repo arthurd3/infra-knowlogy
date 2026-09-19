@@ -1,0 +1,116 @@
+{
+  "note_pt": "Perguntas da lição cicd-03.",
+  "note_en": "Questions for lesson cicd-03.",
+  "pt": [
+    {
+      "q": "`numExecutors: 0` no built-in. O que exatamente isso impede?",
+      "options": [
+        {
+          "text": "Impede que BUILDS rodem no controller — mas o checkout do Jenkinsfile continua acontecendo lá.",
+          "correct": true,
+          "why": "O checkout da definição do pipeline usa um executor *flyweight*, e flyweight não conta para o numExecutors. \"0 executores\" significa \"nenhum build aqui\", não \"nada aqui\" — e a diferença importa, porque esse clone acontece onde moram as credenciais."
+        },
+        {
+          "text": "Impede qualquer execução de código no controller.",
+          "why": "É o que o nome sugere e não é o que acontece. O flyweight passa por cima da contagem, e é por isso que o plugin git recusar remote local deixa de ser um detalhe."
+        },
+        {
+          "text": "Impede que o controller aceite conexões de agentes.",
+          "why": "Isso é outra configuração — `slaveAgentPort: -1`, e mesmo ela não impede: ela só desliga o listener TCP, e o agente entra por WebSocket."
+        }
+      ]
+    },
+    {
+      "q": "Um build de Pipeline terminou SUCCESS e o campo `builtOn` dele está vazio. O que isso diz?",
+      "options": [
+        {
+          "text": "Nada sobre onde o build rodou — o campo reporta o flyweight, que fica no controller.",
+          "correct": true,
+          "why": "Quem prova onde o trabalho aconteceu é a linha `Running on <nó>` do console. Uma checagem de portão baseada em builtOn reprovaria um pipeline perfeitamente isolado."
+        },
+        {
+          "text": "Que o build rodou no nó embutido, violando o isolamento.",
+          "why": "Seria a leitura natural e está errada. O portão deste módulo chegou a reprovar por isso antes de a causa ser medida."
+        },
+        {
+          "text": "Que o agente estava offline e o Jenkins usou o controller como fallback.",
+          "why": "Não existe fallback: com 0 executores o job ficaria na fila indefinidamente, e o campo `why` do item diria \"Waiting for next available executor\"."
+        }
+      ]
+    },
+    {
+      "q": "A porta 50000 está desligada (`slaveAgentPort: -1`) e o agente está online. Como?",
+      "options": [
+        {
+          "text": "Ele conecta por WebSocket, sobre a mesma porta da interface, de dentro para fora.",
+          "correct": true,
+          "why": "A conexão parte do agente. Isso remove uma porta publicada do host e inverte a direção — não há listener esperando conexão de agente."
+        },
+        {
+          "text": "O Jenkins abre a porta 50000 dinamicamente quando um agente aparece.",
+          "why": "`-1` desliga o listener; não existe abertura sob demanda. Dá para conferir com `ss -ltn` no container do controller."
+        },
+        {
+          "text": "O agente usa o socket Unix do controller, montado por volume.",
+          "why": "Confunde com o caminho do buildkitd, que de fato usa socket Unix em volume. O agente e o controller falam por HTTP/WebSocket, em rede."
+        }
+      ]
+    }
+  ],
+  "en": [
+    {
+      "q": "`numExecutors: 0` on the built-in node. What exactly does that prevent?",
+      "options": [
+        {
+          "text": "It prevents BUILDS from running on the controller — but the Jenkinsfile checkout still happens there.",
+          "correct": true,
+          "why": "The pipeline definition checkout uses a *flyweight* executor, and flyweight executors do not count towards numExecutors. \"0 executors\" means \"no builds here\", not \"nothing here\" — and the difference matters, because that clone happens where the credentials live."
+        },
+        {
+          "text": "It prevents any code execution on the controller.",
+          "why": "That is what the name suggests and not what happens. The flyweight bypasses the count, which is why the git plugin refusing local remotes stops being a detail."
+        },
+        {
+          "text": "It prevents the controller from accepting agent connections.",
+          "why": "That is a different setting — `slaveAgentPort: -1`, and even that does not prevent it: it only switches off the TCP listener, and the agent connects over WebSocket."
+        }
+      ]
+    },
+    {
+      "q": "A Pipeline build finished SUCCESS and its `builtOn` field is empty. What does that tell you?",
+      "options": [
+        {
+          "text": "Nothing about where the build ran — the field reports the flyweight, which sits on the controller.",
+          "correct": true,
+          "why": "What proves where the work happened is the console's `Running on <node>` line. A gate check based on builtOn would fail a perfectly isolated pipeline."
+        },
+        {
+          "text": "That the build ran on the built-in node, breaking the isolation.",
+          "why": "That is the natural reading and it is wrong. This module's gate actually failed for exactly that before the cause was measured."
+        },
+        {
+          "text": "That the agent was offline and Jenkins fell back to the controller.",
+          "why": "There is no fallback: with 0 executors the job would queue indefinitely, and the item's `why` field would read \"Waiting for next available executor\"."
+        }
+      ]
+    },
+    {
+      "q": "Port 50000 is off (`slaveAgentPort: -1`) and the agent is online. How?",
+      "options": [
+        {
+          "text": "It connects over WebSocket, on the web interface's own port, outbound.",
+          "correct": true,
+          "why": "The connection originates at the agent. That removes a published host port and reverses the direction — there is no listener waiting for agent connections."
+        },
+        {
+          "text": "Jenkins opens port 50000 on demand when an agent shows up.",
+          "why": "`-1` switches the listener off; there is no on-demand opening. You can confirm it with `ss -ltn` inside the controller container."
+        },
+        {
+          "text": "The agent uses the controller's Unix socket, shared through a volume.",
+          "why": "That confuses it with the buildkitd path, which does use a Unix socket in a volume. The agent and controller talk over HTTP/WebSocket, across the network."
+        }
+      ]
+    }
+  ]
+}

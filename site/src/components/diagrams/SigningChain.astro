@@ -1,0 +1,61 @@
+---
+/** Lição cicd-07 — o que é assinado, e o que uma assinatura promete. */
+import Figure from "../Figure.astro";
+import type { Lang } from "../../i18n/ui";
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+const C = {
+  pt: {
+    build: "build", buildN: "buildctl, sem daemon",
+    digest: "digest", digestN: "sha256 do que foi publicado",
+    sign: "assinatura", signN: "cosign, com a chave",
+    verify: "verificação", verifyN: "o pipeline prova a si mesmo",
+    tag: "tag :ci", tagN: "ponteiro mutável — NÃO se assina isto",
+    caption:
+      "Assina-se o <b>digest</b>, nunca a tag: tag é ponteiro mutável (lição 2), e assinar um ponteiro é assinar o que ele apontar amanhã. O digest vem do <code>--metadata-file</code> do próprio build — é o que <i>acabou</i> de ser publicado, sem uma segunda consulta ao registry que poderia devolver outra coisa.",
+    alt: "Cadeia de assinatura: build, digest, assinatura e verificação, com a tag de fora.",
+  },
+  en: {
+    build: "build", buildN: "buildctl, no daemon",
+    digest: "digest", digestN: "sha256 of what was pushed",
+    sign: "signature", signN: "cosign, with the key",
+    verify: "verification", verifyN: "the pipeline proves itself",
+    tag: "tag :ci", tagN: "mutable pointer — do NOT sign this",
+    caption:
+      "You sign the <b>digest</b>, never the tag: a tag is a mutable pointer (lesson 2), and signing a pointer signs whatever it points at tomorrow. The digest comes from the build's own <code>--metadata-file</code> — it is what was <i>just</i> pushed, with no second lookup that could return something else.",
+    alt: "Signing chain: build, digest, signature and verification, with the tag left out.",
+  },
+}[lang];
+const passos = [[C.build, C.buildN], [C.digest, C.digestN], [C.sign, C.signN], [C.verify, C.verifyN]];
+const W = 158, GAP = 22;
+---
+<Figure caption={C.caption} alt={C.alt}>
+  <svg viewBox="0 0 700 168" xmlns="http://www.w3.org/2000/svg" font-size="11">
+    <defs>
+      <marker id="sc-arrow" viewBox="0 0 10 10" refX="8.5" refY="5"
+              markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+        <path d="M0 0 L10 5 L0 10 z" fill="var(--border-strong)" />
+      </marker>
+    </defs>
+    {passos.map(([t, n], i) => {
+      const x = 6 + i * (W + GAP);
+      return (
+        <g>
+          <rect x={x} y={26} width={W} height={60} rx={7} class="dg-box dg-box--accent" />
+          <text x={x + W / 2} y={50} text-anchor="middle" class="dg-mono" font-weight="620" font-size="11.5">{t}</text>
+          <text x={x + W / 2} y={68} text-anchor="middle" class="dg-faint" font-size="8.5">{n}</text>
+          {i < 3 && <path d={`M${x + W} 56 L${x + W + GAP - 2} 56`} class="dg-line dg-line--accent" marker-end="url(#sc-arrow)" />}
+        </g>
+      );
+    })}
+    <rect x={186} y={106} width={158} height={38} rx={7} class="dg-box dg-box--danger dg-box--dashed" />
+    <text x={265} y={124} text-anchor="middle" class="dg-mono dg-fill-danger" font-weight="620" font-size="11">{C.tag}</text>
+    <text x={265} y={137} text-anchor="middle" class="dg-faint" font-size="8">{C.tagN}</text>
+    <path d="M265 90 L265 102" class="dg-line dg-line--danger dg-line--dashed" />
+    <text x={360} y={130} class="dg-faint" font-size="9">
+      {lang === "pt"
+        ? "A tag continua existindo para humano digitar. Ela só não entra na cadeia de confiança."
+        : "The tag still exists for humans to type. It just does not enter the chain of trust."}
+    </text>
+  </svg>
+</Figure>

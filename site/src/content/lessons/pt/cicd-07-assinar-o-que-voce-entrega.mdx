@@ -1,0 +1,183 @@
+---
+key: signing-what-you-ship
+lang: pt
+track: cicd
+order: 7
+title: Assinar o que você entrega
+summary: Uma assinatura responde a uma pergunta só — e não é "este código é bom". Assinar a tag em vez do digest transforma a resposta em mentira.
+minutes: 15
+tags: [cicd, cosign, sigstore, slsa, digest, supply-chain]
+sources:
+  - label: "Sigstore — cosign"
+    url: "https://docs.sigstore.dev/cosign/signing/signing_with_containers/"
+    kind: docs
+  - label: "SLSA — Supply-chain Levels for Software Artifacts"
+    url: "https://slsa.dev/"
+    kind: spec
+    accessed: "2026-09-19"
+  - label: "OpenSSF — SLSA"
+    url: "https://openssf.org/projects/slsa/"
+    kind: spec
+    accessed: "2026-09-19"
+---
+
+import SigningChain from "../../../components/diagrams/SigningChain.astro";
+
+Uma assinatura de imagem não diz que o código é bom, que passou nos testes ou que
+não tem vulnerabilidade. Ela responde a **uma** pergunta:
+
+> Estes bytes são os mesmos que saíram do meu pipeline?
+
+É pouco, e é exatamente o que falta quando alguém troca a imagem entre o build e
+o deploy.
+
+<SigningChain />
+
+## Assina-se o digest, nunca a tag
+
+```groovy
+digest=$(meta_digest "$OUT/$svc.meta.json")
+ref="$REGISTRY/infra-knowlogy/$svc@$digest"
+cosign sign --yes --key /run/secrets/cosign.key "$ref"
+```
+
+<Callout type="danger" label="Assinar uma tag é assinar um ponteiro">
+Tag é ponteiro mutável — a lição 2 desta casa mede isso. Assinar `:ci` assina o
+que `:ci` apontar **amanhã**, que é precisamente o cenário contra o qual a
+assinatura existe.
+
+O próprio cosign avisa:
+
+```
+WARNING: Image reference …:ci uses a tag, not a digest, to identify
+the image to sign. This can lead you to sign a different image than
+the intended one.
+```
+
+Um aviso que a maioria dos pipelines ignora porque o comando funciona assim
+mesmo.
+</Callout>
+
+E o digest vem do `--metadata-file` do próprio build, não de uma consulta ao
+registry:
+
+```bash
+buildctl build … \
+  --output type=image,name=$REGISTRY/…,push=true \
+  --metadata-file "$OUT/$svc.meta.json"
+```
+
+<Callout type="why" label="Por que não perguntar ao registry">
+Perguntar "qual é o digest de `:ci`?" depois do push abre uma janela: entre o
+push e a consulta, alguém pode ter empurrado outra coisa com a mesma tag. Você
+assinaria o que estivesse lá naquele instante.
+
+O `--metadata-file` devolve o digest do que **acabou** de ser publicado por
+aquele build. Sem janela, sem segunda consulta.
+</Callout>
+
+## Uma build, duas saídas
+
+O mesmo `buildctl build` produz o tarball que será escaneado e arquivado, **e** o
+push para o registry:
+
+```bash
+--output type=docker,name=infra-knowlogy/$svc:ci,dest="$OUT/$svc.tar" \
+--output type=image,name=$REGISTRY/infra-knowlogy/$svc:ci,push=true,registry.insecure=true
+```
+
+Construir duas vezes produziria dois artefatos, e aí "o que foi escaneado" e "o
+que foi publicado" deixariam de ser a mesma coisa. Esse buraco tem nome na
+literatura de cadeia de suprimentos, e é exatamente o que a assinatura deveria
+fechar.
+
+## Assinar sem verificar é fé
+
+O pipeline tem um estágio `verify` depois do `sign`. Parece redundante e não é:
+ele prova a própria assinatura antes de o artefato ser chamado de confiável.
+
+```bash
+cosign verify --allow-http-registry \
+  --key /run/secrets/cosign.pub "$ref"
+```
+
+<Callout type="trap" label="A flag errada, e o erro que não ajuda">
+`--allow-insecure-registry` permite TLS **inválido**. O registry local fala HTTP
+puro, e a flag certa é `--allow-http-registry`.
+
+Com a errada, o erro é `server gave HTTP response to HTTPS client` — que manda
+procurar em certificado quando o problema é protocolo.
+</Callout>
+
+## O que custa a assinatura no CI que é seu
+
+| | GitHub Actions | Jenkins self-hosted |
+|---|---|---|
+| identidade | token OIDC do workflow | uma chave privada |
+| chave para guardar | **nenhuma** | uma, e alguém tem que rotacioná-la |
+| onde ela vive | não existe | um arquivo, ou um KMS |
+| transparência | Rekor, log público | o que você montar |
+
+Essa é a assimetria mais concreta entre os dois mundos, e ela não é sobre
+conveniência: **é uma classe inteira de risco que o CI gerenciado remove**.
+
+<Callout type="why" label="E mesmo assim o self-hosted assina">
+A alternativa a assinar com chave não é "não assinar". Uma chave num KMS, com
+rotação e auditoria, é um problema resolvido há décadas — só não é de graça.
+
+Neste módulo a senha da chave é **vazia**, de propósito e documentado: guardar
+uma senha ao lado da chave não protege de nada. A proteção real é o `chmod 700`
+do diretório, e num ambiente de verdade a chave não estaria em disco.
+</Callout>
+
+<LabExercise check="cosign verify confere a assinatura de cada digest publicado" file="cicd/Jenkinsfile">
+
+O estágio `sign` assina três digests. O `verify` confere os três.
+
+Pergunta: se alguém empurrasse uma imagem **diferente** para o registry com a tag
+`:ci` depois do pipeline terminar, o `cosign verify` da próxima execução
+reprovaria?
+
+<Fragment slot="hint">
+Olhe o que exatamente o `verify` recebe como referência.
+</Fragment>
+
+<Fragment slot="answer">
+
+Não, e isso não é falha — é o escopo da ferramenta.
+
+O `verify` do pipeline confere o **digest que aquele build produziu**, lido do
+`--metadata-file`. Uma imagem diferente tem outro digest; a assinatura dela
+simplesmente não existe, e ninguém a procurou.
+
+A proteção acontece do outro lado, **no consumo**. Quem faz deploy tem que:
+
+1. resolver a tag para um digest,
+2. rodar `cosign verify` **naquele digest**,
+3. e recusar se não houver assinatura.
+
+Sem o passo 3 a assinatura é decorativa: você pode assinar tudo perfeitamente e
+fazer deploy do que não foi assinado. É por isso que o passo seguinte natural
+deste módulo é um **admission controller** no Kubernetes que recusa imagem sem
+assinatura — assunto do módulo 2, não deste.
+
+```bash
+# o que o consumidor faria, e o que o portão prova em miniatura
+digest=$(crane digest registry:5000/infra-knowlogy/api-go:ci)
+cosign verify --key cosign.pub "registry:5000/infra-knowlogy/api-go@$digest" \
+  || { echo "sem assinatura válida — NÃO fazer deploy"; exit 1; }
+```
+
+</Fragment>
+</LabExercise>
+
+## O que fica
+
+- Assinatura responde "estes bytes são os meus?" — e só isso.
+- Assina-se o **digest**; assinar a tag assina o que ela apontar amanhã.
+- O digest vem do metadata do build, não de uma consulta depois do push.
+- Uma build, duas saídas: o que foi escaneado é o que foi publicado.
+- Keyless remove uma classe de risco. Quem não tem, administra uma chave.
+- Assinatura sem verificação no **consumo** é decoração.
+
+<Quiz set="signing-what-you-ship" />

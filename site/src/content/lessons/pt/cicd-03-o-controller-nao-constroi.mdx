@@ -1,0 +1,154 @@
+---
+key: controller-and-agent
+lang: pt
+track: cicd
+order: 3
+title: Por que o controller não constrói nada
+summary: Zero executores, porta TCP de agente desligada, e uma sutileza que faz "zero executores" não significar "nada roda aqui".
+minutes: 13
+tags: [cicd, jenkins, isolamento, agente, websocket, seguranca]
+sources:
+  - label: "Jenkins — Controller Isolation"
+    url: "https://www.jenkins.io/doc/book/security/controller-isolation/"
+    kind: docs
+  - label: "Jenkins — Agent to Controller Security (JEP-235)"
+    url: "https://www.jenkins.io/doc/book/security/controller-isolation/jep-235/"
+    kind: spec
+  - label: "Jenkins — Scaling: Architecting for Scale"
+    url: "https://www.jenkins.io/doc/book/scaling/architecting-for-scale/"
+    kind: docs
+    accessed: "2026-09-19"
+---
+
+import ControllerAgent from "../../../components/diagrams/ControllerAgent.astro";
+
+O processo do Jenkins tem, no disco, tudo que importa: as credenciais, a
+configuração, o histórico. Um build que rode **no mesmo lugar** tem o mesmo
+acesso a esse disco.
+
+Não é uma questão de confiar no seu time. É que um pipeline que constrói pull
+request executa código de quem abriu o pull request.
+
+<ControllerAgent />
+
+## A fronteira, em uma linha de YAML
+
+```yaml
+jenkins:
+  numExecutors: 0
+```
+
+É isso. O nó embutido deixa de aceitar trabalho, e todo job precisa de
+`agent { label 'builder' }` para sair da fila.
+
+<Callout type="why" label="Por que a recomendação é oficial e quase ninguém segue">
+A documentação do próprio Jenkins diz para pôr zero executores no built-in. O
+motivo é direto: qualquer script rodando ali interage com o sistema de arquivos
+do Jenkins — configuração, segredos, o que estiver lá.
+
+Quase ninguém segue porque o padrão da instalação é 2, e porque um Jenkins com
+zero executores e nenhum agente simplesmente **não roda nada** — o job fica
+parado na fila para sempre. É mais fácil deixar como está do que montar o agente.
+</Callout>
+
+<Callout type="trap" label="O build parado na fila, e a mensagem que salva">
+Se você puser `numExecutors: 0` e esquecer o agente, o job fica na fila
+indefinidamente, sem erro nenhum. O Jenkins não reclama: ele está esperando, e
+esperar não é falhar.
+
+A resposta está no item da fila:
+
+```bash
+curl -s -u admin:$TOKEN http://localhost:8090/queue/api/json \
+  | grep -o '"why":"[^"]*"'
+# "why":"Waiting for next available executor"
+```
+
+Esse campo `why` é a primeira coisa a olhar quando um build não começa. O
+`lib/jenkins.sh` deste repositório tem uma função só para lê-lo.
+</Callout>
+
+## A sutileza: zero executores ≠ nada roda aqui
+
+Esta foi medida e contrariou o que eu esperava.
+
+O checkout do **Jenkinsfile** — o passo que busca a definição do pipeline no SCM
+— acontece no controller, num executor chamado *flyweight*. E flyweight **não
+conta** para o `numExecutors`.
+
+<Callout type="danger" label="O que isso significa de verdade">
+`numExecutors: 0` significa **"nenhum BUILD roda aqui"**, e não "nada roda aqui".
+O controller continua clonando o repositório para ler o Jenkinsfile.
+
+A consequência prática é grande: quem controla o SCM do job controla um clone que
+acontece no controller. É por isso que o plugin git **recusa** remote que seja
+diretório local — um job capaz de escolher um caminho local leria qualquer coisa
+que o controller enxergue. Este módulo serve o repositório por `git daemon` em
+vez de desligar esse controle.
+</Callout>
+
+E a mesma sutileza estraga a checagem óbvia:
+
+```bash
+# O builtOn de um build de Pipeline é STRING VAZIA mesmo quando
+# todos os estágios rodaram no agente — ele reporta o flyweight.
+curl -s .../job/stack-pipeline/20/api/json | grep builtOn
+# (vazio)
+
+# Quem prova onde o trabalho aconteceu é o console:
+curl -s .../job/stack-pipeline/20/consoleText | grep "Running on"
+# Running on builder in /home/jenkins/agent/workspace/stack-pipeline
+```
+
+## O agente entra, ninguém entra no agente
+
+A porta 50000 — o listener TCP de agente — está **desligada**:
+
+```yaml
+jenkins:
+  slaveAgentPort: -1
+```
+
+O agente se conecta por WebSocket, sobre a mesma porta da interface. Não há
+segunda porta publicada, e a conexão parte de dentro para fora.
+
+<RunIt title="Prove o isolamento você mesmo" file="cicd/compose.yaml">
+
+```bash
+make cicd-up
+
+# 1. O built-in não aceita trabalho.
+curl -s -u admin:$(cat cicd/secrets/jenkins_admin_password) \
+  "http://localhost:8090/computer/(built-in)/api/json?tree=numExecutors"
+# {"numExecutors":0}
+
+# 2. A porta TCP de agente está desligada.
+curl -s -u admin:$(cat cicd/secrets/jenkins_admin_password) \
+  "http://localhost:8090/api/json?tree=slaveAgentPort"
+# {"slaveAgentPort":-1}
+
+# 3. E o agente está online assim mesmo — por WebSocket.
+curl -s -u admin:$(cat cicd/secrets/jenkins_admin_password) \
+  "http://localhost:8090/computer/builder/api/json?tree=offline"
+# {"offline":false}
+
+# 4. O agente não tem como falar com o Docker do host.
+docker compose -f cicd/compose.yaml exec agent sh -c \
+  'test -S /var/run/docker.sock && echo "TEM" || echo "não tem"'
+docker compose -f cicd/compose.yaml exec agent sh -c \
+  'command -v docker || echo "sem docker CLI"'
+```
+
+</RunIt>
+
+## O que fica
+
+- O controller guarda segredo; o agente constrói. Misturar os dois é dar o
+  segredo ao build.
+- `numExecutors: 0` é a fronteira, e o portão a confere a cada execução.
+- Mas ela significa "nenhum **build** aqui": o checkout do Jenkinsfile continua
+  acontecendo no controller, num executor flyweight.
+- Por isso o `builtOn` de um pipeline é vazio, e quem prova é o console.
+- Porta TCP de agente desligada; a conexão parte do agente, por WebSocket.
+
+<Quiz set="controller-and-agent" />

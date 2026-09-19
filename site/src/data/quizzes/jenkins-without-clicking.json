@@ -1,0 +1,116 @@
+{
+  "note_pt": "Perguntas da lição cicd-02.",
+  "note_en": "Questions for lesson cicd-02.",
+  "pt": [
+    {
+      "q": "Você escreve `numExecutor: 0` no casc.yaml, sem o \"s\". O que acontece?",
+      "options": [
+        {
+          "text": "O controller sobe normalmente, e o built-in continua com os 2 executores padrão.",
+          "correct": true,
+          "why": "O JCasC ignora chave desconhecida em silêncio. A configuração é ACEITA e não é APLICADA — mesma classe da armadilha do kind com NetworkPolicy. Por isso o portão lê o log procurando `Unknown key`."
+        },
+        {
+          "text": "O controller recusa subir, com erro de validação do YAML.",
+          "why": "Seria o comportamento desejável e não é o real. O YAML é válido; o que não existe é a propriedade, e o JCasC não trata isso como erro."
+        },
+        {
+          "text": "O controller sobe e registra um WARNING bem visível no log.",
+          "why": "Ele registra algo, e é justamente por isso que o portão consegue checar. Mas nada falha e nada chama atenção — num log de boot com centenas de linhas, a mensagem passa batido."
+        }
+      ]
+    },
+    {
+      "q": "Por que o `plugins.txt` lista 67 plugins e não os 7 que o módulo realmente pede?",
+      "options": [
+        {
+          "text": "Porque pinar só os de primeiro nível deixa as dependências transitivas resolverem para a última versão do dia.",
+          "correct": true,
+          "why": "O mesmo Dockerfile, construído em duas terças diferentes, produziria controllers diferentes. É a mesma doutrina do pin por digest: o pin só vale se cobrir tudo o que entra na imagem."
+        },
+        {
+          "text": "Porque o jenkins-plugin-cli não sabe resolver dependências sozinho.",
+          "why": "Ele resolve muito bem — o problema é justamente esse: ele resolve para o que estiver disponível naquele momento, e sem `--latest false` sobe até o que você pinou."
+        },
+        {
+          "text": "Porque o Jenkins precisa dos 67 para funcionar.",
+          "why": "Ele precisa, mas essa é a consequência e não a razão do arquivo. A decisão são os 7; os 67 são o resultado dela, e o arquivo grava o resultado para que ele não mude sozinho."
+        }
+      ]
+    },
+    {
+      "q": "Por que a configuração do JCasC fica em `/opt` e não em `/var/jenkins_home`?",
+      "options": [
+        {
+          "text": "Porque /var/jenkins_home é volume nomeado, e volume só é populado a partir da imagem quando está vazio.",
+          "correct": true,
+          "why": "É a lição 6 aplicada a nós mesmos. A primeira subida funciona; depois disso o volume tem conteúdo, o Docker não copia mais nada, e toda alteração no casc.yaml é ignorada em silêncio."
+        },
+        {
+          "text": "Porque o Jenkins não tem permissão de leitura em /var/jenkins_home durante o boot.",
+          "why": "Ele tem — é o diretório de trabalho dele. O problema não é permissão, é o volume sombrear o que a imagem trouxe."
+        },
+        {
+          "text": "Para separar configuração de dados, por organização.",
+          "why": "É um efeito colateral bom e não é a razão. A razão é mecânica: em /var/jenkins_home a imagem deixa de mandar depois da primeira subida."
+        }
+      ]
+    }
+  ],
+  "en": [
+    {
+      "q": "You write `numExecutor: 0` in casc.yaml, without the \"s\". What happens?",
+      "options": [
+        {
+          "text": "The controller comes up normally, and the built-in node keeps its default 2 executors.",
+          "correct": true,
+          "why": "JCasC ignores unknown keys silently. The configuration is ACCEPTED and not APPLIED — same class as the kind/NetworkPolicy trap. Which is why the gate reads the log for `Unknown key`."
+        },
+        {
+          "text": "The controller refuses to start, with a YAML validation error.",
+          "why": "That would be the desirable behaviour and it is not the real one. The YAML is valid; what does not exist is the property, and JCasC does not treat that as an error."
+        },
+        {
+          "text": "The controller starts and logs a prominent WARNING.",
+          "why": "It logs something, which is exactly why the gate can check for it. But nothing fails and nothing draws attention — in a boot log of hundreds of lines, the message slips past."
+        }
+      ]
+    },
+    {
+      "q": "Why does `plugins.txt` list 67 plugins rather than the 7 the module actually asks for?",
+      "options": [
+        {
+          "text": "Because pinning only the top-level ones lets transitive dependencies resolve to whatever is newest that day.",
+          "correct": true,
+          "why": "The same Dockerfile built on two different Tuesdays would produce different controllers. Same doctrine as pinning by digest: a pin only holds if it covers everything that enters the image."
+        },
+        {
+          "text": "Because jenkins-plugin-cli cannot resolve dependencies on its own.",
+          "why": "It resolves them perfectly well — that is the problem: it resolves to whatever is available at that moment, and without `--latest false` it even bumps what you pinned."
+        },
+        {
+          "text": "Because Jenkins needs all 67 to work.",
+          "why": "It does, but that is the consequence rather than the file's reason. The decision is the 7; the 67 are its result, and the file records the result so it cannot drift on its own."
+        }
+      ]
+    },
+    {
+      "q": "Why does the JCasC configuration live in `/opt` rather than `/var/jenkins_home`?",
+      "options": [
+        {
+          "text": "Because /var/jenkins_home is a named volume, and volumes are only populated from the image while empty.",
+          "correct": true,
+          "why": "Lesson 6 applied to ourselves. The first boot works; after that the volume has content, Docker copies nothing more, and every casc.yaml change is silently ignored."
+        },
+        {
+          "text": "Because Jenkins lacks read permission on /var/jenkins_home during boot.",
+          "why": "It has it — that is its working directory. The problem is not permission, it is the volume shadowing what the image brought."
+        },
+        {
+          "text": "To separate configuration from data, for tidiness.",
+          "why": "A welcome side effect, not the reason. The reason is mechanical: in /var/jenkins_home the image stops being in charge after the first boot."
+        }
+      ]
+    }
+  ]
+}

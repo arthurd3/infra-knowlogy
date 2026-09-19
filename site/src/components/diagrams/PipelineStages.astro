@@ -1,0 +1,82 @@
+---
+/** Lição cicd-01 — os estágios do pipeline, e o que cada um custa. */
+import Figure from "../Figure.astro";
+import measured from "../../data/cicd-measured.json";
+import type { Lang } from "../../i18n/ui";
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+// O objeto tem números E booleanos; o cast direto para Record<string, number>
+// é recusado pelo TypeScript, com razão. `unknown` primeiro deixa a conversão
+// explícita — e o `s()` abaixo já trata o que não for número.
+const m = measured.measurements as unknown as Record<string, number | null>;
+const s = (v: number | null | undefined) => (v == null ? "—" : `${Math.round(Number(v))}s`);
+
+const C = {
+  pt: {
+    stages: ["lint", "build", "scan", "sign", "verify", "archive"],
+    o: ["recusa o estilo", "sem daemon", "CVE conhecida", "por digest", "prova a própria", "guarda o tar"],
+    total: "pipeline completo",
+    frio: "frio",
+    quente: "quente",
+    caption:
+      "Cada estágio só faz sentido depois do anterior: escanear uma imagem que não buildou não é nada, e assinar uma que não passou no scanner é assinar a vulnerabilidade. Os tempos são os do <code>cicd-measured.json</code>, gravados pelo portão — <b>o cache quente é a vantagem real do CI que é seu</b>: no runner gerenciado ele é descartado a cada job.",
+    alt: "Os seis estágios do pipeline em sequência, com o tempo medido de cada um.",
+  },
+  en: {
+    stages: ["lint", "build", "scan", "sign", "verify", "archive"],
+    o: ["refuses bad style", "no daemon", "known CVEs", "by digest", "proves itself", "keeps the tar"],
+    total: "whole pipeline",
+    frio: "cold",
+    quente: "warm",
+    caption:
+      "Each stage only makes sense after the previous one: scanning an image that did not build is nothing, and signing one that failed the scanner is signing the vulnerability. Times come from <code>cicd-measured.json</code>, written by the gate — <b>the warm cache is the real advantage of CI you host</b>: on a managed runner it is thrown away with every job.",
+    alt: "The pipeline's six stages in sequence, each with its measured duration.",
+  },
+}[lang];
+
+const tempos = [m.lintStageSeconds, m.buildStageSeconds, m.scanStageSeconds, m.signStageSeconds, null, null];
+const W = 106, GAP = 10;
+---
+<Figure caption={C.caption} alt={C.alt}>
+  <svg viewBox="0 0 700 150" xmlns="http://www.w3.org/2000/svg" font-size="11">
+    <defs>
+      <marker id="ps-arrow" viewBox="0 0 10 10" refX="8.5" refY="5"
+              markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+        <path d="M0 0 L10 5 L0 10 z" fill="var(--border-strong)" />
+      </marker>
+    </defs>
+
+    {C.stages.map((nome, i) => {
+      const x = 6 + i * (W + GAP);
+      return (
+        <g>
+          <rect x={x} y={26} width={W} height={46} rx={6}
+                class={i < 4 ? "dg-box dg-box--accent" : "dg-box dg-box--raised"} />
+          <text x={x + W / 2} y={46} text-anchor="middle" class="dg-mono" font-weight="620" font-size="12">{nome}</text>
+          <text x={x + W / 2} y={62} text-anchor="middle" class="dg-faint" font-size="8.5">{C.o[i]}</text>
+          <text x={x + W / 2} y={88} text-anchor="middle" class="dg-mono dg-muted" font-size="10">
+            {tempos[i] == null ? "" : s(tempos[i])}
+          </text>
+          {i < 5 && <path d={`M${x + W} 49 L${x + W + GAP - 1} 49`} class="dg-line" marker-end="url(#ps-arrow)" />}
+        </g>
+      );
+    })}
+
+    <text x={6} y={16} class="dg-title" font-size="11">{C.total}</text>
+    <rect x={92} y={6} width={92} height={15} rx={7} class="dg-box dg-box--warn" />
+    <text x={138} y={17} text-anchor="middle" class="dg-mono" font-size="9.5">
+      {C.frio} {s(m.pipelineColdSeconds)}
+    </text>
+    <rect x={190} y={6} width={92} height={15} rx={7} class="dg-box dg-box--accent" />
+    <text x={236} y={17} text-anchor="middle" class="dg-mono" font-size="9.5">
+      {C.quente} {s(m.pipelineWarmSeconds)}
+    </text>
+
+    <path d="M6 108 L694 108" class="dg-line dg-line--dashed" />
+    <text x={6} y={126} class="dg-faint" font-size="9">
+      {lang === "pt"
+        ? "verify e archive não aparecem com tempo porque o portão não os cronometra — e um número que não foi medido não entra aqui."
+        : "verify and archive carry no time because the gate does not clock them — and a number that was not measured does not go here."}
+    </text>
+  </svg>
+</Figure>

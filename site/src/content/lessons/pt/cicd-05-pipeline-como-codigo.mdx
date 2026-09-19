@@ -1,0 +1,172 @@
+---
+key: pipeline-as-code
+lang: pt
+track: cicd
+order: 5
+title: Pipeline como código, e o que isso cobra de você
+summary: O Jenkinsfile mora ao lado do código que ele constrói. Isso resolve um problema e cria dois — e o segundo é uma surpresa garantida na primeira hora.
+minutes: 14
+tags: [cicd, jenkins, jenkinsfile, job-dsl, scm, git]
+sources:
+  - label: "Jenkins — Pipeline as Code"
+    url: "https://www.jenkins.io/doc/book/pipeline-as-code/"
+    kind: docs
+  - label: "Jenkins — Declarative Pipeline syntax"
+    url: "https://www.jenkins.io/doc/book/pipeline/syntax/"
+    kind: docs
+  - label: "OWASP — CICD-SEC-4: Poisoned Pipeline Execution"
+    url: "https://owasp.org/www-project-top-10-ci-cd-security-risks/CICD-SEC-04-Poisoned-Pipeline-Execution"
+    kind: spec
+    accessed: "2026-09-19"
+---
+
+import SeedFlow from "../../../components/diagrams/SeedFlow.astro";
+
+Um pipeline configurado na interface do Jenkins tem o mesmo problema de um
+Jenkins configurado na interface: ele existe num lugar só, sem histórico, sem
+revisão e sem como voltar atrás.
+
+O `Jenkinsfile` mora no repositório, ao lado do código. Muda junto, é revisado
+junto, volta atrás junto.
+
+<SeedFlow />
+
+## O que isso cobra: o CI testa o que está commitado
+
+```groovy
+scm {
+    git {
+        remote { url('git://scm/repo') }
+        branch('*/main')
+    }
+}
+```
+
+O job clona do SCM. Não do seu diretório, não do seu working tree — do que
+**está commitado**.
+
+<Callout type="trap" label="A primeira hora">
+Você edita o `Jenkinsfile`, dispara o build, e ele roda a versão anterior. Edita
+de novo, dispara de novo, mesma coisa.
+
+Não é cache. É o CI fazendo exatamente o que um CI faz: construir o que existe no
+repositório, não o que existe no seu editor. `git commit` e o build enxerga.
+
+Isso parece óbvio escrito assim e não é óbvio às 11 da noite.
+</Callout>
+
+## A decisão que o plugin git forçou
+
+O caminho preguiçoso seria apontar o job para `/repo`, um bind mount do
+repositório. O plugin git **recusa**:
+
+```
+ERROR: Checkout of Git remote '/repo' aborted because it references
+a local directory, which may be insecure.
+```
+
+Dá para desligar esse controle com uma propriedade de sistema. Não fizemos.
+
+<Callout type="why" label="Por que ele está certo">
+O checkout do Jenkinsfile acontece no **controller** (lição 3). Um job capaz de
+escolher um caminho local faria o controller ler qualquer coisa que ele enxergue
+— e o controller é onde moram as credenciais.
+
+A saída não é ligar `ALLOW_LOCAL_CHECKOUT`: é dar ao pipeline um remote de
+verdade. Este módulo sobe um `git daemon` somente-leitura, e de quebra a
+topologia fica honesta — em produção o CI puxa de um remote, nunca de um bind
+mount.
+
+Desligar um controle de segurança para destravar o próprio tutorial é o pior
+começo possível para um módulo que ensina segurança de CI.
+</Callout>
+
+## Três armadilhas de quem serve o próprio repositório
+
+Montar o `git daemon` custou três erros seguidos, e os três mentem sobre a causa:
+
+| sintoma | causa real |
+|---|---|
+| `'/srv/repo' does not appear to be a git repository` | o daemon quer o **`.git`**, não a árvore de trabalho |
+| o mesmo erro, com o `.git` montado | bind mount sem `:z` — SELinux (armadilha 2) |
+| `Could not read from remote repository` | `detected dubious ownership`: o daemon roda como `nobody`, o repositório é do uid 1000 |
+
+Repare no padrão: **nenhuma das três mensagens menciona a causa**. A primeira
+manda procurar no caminho, a segunda repete a primeira, e a terceira manda
+procurar em rede e permissão quando o problema é propriedade.
+
+## O linter que o próprio Jenkins oferece
+
+O Jenkins valida um `Jenkinsfile` declarativo sem executá-lo:
+
+```bash
+curl -X POST -u admin:$TOKEN \
+  -F "jenkinsfile=<cicd/Jenkinsfile" \
+  http://localhost:8090/pipeline-model-converter/validate
+# Jenkinsfile successfully validated.
+```
+
+Isso pegou um erro real enquanto este módulo era escrito: `timestamps()` exige o
+plugin `timestamper`, que não estava no `plugins.txt`. A opção saiu em vez de o
+plugin entrar — num módulo sobre cadeia de suprimentos, cada plugin a mais é
+superfície a mais para escanear e justificar.
+
+<LabExercise check="o Jenkinsfile passa no linter declarativo do Jenkins" file="cicd/Jenkinsfile">
+
+Dentro de um bloco `sh '''…'''` do Jenkinsfile, escreva uma continuação de linha
+com uma barra invertida só:
+
+```groovy
+sh '''
+    grep -o 'algo' "$1" \
+      | sed 's/x/y/'
+'''
+```
+
+O pipeline **não compila**. Por quê — e o que o shell tem a ver com isso?
+
+<Fragment slot="hint">
+Quem lê esse texto primeiro não é o shell.
+</Fragment>
+
+<Fragment slot="answer">
+
+Nada, e esse é o ponto: o shell nunca chega a ver.
+
+O bloco `'''…'''` é uma string **Groovy**, e o Groovy consome a barra invertida
+antes de passar o texto adiante — inclusive a de continuação de linha. O erro é
+de compilação, não de execução:
+
+```
+WorkflowScript: 143: unexpected char: '\' @ line 143, column 41.
+```
+
+Para o shell receber uma barra, o arquivo precisa de **duas**:
+
+```groovy
+sh '''
+    grep -o 'algo' "$1" \\
+      | sed 's/x/y/'
+'''
+```
+
+É a mesma classe de problema de escapar uma aspa dentro de uma aspa: há duas
+linguagens empilhadas, e você está escrevendo na de fora.
+
+Na prática este módulo resolveu diferente — reescreveu o trecho **sem barra
+nenhuma**, com dois `grep` encadeados em vez de `grep` mais `sed`. Menos escape,
+menos chance de a mesma coisa acontecer de novo.
+
+</Fragment>
+</LabExercise>
+
+## O que fica
+
+- O Jenkinsfile mora com o código: muda junto, é revisado junto, volta junto.
+- O CI constrói o que está **commitado**. Não é cache, é a definição de CI.
+- O plugin git recusa remote local por um bom motivo — a resposta é um remote de
+  verdade, não desligar o controle.
+- Erro de `git daemon` quase nunca menciona a causa.
+- O linter declarativo valida sem executar, e pega plugin faltando.
+
+<Quiz set="pipeline-as-code" />

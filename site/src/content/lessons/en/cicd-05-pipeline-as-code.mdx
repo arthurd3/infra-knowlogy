@@ -1,0 +1,175 @@
+---
+key: pipeline-as-code
+lang: en
+track: cicd
+order: 5
+title: Pipeline as code, and what it charges you
+summary: The Jenkinsfile lives beside the code it builds. That solves one problem and creates two — and the second is a guaranteed surprise in your first hour.
+minutes: 14
+tags: [cicd, jenkins, jenkinsfile, job-dsl, scm, git]
+sources:
+  - label: "Jenkins — Pipeline as Code"
+    url: "https://www.jenkins.io/doc/book/pipeline-as-code/"
+    kind: docs
+  - label: "Jenkins — Declarative Pipeline syntax"
+    url: "https://www.jenkins.io/doc/book/pipeline/syntax/"
+    kind: docs
+  - label: "OWASP — CICD-SEC-4: Poisoned Pipeline Execution"
+    url: "https://owasp.org/www-project-top-10-ci-cd-security-risks/CICD-SEC-04-Poisoned-Pipeline-Execution"
+    kind: spec
+    accessed: "2026-09-19"
+---
+
+import SeedFlow from "../../../components/diagrams/SeedFlow.astro";
+
+A pipeline configured through the Jenkins UI has the same problem as a Jenkins
+configured through the UI: it exists in exactly one place, with no history, no
+review and no way back.
+
+The `Jenkinsfile` lives in the repository, beside the code. It changes with it,
+is reviewed with it, is reverted with it.
+
+<SeedFlow />
+
+## What it charges you: CI tests what is committed
+
+```groovy
+scm {
+    git {
+        remote { url('git://scm/repo') }
+        branch('*/main')
+    }
+}
+```
+
+The job clones from SCM. Not from your directory, not from your working tree —
+from what is **committed**.
+
+<Callout type="trap" label="The first hour">
+You edit the `Jenkinsfile`, trigger the build, and it runs the previous version.
+Edit again, trigger again, same thing.
+
+It is not a cache. It is CI doing exactly what CI does: building what exists in
+the repository, not what exists in your editor. `git commit` and the build sees
+it.
+
+Written down it sounds obvious. At 11 p.m. it is not.
+</Callout>
+
+## The decision the git plugin forced
+
+The lazy path would point the job at `/repo`, a bind mount of the repository. The
+git plugin **refuses**:
+
+```
+ERROR: Checkout of Git remote '/repo' aborted because it references
+a local directory, which may be insecure.
+```
+
+That control can be switched off with a system property. We did not.
+
+<Callout type="why" label="Why it is right">
+The Jenkinsfile checkout happens on the **controller** (lesson 3). A job able to
+pick a local path would make the controller read anything it can see — and the
+controller is where the credentials live.
+
+The way out is not enabling `ALLOW_LOCAL_CHECKOUT`: it is giving the pipeline a
+real remote. This module brings up a read-only `git daemon`, and the topology
+becomes honest as a bonus — in production CI pulls from a remote, never from a
+bind mount.
+
+Switching off a security control to unblock your own tutorial is the worst
+possible start for a module that teaches CI security.
+</Callout>
+
+## Three traps for anyone serving their own repository
+
+Getting the `git daemon` up cost three errors in a row, and all three lie about
+the cause:
+
+| symptom | real cause |
+|---|---|
+| `'/srv/repo' does not appear to be a git repository` | the daemon wants the **`.git`**, not the working tree |
+| the same error, with `.git` mounted | bind mount without `:z` — SELinux (trap 2) |
+| `Could not read from remote repository` | `detected dubious ownership`: the daemon runs as `nobody`, the repo is owned by uid 1000 |
+
+Notice the pattern: **none of the three messages names the cause**. The first
+sends you to check the path, the second repeats the first, and the third sends
+you to check networking and permissions when the problem is ownership.
+
+## The linter Jenkins itself offers
+
+Jenkins validates a declarative `Jenkinsfile` without executing it:
+
+```bash
+curl -X POST -u admin:$TOKEN \
+  -F "jenkinsfile=<cicd/Jenkinsfile" \
+  http://localhost:8090/pipeline-model-converter/validate
+# Jenkinsfile successfully validated.
+```
+
+That caught a real error while this module was being written: `timestamps()`
+requires the `timestamper` plugin, which was not in `plugins.txt`. The option
+went, rather than the plugin coming in — in a module about supply chain, every
+extra plugin is more surface to scan and to justify.
+
+<LabExercise check="the Jenkinsfile passes Jenkins' declarative linter" file="cicd/Jenkinsfile">
+
+Inside a `sh '''…'''` block of the Jenkinsfile, write a line continuation with a
+single backslash:
+
+```groovy
+sh '''
+    grep -o 'something' "$1" \
+      | sed 's/x/y/'
+'''
+```
+
+The pipeline **does not compile**. Why — and what does the shell have to do with
+it?
+
+<Fragment slot="hint">
+Whoever reads that text first is not the shell.
+</Fragment>
+
+<Fragment slot="answer">
+
+Nothing, and that is the point: the shell never gets to see it.
+
+The `'''…'''` block is a **Groovy** string, and Groovy consumes the backslash
+before passing the text on — the line-continuation one included. The error is at
+compile time, not run time:
+
+```
+WorkflowScript: 143: unexpected char: '\' @ line 143, column 41.
+```
+
+For the shell to receive one backslash, the file needs **two**:
+
+```groovy
+sh '''
+    grep -o 'something' "$1" \\
+      | sed 's/x/y/'
+'''
+```
+
+It is the same class of problem as escaping a quote inside a quote: two languages
+are stacked, and you are writing in the outer one.
+
+In practice this module solved it differently — rewriting the snippet with **no
+backslash at all**, two chained `grep`s instead of `grep` plus `sed`. Less
+escaping, less chance of the same thing happening again.
+
+</Fragment>
+</LabExercise>
+
+## What to take away
+
+- The Jenkinsfile lives with the code: changes, review and reverts travel together.
+- CI builds what is **committed**. Not a cache — the definition of CI.
+- The git plugin refuses local remotes for a good reason — the answer is a real
+  remote, not switching the control off.
+- `git daemon` errors almost never name the cause.
+- The declarative linter validates without executing, and catches missing plugins.
+
+<Quiz set="pipeline-as-code" />

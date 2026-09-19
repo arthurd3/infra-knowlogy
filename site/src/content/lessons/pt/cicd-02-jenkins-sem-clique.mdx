@@ -1,0 +1,147 @@
+---
+key: jenkins-without-clicking
+lang: pt
+track: cicd
+order: 2
+title: Um Jenkins que nasce pronto
+summary: Configuration as Code, 67 plugins pinados e os jobs vindos de um seed. E a armadilha que faz tudo isso parecer funcionar quando não está.
+minutes: 15
+tags: [cicd, jenkins, jcasc, job-dsl, plugins, reprodutibilidade]
+sources:
+  - label: "Jenkins — Configuration as Code"
+    url: "https://www.jenkins.io/projects/jcasc/"
+    kind: docs
+  - label: "JCasC — Handling Secrets"
+    url: "https://github.com/jenkinsci/configuration-as-code-plugin/blob/master/docs/features/secrets.adoc"
+    kind: docs
+  - label: "job-dsl-plugin — JCasC"
+    url: "https://github.com/jenkinsci/job-dsl-plugin/blob/master/docs/JCasC.md"
+    kind: docs
+---
+
+import SeedFlow from "../../../components/diagrams/SeedFlow.astro";
+
+Um Jenkins configurado pela interface é uma **máquina de estimação**: única,
+insubstituível e impossível de recriar. Quando ela morre, morre com ela o
+conhecimento de como ela estava.
+
+O controller deste módulo sobe em **13 segundos**, do zero, já com autenticação,
+autorização, nó de build, jobs e 67 plugins — e ninguém clicou em nada.
+
+<SeedFlow />
+
+## Quatro arquivos, quatro responsabilidades
+
+```
+cicd/controller/Dockerfile      a imagem, com os plugins baixados no BUILD
+cicd/controller/plugins.txt     67 plugins, pinados por versão
+cicd/controller/casc/*.yaml     o Jenkins inteiro, declarado
+cicd/controller/jobs/seed.groovy  os jobs, em Job DSL
+```
+
+O download dos plugins acontece em tempo de **build da imagem**, nunca no start
+do container. Depois que a imagem existe, `make cicd-verify` roda sem rede — e um
+portão que depende da internet não é um portão, é uma aposta.
+
+## 67 plugins, e não 7
+
+O `plugins.txt` lista o fecho transitivo **inteiro**, não só os sete que este
+módulo realmente pede.
+
+<Callout type="trap" label="Pin decorativo">
+Pinar `job-dsl:3732.v9a_c49a_61a_313` e deixar as dependências soltas parece
+suficiente e não é: o `jenkins-plugin-cli` resolve cada dependência para a última
+versão disponível **naquele dia**. O mesmo Dockerfile, construído em duas
+terças-feiras diferentes, produz dois controllers diferentes.
+
+É a mesma doutrina do pin por digest (ADR 0004), e o mecanismo para mover o pin
+de propósito também existe: `make cicd-plugins` regrava o arquivo, e aí a
+mudança aparece num diff revisável em vez de acontecer calada.
+
+O `--latest false` na chamada do `jenkins-plugin-cli` é o que faz o pin valer.
+Sem ele, a ferramenta sobe as transitivas e o arquivo vira decoração.
+</Callout>
+
+## A armadilha que custa mais tempo do que todas as outras
+
+O JCasC **ignora chave errada em silêncio**.
+
+Escreva `numExecutor` sem o "s". O controller sobe, a página de configuração
+parece certa, e o built-in fica com dois executores — ou seja, o isolamento que a
+próxima lição inteira defende simplesmente não existe, e nada avisa.
+
+<Callout type="danger" label="O primo do kind que aceitava NetworkPolicy">
+É exatamente a mesma classe de defeito da armadilha 12 deste repositório: a
+configuração é **aceita** e não é **aplicada**. Nos dois casos o sistema responde
+com sucesso e o efeito não acontece.
+
+Por isso o portão lê o log do controller procurando `Unknown key`. É uma checagem
+que parece paranoia até a primeira vez que ela pega alguma coisa.
+</Callout>
+
+E há uma segunda, mais sutil, que é da **nossa** stack e não do Jenkins:
+
+<Callout type="trap" label="A configuração não pode morar em /var/jenkins_home">
+`/var/jenkins_home` é volume nomeado. E volume nomeado só é populado a partir da
+imagem **quando está vazio** — é a lição 6 desta casa aplicada a nós mesmos.
+
+Resultado: a primeira subida funciona, você edita o `casc.yaml`, reconstrói a
+imagem, sobe de novo... e nada muda. O volume já tem conteúdo, o Docker não copia
+nada, e você passa a tarde depurando um YAML que o Jenkins nunca leu.
+
+A configuração deste módulo fica em `/opt`. Ali a imagem manda.
+</Callout>
+
+## Os jobs são reconciliados, não criados
+
+O bloco `jobs:` do JCasC roda o seed a cada boot **e a cada reload**. Isso não é
+"criar se não existir": é reconciliação. Um job editado pela interface volta ao
+que o código diz na próxima recarga.
+
+O portão aproveita essa propriedade para uma checagem que só faz sentido num
+sistema declarado: o conjunto de jobs precisa ser **exatamente** o que o seed
+declara. Nem a mais, nem a menos.
+
+<LabExercise check="os jobs são exatamente os do seed" file="cicd/controller/jobs/seed.groovy">
+
+Com o Jenkins no ar, crie um job qualquer pela interface — um "Freestyle
+project" chamado `meu-job`, sem nenhuma configuração. Depois rode o
+`make cicd-verify`.
+
+O portão vai reprovar. **Por que ele reprova, se o job que você criou não
+quebrou nada?**
+
+<Fragment slot="hint">
+A checagem não pergunta "os jobs do seed existem?". Ela pergunta outra coisa.
+</Fragment>
+
+<Fragment slot="answer">
+
+Porque a checagem compara os dois conjuntos, e não a inclusão de um no outro:
+
+```bash
+declarados="stack-pipeline stack-negative-lint credential-probe"
+existem="credential-probe meu-job stack-negative-lint stack-pipeline"
+# diferentes -> reprova
+```
+
+"Os jobs do seed existem" passaria com `meu-job` lá dentro, e aí o controller
+teria estado que não está em lugar nenhum do repositório — que é precisamente o
+que configuração como código existe para impedir.
+
+Repare no efeito colateral bom: um `make cicd-up` (que recarrega o JCasC) apaga
+o `meu-job` sozinho. O sistema converge para o que está escrito, sem ninguém
+lembrar de limpar.
+
+</Fragment>
+</LabExercise>
+
+## O que fica
+
+- Plugin baixado no build da imagem; portão rodando offline depois disso.
+- Pin do fecho transitivo inteiro, ou o pin é decoração.
+- Chave errada no JCasC é ignorada **em silêncio** — o portão lê o log por isso.
+- Configuração fora de `/var/jenkins_home`, ou a imagem para de mandar.
+- O seed reconcilia: job criado à mão some, e o portão exige igualdade exata.
+
+<Quiz set="jenkins-without-clicking" />

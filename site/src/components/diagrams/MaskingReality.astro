@@ -1,0 +1,71 @@
+---
+/** Lição cicd-06 — o que o mascaramento de credencial pega, medido. */
+import Figure from "../Figure.astro";
+import type { Lang } from "../../i18n/ui";
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+const C = {
+  pt: {
+    titulo: "o mesmo segredo, seis formas",
+    pega: "o Jenkins reconhece e mascara",
+    passa: "passa inteiro",
+    linhas: [
+      ["echo $TOK", "****", true],
+      ["$TOK | base64", "****", true],
+      ["$TOK | rev", "muhnen-rolav…", false],
+      ["$TOK | cut -c1-12", "token-de-exe", false],
+      ['$TOK | tr -d "-"', "tokendeexemp…", false],
+      ["$TOK | od -c", "t o k e n - d…", false],
+    ] as Array<[string, string, boolean]>,
+    caption:
+      "Medido no Jenkins 2.568.3 com credentials-binding 728. O exemplo que mais se repete na internet — <i>\"o base64 vaza\"</i> — <b>está desatualizado</b>: o plugin registra também as formas codificadas. A conclusão não muda e fica mais afiada: mascaramento é casamento de padrão sobre um conjunto conhecido, e sair do conjunto é trivial.",
+    alt: "Seis transformações do mesmo segredo e quais delas o Jenkins mascara.",
+  },
+  en: {
+    titulo: "the same secret, six shapes",
+    pega: "Jenkins recognises and masks",
+    passa: "goes through whole",
+    linhas: [
+      ["echo $TOK", "****", true],
+      ["$TOK | base64", "****", true],
+      ["$TOK | rev", "muhnen-rolav…", false],
+      ["$TOK | cut -c1-12", "token-de-exe", false],
+      ['$TOK | tr -d "-"', "tokendeexemp…", false],
+      ["$TOK | od -c", "t o k e n - d…", false],
+    ] as Array<[string, string, boolean]>,
+    caption:
+      "Measured on Jenkins 2.568.3 with credentials-binding 728. The most repeated example on the internet — <i>\"base64 leaks it\"</i> — is <b>out of date</b>: the plugin registers encoded forms too. The conclusion does not change and gets sharper: masking is pattern matching over a known set, and stepping outside that set is trivial.",
+    alt: "Six transformations of the same secret and which ones Jenkins masks.",
+  },
+}[lang];
+---
+<Figure caption={C.caption} alt={C.alt}>
+  <svg viewBox="0 0 700 200" xmlns="http://www.w3.org/2000/svg" font-size="11">
+    <text x={6} y={16} class="dg-title" font-size="11">{C.titulo}</text>
+    <text x={220} y={16} class="dg-fill-accent" font-size="9" font-weight="620">✓ {C.pega}</text>
+    <text x={460} y={16} class="dg-fill-danger" font-size="9" font-weight="620">✗ {C.passa}</text>
+
+    {C.linhas.map(([cmd, saida, mascarado], i) => {
+      const y = 28 + i * 26;
+      return (
+        <g>
+          <rect x={6} y={y} width={688} height={22} rx={5}
+                class={mascarado ? "dg-box dg-box--accent" : "dg-box dg-box--danger"} />
+          <text x={18} y={y + 15} class="dg-mono" font-size="10.5">{cmd}</text>
+          <text x={250} y={y + 15} class="dg-mono dg-muted" font-size="10.5">→</text>
+          <text x={276} y={y + 15} class="dg-mono" font-size="10.5"
+                font-weight={mascarado ? "400" : "620"}>{saida}</text>
+          <text x={676} y={y + 15} text-anchor="end"
+                class={mascarado ? "dg-fill-accent" : "dg-fill-danger"}
+                font-size="11" font-weight="700">{mascarado ? "✓" : "✗"}</text>
+        </g>
+      );
+    })}
+
+    <text x={6} y={194} class="dg-faint" font-size="9">
+      {lang === "pt"
+        ? "Mascaramento é higiene de log. Tratá-lo como fronteira é confiar numa porta que só tranca quando o ladrão usa a maçaneta."
+        : "Masking is log hygiene. Treating it as a boundary is trusting a door that only locks when the burglar uses the handle."}
+    </text>
+  </svg>
+</Figure>

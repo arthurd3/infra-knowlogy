@@ -1,0 +1,116 @@
+{
+  "note_pt": "Perguntas da lição cicd-07.",
+  "note_en": "Questions for lesson cicd-07.",
+  "pt": [
+    {
+      "q": "O que exatamente uma assinatura de imagem afirma?",
+      "options": [
+        {
+          "text": "Que estes bytes são os mesmos que saíram daquele pipeline.",
+          "correct": true,
+          "why": "Só isso — e é exatamente o que falta quando alguém troca a imagem entre o build e o deploy. Ela não diz nada sobre qualidade do código, testes ou vulnerabilidade."
+        },
+        {
+          "text": "Que a imagem passou nos testes e no scanner.",
+          "why": "O pipeline garante a ORDEM (assinar depois de escanear), mas a assinatura em si não carrega esse fato. Quem verifica lê uma assinatura, não um histórico de estágios."
+        },
+        {
+          "text": "Que a imagem não tem vulnerabilidade conhecida.",
+          "why": "Confunde assinatura com scanner. Dá para assinar perfeitamente uma imagem cheia de CVE — e é por isso que a ordem dos estágios importa tanto."
+        }
+      ]
+    },
+    {
+      "q": "Por que se assina o digest e não a tag `:ci`?",
+      "options": [
+        {
+          "text": "Porque tag é ponteiro mutável: assinar `:ci` é assinar o que ela apontar amanhã.",
+          "correct": true,
+          "why": "É exatamente o cenário contra o qual a assinatura existe. O próprio cosign avisa — um aviso que a maioria dos pipelines ignora porque o comando funciona assim mesmo."
+        },
+        {
+          "text": "Porque o cosign não aceita tag como referência.",
+          "why": "Aceita, e é justamente esse o problema: ele funciona, imprime um WARNING, e segue. A ferramenta não impede; ela avisa."
+        },
+        {
+          "text": "Porque o digest é mais curto e cabe melhor no log.",
+          "why": "O digest é bem mais longo que a tag. O motivo é semântico, não cosmético: um identifica conteúdo, o outro aponta para conteúdo."
+        }
+      ]
+    },
+    {
+      "q": "O pipeline assina e verifica. Isso protege contra alguém empurrar outra imagem com a tag `:ci` depois?",
+      "options": [
+        {
+          "text": "Não — a proteção acontece no CONSUMO, quando quem faz deploy resolve a tag e recusa digest sem assinatura.",
+          "correct": true,
+          "why": "O verify do pipeline confere o digest que aquele build produziu. Sem a recusa do lado do deploy, a assinatura é decorativa: dá para assinar tudo certo e fazer deploy do que não foi assinado."
+        },
+        {
+          "text": "Sim — o cosign invalida assinaturas anteriores quando a tag muda.",
+          "why": "Assinatura é atrelada a digest, e digests não se invalidam. A imagem antiga continua assinada e válida; a nova simplesmente nunca foi assinada."
+        },
+        {
+          "text": "Sim, desde que o registry tenha tags imutáveis habilitadas.",
+          "why": "Tag imutável ajuda de verdade e resolve outro problema: ela impede a troca. Não é a assinatura que protege nesse caso, é a política do registry."
+        }
+      ]
+    }
+  ],
+  "en": [
+    {
+      "q": "What exactly does an image signature claim?",
+      "options": [
+        {
+          "text": "That these bytes are the ones that left that pipeline.",
+          "correct": true,
+          "why": "That is all — and it is exactly what is missing when somebody swaps the image between build and deploy. It says nothing about code quality, tests or vulnerabilities."
+        },
+        {
+          "text": "That the image passed the tests and the scanner.",
+          "why": "The pipeline guarantees the ORDER (sign after scan), but the signature itself does not carry that fact. A verifier reads a signature, not a stage history."
+        },
+        {
+          "text": "That the image has no known vulnerability.",
+          "why": "That confuses signature with scanner. You can sign a CVE-ridden image perfectly — which is why stage order matters so much."
+        }
+      ]
+    },
+    {
+      "q": "Why sign the digest rather than the `:ci` tag?",
+      "options": [
+        {
+          "text": "Because a tag is a mutable pointer: signing `:ci` signs whatever it points at tomorrow.",
+          "correct": true,
+          "why": "That is precisely the scenario signatures exist to prevent. cosign itself warns you — a warning most pipelines ignore because the command works anyway."
+        },
+        {
+          "text": "Because cosign does not accept a tag as a reference.",
+          "why": "It does, and that is exactly the problem: it works, prints a WARNING, and carries on. The tool does not stop you; it warns you."
+        },
+        {
+          "text": "Because the digest is shorter and fits the log better.",
+          "why": "The digest is far longer than the tag. The reason is semantic, not cosmetic: one identifies content, the other points at content."
+        }
+      ]
+    },
+    {
+      "q": "The pipeline signs and verifies. Does that protect against somebody pushing a different image under `:ci` afterwards?",
+      "options": [
+        {
+          "text": "No — protection happens at CONSUMPTION, when whoever deploys resolves the tag and refuses an unsigned digest.",
+          "correct": true,
+          "why": "The pipeline's verify checks the digest that build produced. Without a refusal on the deploy side, the signature is decorative: you can sign everything correctly and deploy what was never signed."
+        },
+        {
+          "text": "Yes — cosign invalidates earlier signatures when the tag changes.",
+          "why": "Signatures are bound to digests, and digests are not invalidated. The old image stays signed and valid; the new one simply was never signed."
+        },
+        {
+          "text": "Yes, as long as the registry has immutable tags enabled.",
+          "why": "Immutable tags genuinely help and solve a different problem: they prevent the swap. In that case it is the registry policy protecting you, not the signature."
+        }
+      ]
+    }
+  ]
+}

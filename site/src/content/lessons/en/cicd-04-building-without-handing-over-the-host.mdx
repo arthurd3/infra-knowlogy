@@ -1,0 +1,202 @@
+---
+key: building-without-a-daemon
+lang: en
+track: cicd
+order: 4
+title: Building images without handing over the host
+summary: Mounting the Docker socket into the agent is what every tutorial shows — and it hands root on the machine to whoever opens a pull request. There is a way out, and it was measured here.
+minutes: 18
+tags: [cicd, buildkit, rootless, selinux, docker-socket, owasp]
+sources:
+  - label: "moby/buildkit — rootless.md"
+    url: "https://github.com/moby/buildkit/blob/master/docs/rootless.md"
+    kind: docs
+  - label: "OWASP — Docker Security Cheat Sheet"
+    url: "https://cheatsheetseries.owasp.org/cheatsheets/Docker_Security_Cheat_Sheet.html"
+    kind: spec
+  - label: "Chainguard — Fork Yeah: bringing kaniko back (archived by Google in Jun 2025)"
+    url: "https://www.chainguard.dev/unchained/fork-yeah-were-bringing-kaniko-back"
+    kind: blog
+    accessed: "2026-09-19"
+---
+
+import BlastRadius from "../../../components/diagrams/BlastRadius.astro";
+
+The agent has to build images. The way every tutorial shows is mounting
+`/var/run/docker.sock` into it.
+
+The question that choice answers is not "how do I build an image?". It is
+**"what can a `RUN` written by whoever opened a pull request reach?"**
+
+<BlastRadius />
+
+## Why the socket is root on the host
+
+The Docker daemon runs as root. Whoever talks to the socket asks the daemon to
+create containers — including one with `--privileged` and the host disk mounted.
+
+```bash
+# Two commands. The first is the one the tutorial tells you to run.
+docker run --rm --security-opt label=disable \
+  -v /var/run/docker.sock:/var/run/docker.sock docker:cli \
+  docker run --rm -v /:/host:ro alpine head -1 /host/etc/shadow
+# root:$y$j9T$…     ← the HOST's /etc/shadow, from inside a container
+```
+
+<Callout type="danger" label="The irony of the workaround">
+On this host SELinux **blocks** access to the socket. The symptom never mentions
+SELinux — it is a `permission denied` that looks like an ownership problem.
+
+And the fix people paste from every tutorial is `--security-opt label=disable`,
+which is precisely the removal of the last barrier. SELinux was protecting you,
+and the first thing done is to switch it off to "unblock".
+
+This house's ADR 0003 had already recorded that tension in the observability
+stack. Repeating it in the module that teaches automation would be the
+repository contradicting itself.
+</Callout>
+
+## The alternatives, and what each one costs
+
+**Docker-in-Docker with `--privileged`** swaps the socket for a privileged
+daemon. No improvement: `--privileged` runs the container as `spc_t`, and SELinux
+confinement does not get weaker — it **stops existing**. Plus a nested storage
+driver and a third build cache to maintain.
+
+**Kaniko** was archived by Google in June 2025 (Chainguard maintains a fork).
+Choosing an archived builder in the module that teaches supply chain is
+indefensible.
+
+**Rootless BuildKit** is the choice. The process executing the `RUN` lines is not
+root on the host: it runs in a user namespace, as an ordinary user.
+
+## What the documentation asks for, and what was missing
+
+BuildKit's official recipe asks for three `unconfined`:
+
+```
+--security-opt seccomp=unconfined      # unshare/mount for runc
+--security-opt apparmor=unconfined     # no-op on Fedora (no AppArmor)
+--security-opt systempaths=unconfined  # a /proc of its own for each RUN
+```
+
+None of them is root privilege, and the documentation is explicit that they are
+safe **because buildkitd is not root**.
+
+With those three and nothing else, under SELinux enforcing, the `RUN` dies:
+
+```
+error mounting "proc" to rootfs at "/proc": ... permission denied
+```
+
+<Callout type="why" label="The answer is not switching SELinux off">
+The plan anticipated a ladder of fallbacks ending in `label=disable`. It was not
+needed. Fedora has a type built for **nested** container engines:
+
+```
+--security-opt label=type:container_engine_t
+```
+
+Measured here, with `getenforce` = Enforcing across all three tests:
+
+| `--security-opt` | process label | build |
+|---|---|---|
+| (default) | `container_t:s0:c33,c459` | **fails** mounting `/proc` |
+| `label=disable` | *(empty — unconfined)* | passes |
+| `label=type:container_engine_t` | `container_engine_t:s0:c216,c785` | **passes, confined** |
+
+The MCS categories in the label are the proof there was no silent fallback.
+See ADR 0011.
+</Callout>
+
+## The honest question: what actually changed?
+
+The agent talks to buildkitd over a Unix socket. You swapped `docker.sock` for
+`buildkitd.sock`. Did anything change?
+
+**What changed is who is on the other side.** Talking to the Docker socket means
+talking to a daemon that is root on the host. Talking to buildkitd's means
+talking to a non-root process inside a user namespace. The blast radius of a
+malicious `RUN` stops being "the machine" and becomes "one rootless container".
+
+And there is a difference the Docker socket does not have: BuildKit has
+**entitlements**. `security.insecure` and `network.host` only work if the daemon
+started with `--allow-insecure-entitlement`. We did not enable them.
+
+<Callout type="trap" label="The Unix socket and SELinux, by another road">
+Connecting to a Unix socket requires **write** permission on the file — mounting
+the volume `:ro` breaks `connect()` with a `permission denied` that looks like an
+ownership problem.
+
+And even with the right permission it still failed. The reason: SELinux checks
+the `connectto` permission against the label of the **listening process**, not
+against the socket file's label. Which is why `ls -Z` shows a perfectly
+accessible `container_file_t:s0` and the connection fails anyway. The agent
+needed buildkitd's own `container_engine_t`.
+</Callout>
+
+## The proof that it is not an approximation
+
+A different builder could produce a similar image rather than the same one. This
+one does not:
+
+| | local `docker build` | rootless BuildKit, via Jenkins |
+|---|---|---|
+| sha256 of `/api-go` | `2859240b1b319ff7…` | `2859240b1b319ff7…` |
+| size | 14,762,168 B | 14,762,168 B |
+| layers | 13 | 13 |
+| `User` / `Entrypoint` | `65532:65532` / `["/api-go"]` | identical |
+
+The binary is **byte for byte the same**. The whole-image digest differs — two
+BuildKits can diverge on timestamps and tar ordering with nothing being wrong.
+Which is why it is a measurement in `cicd-measured.json` and not a gate check: a
+difference there proves no defect.
+
+<LabExercise check="the agent cannot see the Docker socket" file="cicd/agent/Dockerfile">
+
+`cicd/agent/Dockerfile` **does not install the docker CLI**. That saves a few
+megabytes, and that is not why it is absent.
+
+Suppose somebody, to "unblock" a build, mounts the Docker socket into the agent.
+What happens to a stage that calls `docker build`?
+
+<Fragment slot="hint">
+Think about what the gate can tell apart: a stage that fails, and a stage that
+quietly works.
+</Fragment>
+
+<Fragment slot="answer">
+
+The stage fails with `docker: not found` — and failing loudly is the point.
+
+If the binary were there, mounting the socket would make the build **work**, and
+nobody would notice that the isolation had ended. The missing CLI turns a silent
+security regression into an immediate error.
+
+The gate covers both sides:
+
+```bash
+# the socket does not exist in the agent
+docker compose -f cicd/compose.yaml exec agent test -S /var/run/docker.sock  # fails
+# and neither does the binary
+docker compose -f cicd/compose.yaml exec agent command -v docker             # fails
+```
+
+It is defence in depth applied to something small: the door being locked is not
+enough, the key is not under the mat either.
+
+</Fragment>
+</LabExercise>
+
+## What to take away
+
+- Mounting `docker.sock` into the agent hands root on the host to whoever opens a
+  pull request.
+- `--privileged` is not "more permissive": it is confinement ceasing to exist.
+- Rootless BuildKit solves it, and under SELinux it needs `container_engine_t` —
+  not `label=disable`.
+- The Unix socket needs write access, and SELinux checks `connectto` against the
+  listening process, not the file.
+- The artifact is the same as the local build, byte for byte. Not an approximation.
+
+<Quiz set="building-without-a-daemon" />

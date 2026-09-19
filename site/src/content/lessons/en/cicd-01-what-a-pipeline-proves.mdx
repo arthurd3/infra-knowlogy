@@ -1,0 +1,122 @@
+---
+key: what-a-pipeline-proves
+lang: en
+track: cicd
+order: 1
+title: What a pipeline actually proves
+summary: Six stages, each answering a different question. Most pipelines answer only the first one and let you believe they answered the other five.
+minutes: 14
+tags: [cicd, jenkins, pipeline, buildkit, trivy, cosign]
+sources:
+  - label: "Jenkins — Pipeline"
+    url: "https://www.jenkins.io/doc/book/pipeline/"
+    kind: docs
+  - label: "OWASP — Top 10 CI/CD Security Risks"
+    url: "https://owasp.org/www-project-top-10-ci-cd-security-risks/"
+    kind: spec
+    accessed: "2026-09-19"
+  - label: "DORA — 2025: Year in review"
+    url: "https://dora.dev/insights/dora-2025-year-in-review/"
+    kind: blog
+    accessed: "2026-09-19"
+---
+
+import PipelineStages from "../../../components/diagrams/PipelineStages.astro";
+import CicdMeasurements from "../../../components/islands/CicdMeasurements.tsx";
+
+"The pipeline passed" means nothing on its own. Passed what?
+
+A pipeline is a sequence of **questions**, and each stage answers one. Its worth
+is not in having many stages — it is in knowing exactly what each one proves, and
+what it does **not**.
+
+<PipelineStages />
+
+## The six questions
+
+| stage | the question it answers | what it does NOT answer |
+|---|---|---|
+| `lint` | is this written the way this house writes? | whether it works |
+| `build` | does this compile into an image? | whether it is correct |
+| `scan` | does the image carry a known vulnerability? | whether it has an unknown one |
+| `sign` | was this built by you? | that the contents are good |
+| `verify` | does the signature check out? | that the verifier was the right party |
+| `archive` | does the artifact outlive the job? | that anyone will use it |
+
+The right-hand column is the one that matters. A green scanner does not mean
+"safe", it means "none of the CVEs this database knows about today". A valid
+signature does not mean "good code", it means "nobody swapped the image between
+build and deploy".
+
+<Callout type="why" label="Why the order is not negotiable">
+Scanning an image that did not build is nothing. Signing an image that failed the
+scanner is **signing the vulnerability** — now with your key, which is worse than
+not signing, because it adds a false guarantee.
+
+This repository's `.github/workflows/ci.yml` uses the same order, and its opening
+comment says why in one line: *"lint is cheap and catches syntax errors in
+seconds; the build is expensive; the scan only makes sense over an image that
+built; and signing only makes sense over an image that passed the scan."*
+</Callout>
+
+## The numbers from this machine
+
+<CicdMeasurements client:visible lang="en" />
+
+Two things worth noticing in that table.
+
+**`scan` is the most expensive stage**, for a reason that surprises anyone
+expecting the build to dominate: Trivy needs the vulnerability database, and it
+consults it for three images. The build, with a warm cache, costs less than half
+of that.
+
+**Cold and warm differ by more than a factor of two.** That gap is the one
+structural advantage of CI you host yourself — and it is the subject of the last
+lesson in this track.
+
+## The stage that proves the others work
+
+A gate that only knows the happy path proves nothing. It would pass just as
+happily with `lint` switched off, and nobody would notice until the day they
+needed it.
+
+That is why this module has a **negative pipeline**: a job whose only purpose is
+to fail. It runs the same lint image, with the same rule and the same hadolint —
+one argument differs, and it pulls a deliberately bad fixture into the sweep.
+
+<Callout type="trap" label="The test that passes when the system fails">
+Same logic as the trap where kind accepted NetworkPolicy without enforcing it:
+the API answers 200, the object shows up in the cluster, and nothing happens. The
+only way to know a rule holds is to **watch a violation get refused**.
+
+`make cicd-verify` demands two things of the negative job: that it end in
+`FAILURE`, and that the console show the violation code (`DL3006`). Failing for
+the wrong reason — network down, disk full — also ends in `FAILURE`, and would
+prove nothing.
+</Callout>
+
+<RunIt title="See both pipelines, the one that passes and the one that fails" file="cicd/Jenkinsfile">
+
+```bash
+make cicd-prereqs   # proves this host can build images with no daemon
+make cicd-up        # brings up Jenkins — password lands in cicd/secrets/
+
+# The good pipeline: lint -> build -> scan -> sign -> verify -> archive
+# The negative one: a fixture with a hadolint violation, which MUST fail.
+# Open both at http://localhost:8090 and compare the consoles.
+
+make cicd-verify    # the 35 checks, negative proof included
+make cicd-down
+```
+
+</RunIt>
+
+## What to take away
+
+- Every stage answers **one** question. Knowing which is half the work.
+- The order exists because signing an unscanned image adds a false guarantee —
+  worse than none at all.
+- A green scanner means "no CVE known today", not "safe".
+- A gate with no negative proof is a gate you cannot tell is switched on.
+
+<Quiz set="what-a-pipeline-proves" />
