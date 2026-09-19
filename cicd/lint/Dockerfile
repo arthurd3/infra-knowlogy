@@ -6,7 +6,7 @@
 # um lint precisa fazer.
 #
 # Construído com o repositório inteiro como contexto.
-FROM hadolint/hadolint:2.14.0-alpine
+FROM hadolint/hadolint:v2.14.0-alpine@sha256:7aba693c1442eb31c0b015c129697cb3b6cb7da589d85c7562f9deb435a6657c
 
 WORKDIR /work
 COPY . /work
