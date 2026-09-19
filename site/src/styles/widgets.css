@@ -340,3 +340,88 @@
 .km__cell--good .km__value { color: var(--accent-text); }
 .km__caption { margin: var(--space-sm) 0 0; padding-top: var(--space-sm);
                border-top: 1px solid var(--border); font-size: 0.75rem; color: var(--text-faint); }
+
+/* ── Quiz (.qz) ───────────────────────────────────────────────────────────
+   A checagem rápida do fim da lição. O estado visual carrega a informação:
+   ao conferir, a alternativa certa fica verde, a que o leitor marcou fica
+   vermelha se estiver errada, e as demais esmaecem — mas TODAS mostram a
+   explicação, porque saber por que a errada está errada é o ponto. */
+
+.qz {
+  border: 1px solid var(--border); border-radius: var(--radius-lg);
+  background: var(--bg-raised); padding: 1rem 1.1rem 1.1rem;
+  margin: 2rem 0; font-size: 0.9375rem;
+}
+.qz--empty { color: var(--text-faint); font-size: 0.875rem; }
+
+.qz__head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 0.75rem; margin-bottom: 0.85rem;
+  padding-bottom: 0.6rem; border-bottom: 1px solid var(--border);
+}
+.qz__title {
+  font-size: 0.75rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--text-muted);
+}
+.qz__counter {
+  font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.qz__fieldset { border: none; margin: 0; padding: 0; min-width: 0; }
+/* O fieldset inteiro fica `disabled` depois de conferir, para o leitor não
+   trocar a resposta depois de ver o gabarito. O opacity padrão do navegador
+   apagaria as explicações junto — por isso a cor é devolvida à mão. */
+.qz__fieldset:disabled { opacity: 1; }
+.qz__q {
+  padding: 0; margin-bottom: 0.75rem;
+  font-size: 1rem; font-weight: 600; line-height: 1.45; color: var(--text);
+}
+.qz__q code { font-size: 0.9375rem; }
+
+.qz__opt {
+  display: grid; grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.15rem 0.55rem; align-items: start;
+  padding: 0.55rem 0.7rem; margin-bottom: 0.35rem;
+  border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--bg-sunken); cursor: pointer;
+  transition: border-color var(--transition), background var(--transition);
+}
+.qz__fieldset:disabled .qz__opt { cursor: default; }
+.qz__opt:hover { border-color: var(--border-strong); }
+.qz__opt input { accent-color: var(--accent); width: 1rem; height: 1rem; margin-top: 0.15rem; }
+.qz__opt-text { line-height: 1.45; }
+.qz__opt.is-picked { border-color: var(--border-strong); }
+
+.qz__opt.is-correct {
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.qz__opt.is-wrong {
+  background: var(--danger-soft);
+  border-color: color-mix(in srgb, var(--danger) 45%, transparent);
+}
+.qz__opt.is-dim { opacity: 0.72; }
+
+.qz__why {
+  grid-column: 2; margin-top: 0.3rem;
+  font-size: 0.8125rem; line-height: 1.5; color: var(--text-muted);
+}
+.qz__opt.is-correct .qz__why { color: var(--accent-text); }
+.qz__opt.is-wrong .qz__why { color: var(--danger); }
+
+.qz__foot {
+  display: flex; align-items: center; gap: 0.75rem;
+  margin-top: 0.85rem; padding-top: 0.75rem; border-top: 1px solid var(--border);
+}
+.qz__verdict {
+  font-size: 0.8125rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.05em; margin-right: auto;
+}
+.qz__verdict.is-correct { color: var(--accent-text); }
+.qz__verdict.is-wrong { color: var(--danger); }
+.qz__foot .btn { margin-left: auto; }
+.qz__verdict + .btn { margin-left: 0; }
+
+.qz__result { margin: 0 0 0.85rem; color: var(--text-muted); }
+.qz__result strong { color: var(--text); }

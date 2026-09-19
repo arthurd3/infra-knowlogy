@@ -1,0 +1,73 @@
+---
+/**
+ * O tradeoff: duas opções, e — o que importa — o CRITÉRIO de quando cada uma
+ * ganha.
+ *
+ * Uma tabela comparativa lista atributos e deixa a decisão com o leitor, que
+ * normalmente não tem repertório para tomá-la. Este componente exige
+ * `whenA`/`whenB`: sem eles não há tradeoff, há só comparação — e o teste em
+ * site/tests/content.test.ts reprova o uso sem os dois.
+ *
+ * `chose` marca visualmente o que ESTE repositório escolheu, e `adr` liga à
+ * decisão registrada. A intenção é que o leitor possa discordar com
+ * informação, não que ele obedeça.
+ *
+ * O texto das props passa por `set:html` (mesma licença que o `caption` do
+ * Figure): aceita <b>, <code> e <a>. O idioma sai da URL, como no Callout.
+ */
+import { useTranslations, repoFile, type Lang } from "../i18n/ui";
+
+interface Props {
+  /** Rótulo da opção A. Aceita HTML inline. */
+  a: string;
+  /** Rótulo da opção B. Aceita HTML inline. */
+  b: string;
+  /** Quando a opção A é a certa. Obrigatório: é o ensino. */
+  whenA: string;
+  /** Quando a opção B é a certa. Obrigatório: é o ensino. */
+  whenB: string;
+  /** Qual delas este repositório usa. `none` quando a escolha é do leitor. */
+  chose?: "a" | "b" | "none";
+  /** Uma frase dizendo por quê. Aceita HTML inline. */
+  verdict?: string;
+  /** Slug do ADR, sem extensão. Ex.: "0004-pin-por-digest". */
+  adr?: string;
+}
+const { a, b, whenA, whenB, chose = "none", verdict, adr } = Astro.props;
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+const t = useTranslations(lang);
+---
+<section class="tradeoff">
+  <span class="tradeoff__eyebrow">{t("tradeoff.title")}</span>
+
+  <div class="tradeoff__grid">
+    <article class={`tradeoff__col${chose === "a" ? " is-chosen" : ""}`}>
+      <h4 class="tradeoff__opt"><span set:html={a} /></h4>
+      <p class="tradeoff__when-label">{t("tradeoff.when")}</p>
+      <div class="tradeoff__when" set:html={whenA} />
+    </article>
+
+    <article class={`tradeoff__col${chose === "b" ? " is-chosen" : ""}`}>
+      <h4 class="tradeoff__opt"><span set:html={b} /></h4>
+      <p class="tradeoff__when-label">{t("tradeoff.when")}</p>
+      <div class="tradeoff__when" set:html={whenB} />
+    </article>
+  </div>
+
+  {(verdict || adr) && (
+    <footer class="tradeoff__foot">
+      {verdict && (
+        <p class="tradeoff__verdict">
+          <strong>{t("tradeoff.chose")}:</strong> <span set:html={verdict} />
+        </p>
+      )}
+      {adr && (
+        <a class="tradeoff__adr" href={repoFile(`docs/adr/${adr}.md`)}
+           rel="noopener noreferrer" target="_blank">
+          {t("tradeoff.seeAdr")} — <code>{adr}</code>
+        </a>
+      )}
+    </footer>
+  )}
+</section>

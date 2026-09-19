@@ -1,0 +1,48 @@
+---
+/**
+ * A checagem rápida no fim de uma lição.
+ *
+ * As perguntas NÃO ficam aqui nem no MDX: ficam em
+ * `src/data/quizzes/<key>.json`, um arquivo por lição, com `pt` e `en` lado a
+ * lado. Isso é de propósito — é o mesmo lugar de onde as outras ilhas leem
+ * (`measured.json`, `k8s-measured.json`, `recorded-gate.json`), e põe as duas
+ * versões de uma pergunta no mesmo arquivo, onde a divergência entre elas fica
+ * óbvia na revisão em vez de esperar o teste reprovar.
+ *
+ * A resolução do conjunto acontece AQUI, em tempo de build. O `import.meta.glob`
+ * roda no servidor; só as perguntas do idioma desta página atravessam para o
+ * cliente como props da ilha. Se o glob fosse feito dentro do .tsx, o site
+ * inteiro carregaria os quizzes de todas as lições em toda lição.
+ *
+ * O `lang` sai da URL e é repassado à ilha — que não tem como consultá-la,
+ * porque roda no navegador.
+ */
+import QuizBoard from "./islands/QuizBoard.tsx";
+import type { Lang } from "../i18n/ui";
+
+interface Props {
+  /** Nome do arquivo em src/data/quizzes/, sem extensão. É a `key` da lição. */
+  set: string;
+}
+const { set } = Astro.props;
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+
+interface Option { text: string; correct?: boolean; why: string }
+interface Question { q: string; options: Option[] }
+type QuizFile = { pt: Question[]; en: Question[] };
+
+const files = import.meta.glob<QuizFile>("../data/quizzes/*.json", { eager: true });
+const entry = files[`../data/quizzes/${set}.json`];
+
+// Falhar o BUILD, e não a página. Um `set` escrito errado renderizaria um
+// widget vazio em produção; aqui ele derruba o build com o nome do arquivo.
+if (!entry) {
+  throw new Error(
+    `Quiz: não existe src/data/quizzes/${set}.json — conjuntos disponíveis: ` +
+      Object.keys(files).map((f) => f.replace(/.*\/|\.json$/g, "")).join(", "),
+  );
+}
+const questions = entry[lang];
+---
+<QuizBoard client:visible lang={lang} questions={questions} />

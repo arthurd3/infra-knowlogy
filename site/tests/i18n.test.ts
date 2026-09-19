@@ -1,5 +1,7 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { defaultLang, languages, repoFile, repoUrl, trackLabel, ui } from "../src/i18n/ui";
+import { defaultLang, languages, repoFile, repoUrl, TRACKS, trackBadge, trackLabel, ui } from "../src/i18n/ui";
 
 /**
  * A moldura do site é bilíngue tanto quanto as lições.
@@ -30,17 +32,36 @@ describe("dicionário de interface", () => {
       (k) => ui.pt[k as keyof typeof ui.pt] === ui.en[k as keyof typeof ui.en],
     );
     expect(mesmos.sort()).toEqual([
-      "site.title", "track.kubernetes",
+      "site.title", "track.cicd", "track.kubernetes",
     ]);
   });
 
-  it("cobre as três trilhas com rótulo e descrição", () => {
-    for (const track of ["fundamentos", "producao", "kubernetes"] as const) {
+  it("cobre TODA trilha com rótulo, descrição e cor", () => {
+    // Itera TRACKS em vez de uma lista literal: acrescentar uma trilha e
+    // esquecer de traduzi-la passava calado aqui, porque o teste só conhecia
+    // as três que existiam quando ele foi escrito.
+    for (const track of TRACKS) {
+      expect(trackBadge(track), `${track}: sem classe de cor`).toMatch(/^badge--/);
       for (const lang of Object.keys(languages) as Array<keyof typeof ui>) {
-        expect(trackLabel(lang, track).length).toBeGreaterThan(0);
-        expect(ui[lang][`track.${track}.desc` as keyof typeof ui.pt].length).toBeGreaterThan(20);
+        expect(trackLabel(lang, track).length, `${lang}/${track}: sem rótulo`).toBeGreaterThan(0);
+        expect(
+          ui[lang][`track.${track}.desc` as keyof typeof ui.pt].length,
+          `${lang}/${track}: descrição curta demais`,
+        ).toBeGreaterThan(20);
       }
     }
+  });
+
+  it("toda classe de badge existe no CSS", () => {
+    // A trilha pode ter rótulo e descrição e mesmo assim sair sem cor: a
+    // classe é escrita num arquivo e definida em outro, e nada os liga.
+    const css = readFileSync(join(import.meta.dirname, "../src/styles/global.css"), "utf8");
+    for (const track of TRACKS) {
+      expect(css, `${track}: .${trackBadge(track)} não existe em global.css`)
+        .toContain(`.${trackBadge(track)} {`);
+    }
+    expect(css, "--track-cicd sem valor no tema claro e nos dois escuros")
+      .toMatch(/--track-cicd/);
   });
 
   it("aponta para o repositório certo", () => {

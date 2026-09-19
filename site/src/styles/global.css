@@ -29,6 +29,7 @@
   --track-fund:    #0b6b5e;
   --track-prod:    #6a3fa0;
   --track-k8s:     #1d63c2;
+  --track-cicd:    #a82a63;
 
   --radius:        8px;
   --radius-lg:     14px;
@@ -89,6 +90,7 @@
     --track-fund:    #4dd4bd;
     --track-prod:    #b490e8;
     --track-k8s:     #74a9f0;
+    --track-cicd:    #ef92ba;
 
     --shadow:        0 1px 2px rgb(0 0 0 / 0.4), 0 4px 14px rgb(0 0 0 / 0.25);
 
@@ -117,6 +119,7 @@
   --track-fund:    #4dd4bd;
   --track-prod:    #b490e8;
   --track-k8s:     #74a9f0;
+  --track-cicd:    #ef92ba;
   --shadow:        0 1px 2px rgb(0 0 0 / 0.4), 0 4px 14px rgb(0 0 0 / 0.25);
   color-scheme: dark;
 }
@@ -338,6 +341,7 @@ blockquote {
 .badge--fund { color: var(--track-fund); border-color: color-mix(in srgb, var(--track-fund) 35%, transparent); }
 .badge--prod { color: var(--track-prod); border-color: color-mix(in srgb, var(--track-prod) 35%, transparent); }
 .badge--k8s { color: var(--track-k8s); border-color: color-mix(in srgb, var(--track-k8s) 35%, transparent); }
+.badge--cicd { color: var(--track-cicd); border-color: color-mix(in srgb, var(--track-cicd) 35%, transparent); }
 
 .card {
   display: block; text-decoration: none; color: inherit;
@@ -697,3 +701,183 @@ blockquote {
 .footer__links { display: flex; flex-wrap: wrap; gap: var(--space-md); }
 .footer a { color: var(--text-muted); text-decoration: none; }
 .footer a:hover { color: var(--text); text-decoration: underline; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Tradeoff, relato de campo e exercício
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Tradeoff: duas colunas e o critério de escolha ───────────────────────── */
+
+.tradeoff {
+  margin: var(--space-xl) 0;
+  border: 1px solid var(--border-strong); border-radius: var(--radius-lg);
+  background: var(--bg-raised); overflow: hidden;
+}
+.tradeoff__eyebrow {
+  display: block; padding: var(--space-sm) var(--space-md);
+  font-size: 0.6875rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.08em; color: var(--text-faint);
+  background: var(--bg-sunken); border-bottom: 1px solid var(--border);
+}
+.tradeoff__grid { display: grid; }
+@media (min-width: 640px) { .tradeoff__grid { grid-template-columns: 1fr 1fr; } }
+.tradeoff__col { padding: var(--space-md); min-width: 0; }
+/* A borda divisória troca de eixo com o layout: vertical em duas colunas,
+   horizontal quando elas empilham no celular. Sem isto, no mobile as duas
+   opções viram um bloco só de texto corrido. */
+.tradeoff__col + .tradeoff__col { border-top: 1px solid var(--border); }
+@media (min-width: 640px) {
+  .tradeoff__col + .tradeoff__col { border-top: none; border-left: 1px solid var(--border); }
+}
+/* A opção escolhida por este repositório ganha uma barra de acento à esquerda.
+   É informação, não decoração: o leitor precisa saber o que está em uso aqui
+   para calibrar o resto da lição. */
+.tradeoff__col.is-chosen { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
+.tradeoff__opt { margin: 0 0 var(--space-xs); font-size: 0.9375rem; font-weight: 640; letter-spacing: -0.01em; }
+.tradeoff__opt code { font-size: 0.875rem; }
+.tradeoff__when-label {
+  margin: var(--space-sm) 0 var(--space-2xs);
+  font-size: 0.6875rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--text-faint);
+}
+.tradeoff__when { font-size: 0.9375rem; color: var(--text-muted); }
+.tradeoff__when > :first-child { margin-top: 0; }
+.tradeoff__when > :last-child { margin-bottom: 0; }
+.tradeoff__foot {
+  padding: var(--space-sm) var(--space-md);
+  border-top: 1px solid var(--border); background: var(--bg-sunken);
+  font-size: 0.875rem;
+}
+.tradeoff__verdict { margin: 0; color: var(--text-muted); }
+.tradeoff__verdict strong { color: var(--text); }
+.tradeoff__adr {
+  display: inline-block; margin-top: var(--space-xs);
+  font-size: 0.75rem; color: var(--text-muted);
+}
+.tradeoff__adr:hover { color: var(--accent-text); }
+
+/* ── FieldNote: o que foi citado, e não medido aqui ───────────────────────── */
+
+.field {
+  margin: var(--space-xl) 0; padding: var(--space-md);
+  border: 1px dashed var(--border-strong); border-radius: var(--radius-lg);
+  background: var(--bg-sunken);
+}
+/* Tracejado de propósito: a borda contínua é do que foi medido nesta máquina
+   (callout, runit, figure). Ver a diferença de longe é o ponto do ADR 0009. */
+.field__head {
+  display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-xs);
+  margin-bottom: var(--space-sm);
+}
+.field__icon { width: 1.05rem; height: 1.05rem; flex: none; color: var(--text-muted); }
+.field__label {
+  font-size: 0.75rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--text-muted);
+}
+.field__flag {
+  margin-left: auto;
+  font-size: 0.6875rem; letter-spacing: 0.03em;
+  color: var(--text-faint);
+  border: 1px solid var(--border); border-radius: 999px;
+  padding: 0.1rem 0.5rem; background: var(--bg-raised); white-space: nowrap;
+}
+.field__body { font-size: 0.9375rem; }
+.field__body > :first-child { margin-top: 0; }
+.field__body > :last-child { margin-bottom: 0; }
+.field__foot {
+  margin-top: var(--space-sm); padding-top: var(--space-sm);
+  border-top: 1px dashed var(--border);
+  font-size: 0.75rem; color: var(--text-faint);
+}
+.field__foot a { color: var(--text-muted); }
+.field__foot a:hover { color: var(--accent-text); }
+.field--postmortem .field__icon, .field--postmortem .field__label { color: var(--danger); }
+.field--scale     .field__icon, .field--scale     .field__label { color: var(--track-cicd); }
+.field--thread    .field__icon, .field--thread    .field__label { color: var(--track-prod); }
+.field--spec      .field__icon, .field--spec      .field__label { color: var(--track-k8s); }
+
+/* ── LabExercise: a pergunta cuja resposta é um comando ───────────────────── */
+
+.lab {
+  margin: var(--space-xl) 0;
+  border: 1px solid var(--accent); border-radius: var(--radius-lg);
+  background: var(--bg-raised); overflow: hidden;
+}
+.lab__head {
+  display: flex; align-items: center; gap: var(--space-xs);
+  padding: var(--space-sm) var(--space-md);
+  background: var(--accent-soft); border-bottom: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+}
+.lab__icon { width: 1rem; height: 1rem; flex: none; color: var(--accent-text); }
+.lab__title {
+  font-size: 0.75rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--accent-text);
+}
+.lab__question { padding: var(--space-md) var(--space-md) var(--space-sm); font-size: 0.9375rem; }
+.lab__question > :first-child { margin-top: 0; }
+.lab__question > :last-child { margin-bottom: 0; }
+.lab__details { border-top: 1px dashed var(--border); }
+.lab__details > summary {
+  cursor: pointer; padding: var(--space-sm) var(--space-md);
+  font-size: 0.8125rem; font-weight: 600; color: var(--text-muted);
+}
+.lab__details > summary:hover { color: var(--text); }
+.lab__details > summary::marker { color: var(--text-faint); }
+.lab__reveal { padding: 0 var(--space-md) var(--space-sm); font-size: 0.9375rem; }
+.lab__reveal > :first-child { margin-top: 0; }
+.lab__reveal pre { margin: var(--space-sm) 0; }
+.lab__foot {
+  display: flex; flex-wrap: wrap; gap: var(--space-md);
+  justify-content: space-between;
+  padding: var(--space-xs) var(--space-md) var(--space-sm);
+  border-top: 1px solid var(--border);
+  font-size: 0.75rem; color: var(--text-faint);
+}
+.lab__foot code { font-size: 0.75rem; }
+
+/* ── Figura que carrega imagem de terceiro ────────────────────────────────── */
+
+.figure__canvas--raster img {
+  display: block; width: 100%; height: auto; max-width: 100%;
+  border-radius: var(--radius); background: var(--bg-sunken);
+}
+.figure__credit {
+  margin: var(--space-sm) 0 0; font-size: 0.75rem; color: var(--text-faint);
+}
+.figure__credit a { color: var(--text-muted); }
+.figure__credit a:hover { color: var(--accent-text); }
+.figure__license { font-family: var(--font-mono); font-size: 0.6875rem; }
+/* Quando há crédito E legenda, a legenda já traz a borda de cima; sem ela o
+   crédito ficaria colado no desenho. */
+.figure__credit + figcaption { margin-top: var(--space-xs); }
+
+/* Anotação numerada sobre uma figura — o formato "explique esta imagem".
+   Reaproveita o slot `legend` do Figure, que existia sem consumidor. */
+.figure__notes {
+  display: grid; gap: var(--space-2xs);
+  margin: var(--space-sm) 0 0; padding: 0 0 0 1.4rem;
+  font-size: 0.8125rem; color: var(--text-muted);
+}
+.figure__notes li::marker { color: var(--accent); font-weight: 700; }
+.figure__notes b { color: var(--text); font-weight: 620; }
+
+/* Fontes em dois grupos: documentação e relato de campo (ADR 0009). */
+.sources__group {
+  margin: var(--space-md) 0 var(--space-2xs);
+  font-size: 0.75rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--text-faint);
+}
+.sources__group:first-of-type { margin-top: var(--space-sm); }
+.sources__when { color: var(--text-faint); font-size: 0.8125rem; }
+
+/* Placa clara para imagem de terceiro desenhada para fundo branco. Ela não
+   acompanha o tema — é exatamente o custo que o ADR 0010 registra — então
+   recebe o fundo para o qual foi desenhada, em vez de ficar ilegível no tema
+   escuro. A borda existe para a placa não flutuar solta no escuro. */
+.figure__canvas--plate {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-sm);
+}
+.figure__canvas--plate img { background: transparent; }

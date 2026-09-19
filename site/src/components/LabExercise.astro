@@ -1,0 +1,62 @@
+---
+/**
+ * O exercício de laboratório: a pergunta cuja resposta é um comando.
+ *
+ * O `RunIt` é prescritivo — ele diz o que rodar. Este é avaliativo: ele
+ * pergunta o que vai acontecer, e o leitor descobre rodando. A resposta fica
+ * num `<details>` fechado, porque ler o gabarito antes de tentar é o jeito
+ * mais rápido de não aprender nada.
+ *
+ * `check` é o detalhe que amarra o exercício ao resto do repositório: ele
+ * nomeia a checagem do portão que prova a mesma coisa. Se a resposta aqui
+ * estiver errada, o `make verify` reprova — o gabarito e o portão não podem
+ * divergir sem alguém notar.
+ */
+import { useTranslations, repoFile, type Lang } from "../i18n/ui";
+
+interface Props {
+  /** Título do exercício. Padrão: o rótulo genérico do idioma. */
+  title?: string;
+  /** Nome da checagem do portão que prova a resposta. */
+  check?: string;
+  /** Arquivo do repositório que o exercício exercita. */
+  file?: string;
+}
+const { title, check, file } = Astro.props;
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+const t = useTranslations(lang);
+---
+<section class="lab">
+  <header class="lab__head">
+    <svg class="lab__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+         stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M9 2v6.5L4.4 17A2 2 0 0 0 6.2 20h11.6a2 2 0 0 0 1.8-3L15 8.5V2"></path>
+      <path d="M8 2h8M7.5 14h9"></path>
+    </svg>
+    <span class="lab__title">{title ?? t("lab.title")}</span>
+  </header>
+
+  <div class="lab__question"><slot /></div>
+
+  {Astro.slots.has("hint") && (
+    <details class="lab__details lab__details--hint">
+      <summary>{t("lab.hint")}</summary>
+      <div class="lab__reveal"><slot name="hint" /></div>
+    </details>
+  )}
+
+  <details class="lab__details">
+    <summary>{t("lab.answer")}</summary>
+    <div class="lab__reveal"><slot name="answer" /></div>
+  </details>
+
+  {(check || file) && (
+    <footer class="lab__foot">
+      {check && <span><strong>{t("lab.provenBy")}:</strong> <code>{check}</code></span>}
+      {file && (
+        <a href={repoFile(file)} rel="noopener noreferrer" target="_blank"><code>{file}</code></a>
+      )}
+    </footer>
+  )}
+</section>

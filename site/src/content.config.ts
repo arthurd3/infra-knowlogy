@@ -21,7 +21,7 @@ const lessons = defineCollection({
     // delas seria descartada silenciosamente da coleção.
     key: z.string(),
     lang: z.enum(["pt", "en"]),
-    track: z.enum(["fundamentos", "producao", "kubernetes"]),
+    track: z.enum(["fundamentos", "producao", "kubernetes", "cicd"]),
     order: z.number().int().positive(),
 
     title: z.string(),
@@ -33,8 +33,27 @@ const lessons = defineCollection({
     tags: z.array(z.string()).default([]),
     // Fontes usadas para escrever a lição. Uma afirmação técnica sem origem
     // verificável não deveria estar aqui.
+    //
+    // `kind` separa as duas naturezas de fonte, e a página as agrupa por ele
+    // (ADR 0009). Documentação e especificação dizem como uma coisa DEVE se
+    // comportar; um postmortem, uma thread ou um blog de engenharia dizem o
+    // que aconteceu com alguém — é conhecimento valioso e de outra natureza,
+    // e misturar os dois numa lista só é o que faz uma opinião envelhecer
+    // dentro de uma lição parecendo um fato.
+    //
+    // `accessed` existe porque relato envelhece: uma thread de 2019 sobre
+    // custo de control plane fala de preços que já mudaram duas vezes.
     sources: z
-      .array(z.object({ label: z.string(), url: z.string().url() }))
+      .array(
+        z.object({
+          label: z.string(),
+          url: z.string().url(),
+          kind: z
+            .enum(["spec", "docs", "blog", "thread", "postmortem", "talk", "book"])
+            .default("docs"),
+          accessed: z.string().optional(),
+        }),
+      )
       .default([]),
   }),
 });

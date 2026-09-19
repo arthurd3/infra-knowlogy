@@ -48,14 +48,19 @@ export const ui = {
     "track.fundamentos": "Fundamentos",
     "track.producao": "Produção",
     "track.kubernetes": "Kubernetes",
+    "track.cicd": "CI/CD",
     "track.fundamentos.desc":
       "O que um container realmente é, como uma imagem é montada e por que o cache de build se comporta assim.",
     "track.producao.desc":
       "O que muda quando a stack precisa sobreviver a usuários reais: multi-stage, segurança, segredos e cadeia de suprimentos.",
     "track.kubernetes.desc":
       "A mesma stack, portada para um cluster kind: o que um orquestrador acrescenta — auto-cura, probes, rolling — medido lado a lado com o Compose.",
+    "track.cicd.desc":
+      "O mesmo pipeline em dois mundos: o GitHub Actions que já existe e um Jenkins self-hosted construído do zero — comparados por medição, não por preferência.",
     "lesson.minutes": "min de leitura",
     "lesson.sources": "Fontes",
+    "lesson.sources.docs": "Documentação e especificação",
+    "lesson.sources.field": "Relatos de campo",
     "lesson.next": "Próxima",
     "lesson.prev": "Anterior",
     "lesson.onThisPage": "Nesta página",
@@ -63,6 +68,45 @@ export const ui = {
     "callout.why": "Por quê",
     "callout.trap": "Pegadinha",
     "callout.danger": "Perigo",
+
+    // ── Tradeoff: a decisão com critério de quando aplicar ──────────────────
+    "tradeoff.title": "A escolha",
+    "tradeoff.when": "Quando vale a pena",
+    "tradeoff.chose": "O que este repositório escolheu",
+    "tradeoff.seeAdr": "Ver a decisão registrada",
+
+    // ── FieldNote: o que foi CITADO, e não medido nesta máquina ─────────────
+    "field.postmortem": "Relato de incidente",
+    "field.thread": "Discussão pública",
+    "field.blog": "Blog de engenharia",
+    "field.talk": "Palestra",
+    "field.scale": "Como se faz em escala",
+    "field.spec": "Especificação",
+    "field.notMeasured": "Não medido aqui",
+    "field.reportedBy": "relatado por",
+
+    // ── LabExercise: a pergunta cuja resposta é um comando ──────────────────
+    "lab.title": "Exercício",
+    "lab.hint": "Uma dica",
+    "lab.answer": "Ver a resposta",
+    "lab.provenBy": "O portão prova isto na checagem",
+
+    // ── Quiz ────────────────────────────────────────────────────────────────
+    "quiz.title": "Checagem rápida",
+    "quiz.question": "Pergunta",
+    "quiz.check": "Conferir",
+    "quiz.retry": "Tentar de novo",
+    "quiz.next": "Próxima pergunta",
+    "quiz.restart": "Recomeçar",
+    "quiz.correct": "Isso mesmo",
+    "quiz.wrong": "Ainda não",
+    "quiz.done": "Fim da checagem",
+    "quiz.score": "acertos de",
+
+    // ── Figura com imagem de terceiro ───────────────────────────────────────
+    "figure.source": "Fonte",
+    "figure.license": "Licença",
+    "figure.redrawn": "Redesenhado a partir de",
     "lesson.lesson": "Lição",
     "lang.switch": "Ver em inglês",
     "footer.built":
@@ -101,14 +145,19 @@ export const ui = {
     "track.fundamentos": "Fundamentals",
     "track.producao": "Production",
     "track.kubernetes": "Kubernetes",
+    "track.cicd": "CI/CD",
     "track.fundamentos.desc":
       "What a container actually is, how an image is assembled, and why the build cache behaves the way it does.",
     "track.producao.desc":
       "What changes when the stack has to survive real users: multi-stage, security, secrets and supply chain.",
     "track.kubernetes.desc":
       "The same stack, ported to a kind cluster: what an orchestrator adds — self-healing, probes, rolling updates — measured side by side with Compose.",
+    "track.cicd.desc":
+      "The same pipeline in two worlds: the GitHub Actions one that already exists, and a self-hosted Jenkins built from scratch — compared by measurement, not by preference.",
     "lesson.minutes": "min read",
     "lesson.sources": "Sources",
+    "lesson.sources.docs": "Documentation and specification",
+    "lesson.sources.field": "Field reports",
     "lesson.next": "Next",
     "lesson.prev": "Previous",
     "lesson.onThisPage": "On this page",
@@ -116,6 +165,45 @@ export const ui = {
     "callout.why": "Why",
     "callout.trap": "Gotcha",
     "callout.danger": "Danger",
+
+    // ── Tradeoff: the decision, with a rule for when to apply it ───────────
+    "tradeoff.title": "The trade-off",
+    "tradeoff.when": "When it pays off",
+    "tradeoff.chose": "What this repository chose",
+    "tradeoff.seeAdr": "See the recorded decision",
+
+    // ── FieldNote: what was CITED, not measured on this machine ────────────
+    "field.postmortem": "Incident report",
+    "field.thread": "Public thread",
+    "field.blog": "Engineering blog",
+    "field.talk": "Conference talk",
+    "field.scale": "How it is done at scale",
+    "field.spec": "Specification",
+    "field.notMeasured": "Not measured here",
+    "field.reportedBy": "reported by",
+
+    // ── LabExercise: the question whose answer is a command ────────────────
+    "lab.title": "Exercise",
+    "lab.hint": "A hint",
+    "lab.answer": "Show the answer",
+    "lab.provenBy": "The gate proves this in check",
+
+    // ── Quiz ───────────────────────────────────────────────────────────────
+    "quiz.title": "Quick check",
+    "quiz.question": "Question",
+    "quiz.check": "Check answer",
+    "quiz.retry": "Try again",
+    "quiz.next": "Next question",
+    "quiz.restart": "Start over",
+    "quiz.correct": "That is it",
+    "quiz.wrong": "Not quite",
+    "quiz.done": "Check complete",
+    "quiz.score": "right out of",
+
+    // ── Figure carrying a third-party image ────────────────────────────────
+    "figure.source": "Source",
+    "figure.license": "License",
+    "figure.redrawn": "Redrawn from",
     "lesson.lesson": "Lesson",
     "lang.switch": "Ver em português",
     "footer.built":
@@ -139,10 +227,31 @@ export function otherLang(lang: Lang): Lang {
   return lang === "pt" ? "en" : "pt";
 }
 
+/**
+ * Toda trilha do site, na ordem em que a jornada acontece.
+ *
+ * Fonte única desta união: o enum de `content.config.ts`, o array da home, o
+ * mapa de badge da página da lição e os testes todos derivam daqui. Antes,
+ * cada um repetia a lista à mão e acrescentar uma trilha era caçar literais.
+ */
+export const TRACKS = ["fundamentos", "producao", "kubernetes", "cicd"] as const;
+export type Track = (typeof TRACKS)[number];
+
 /** Rótulo localizado de uma trilha. */
-export function trackLabel(
-  lang: Lang,
-  track: "fundamentos" | "producao" | "kubernetes",
-): string {
+export function trackLabel(lang: Lang, track: Track): string {
   return ui[lang][`track.${track}` as UIKey];
+}
+
+/**
+ * Classe de cor da trilha. Mora aqui, junto do rótulo, porque os dois eram
+ * literais repetidos na home e na página da lição — e acrescentar uma trilha
+ * significava lembrar dos dois lugares.
+ */
+export function trackBadge(track: Track): string {
+  return {
+    fundamentos: "badge--fund",
+    producao: "badge--prod",
+    kubernetes: "badge--k8s",
+    cicd: "badge--cicd",
+  }[track];
 }

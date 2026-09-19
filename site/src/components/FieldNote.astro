@@ -1,0 +1,61 @@
+---
+/**
+ * O relato de campo — a afirmação CITADA, que não foi medida nesta máquina.
+ *
+ * O princípio do repositório é que toda afirmação técnica seja verificável por
+ * um comando. Isso é ótimo e tem um teto: nada do que acontece fora daqui —
+ * um postmortem, a escala de uma empresa grande, o consenso (ou a briga) de
+ * uma thread — cabe num `make verify`. A tentação é escrever esse conhecimento
+ * na prosa mesmo, onde ele fica indistinguível de uma medição. É assim que um
+ * número de blog vira lenda.
+ *
+ * A saída é declarar a diferença em vez de escondê-la (ADR 0009): este bloco
+ * SEMPRE imprime "não medido aqui — relatado por ‹source›" e SEMPRE carrega a
+ * URL. Sem fonte não existe relato de campo, existe opinião.
+ */
+import { useTranslations, type Lang } from "../i18n/ui";
+
+type Kind = "postmortem" | "thread" | "blog" | "talk" | "scale" | "spec";
+
+interface Props {
+  /** Que tipo de relato é este. Muda o rótulo e a cor da faixa. */
+  kind?: Kind;
+  /** Quem disse. Pessoa, empresa ou projeto. */
+  source: string;
+  /** Onde ler o original. Obrigatória. */
+  url: string;
+  /** Quando foi dito. Ano ou data — o leitor precisa saber se envelheceu. */
+  when?: string;
+}
+const { kind = "blog", source, url, when } = Astro.props;
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+const t = useTranslations(lang);
+
+const labels = {
+  postmortem: t("field.postmortem"),
+  thread: t("field.thread"),
+  blog: t("field.blog"),
+  talk: t("field.talk"),
+  scale: t("field.scale"),
+  spec: t("field.spec"),
+} as const;
+---
+<aside class={`field field--${kind}`}>
+  <header class="field__head">
+    <svg class="field__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+         stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+      <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z"></path>
+    </svg>
+    <strong class="field__label">{labels[kind]}</strong>
+    <span class="field__flag">{t("field.notMeasured")}</span>
+  </header>
+
+  <div class="field__body"><slot /></div>
+
+  <footer class="field__foot">
+    {t("field.reportedBy")}{" "}
+    <a href={url} rel="noopener noreferrer" target="_blank">{source}</a>{when && <>, {when}</>}
+  </footer>
+</aside>

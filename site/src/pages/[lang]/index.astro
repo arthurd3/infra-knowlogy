@@ -2,7 +2,7 @@
 import { getCollection } from "astro:content";
 import Base from "../../layouts/Base.astro";
 import GateRunner from "../../components/islands/GateRunner.tsx";
-import { useTranslations, otherLang, repoUrl, type Lang } from "../../i18n/ui";
+import { useTranslations, otherLang, repoUrl, TRACKS, trackBadge, type Lang, type Track } from "../../i18n/ui";
 import measured from "../../data/measured.json";
 
 export async function getStaticPaths() {
@@ -13,14 +13,12 @@ const lang = Astro.params.lang as Lang;
 const t = useTranslations(lang);
 
 const all = await getCollection("lessons", (e) => e.data.lang === lang);
-const byTrack = (track: "fundamentos" | "producao" | "kubernetes") =>
+const byTrack = (track: Track) =>
   all.filter((e) => e.data.track === track).sort((a, b) => a.data.order - b.data.order);
 
-const tracks = [
-  { id: "fundamentos" as const, badge: "badge--fund", lessons: byTrack("fundamentos") },
-  { id: "producao" as const, badge: "badge--prod", lessons: byTrack("producao") },
-  { id: "kubernetes" as const, badge: "badge--k8s", lessons: byTrack("kubernetes") },
-];
+// A lista sai de TRACKS (i18n/ui.ts), que é a ordem canônica da jornada.
+// Antes era um array literal aqui, e uma trilha nova exigia lembrar dele.
+const tracks = TRACKS.map((id) => ({ id, badge: trackBadge(id), lessons: byTrack(id) }));
 const first = tracks[0].lessons[0];
 
 // Os números da vitrine saem dos dados medidos, não de um literal na página.

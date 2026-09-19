@@ -3,7 +3,12 @@ import { getCollection, render } from "astro:content";
 import Base from "../../../layouts/Base.astro";
 import Callout from "../../../components/Callout.astro";
 import RunIt from "../../../components/RunIt.astro";
-import { useTranslations, otherLang, repoUrl, type Lang } from "../../../i18n/ui";
+import Tradeoff from "../../../components/Tradeoff.astro";
+import FieldNote from "../../../components/FieldNote.astro";
+import LabExercise from "../../../components/LabExercise.astro";
+import Quiz from "../../../components/Quiz.astro";
+import Figure from "../../../components/Figure.astro";
+import { useTranslations, otherLang, repoUrl, TRACKS, trackBadge, type Lang, type Track } from "../../../i18n/ui";
 
 export async function getStaticPaths() {
   const lessons = await getCollection("lessons");
@@ -30,10 +35,9 @@ let next = index >= 0 && index < siblings.length - 1 ? siblings[index + 1] : und
 
 // Fim de trilha não é fim do site. Sem isto, quem termina "fundamentos" cai
 // num beco sem saída e precisa voltar à home para descobrir que há mais.
-const ORDER = ["fundamentos", "producao", "kubernetes"] as const;
 let crossTrack: (typeof siblings)[number] | undefined;
 if (!next) {
-  const rest = ORDER.slice(ORDER.indexOf(entry.data.track as (typeof ORDER)[number]) + 1);
+  const rest = TRACKS.slice(TRACKS.indexOf(entry.data.track as Track) + 1);
   for (const track of rest) {
     const firstOf = (await getCollection("lessons", (e) => e.data.lang === lang && e.data.track === track))
       .sort((a, b) => a.data.order - b.data.order)[0];
@@ -45,12 +49,14 @@ if (!next) {
 // determinístico — sem tabela de tradução de URL.
 const altPath = `/${otherLang(lang)}/lessons/${entry.data.key}/`;
 const toc = headings.filter((h) => h.depth === 2 || h.depth === 3);
-const badgeOf = (track: string) => ({
-  fundamentos: "badge--fund",
-  producao: "badge--prod",
-  kubernetes: "badge--k8s",
-}[track] ?? "");
-const badgeClass = badgeOf(entry.data.track);
+const badgeClass = trackBadge(entry.data.track as Track);
+
+// As fontes saem em dois grupos (ADR 0009). Documentação e especificação dizem
+// como a coisa DEVE se comportar; relato de campo diz o que aconteceu com
+// alguém. São dois padrões de prova diferentes, e uma lista única os achata.
+const DOCS = new Set(["docs", "spec"]);
+const sourcesDocs = entry.data.sources.filter((s) => DOCS.has(s.kind));
+const sourcesField = entry.data.sources.filter((s) => !DOCS.has(s.kind));
 ---
 
 <Base lang={lang} title={`${entry.data.title} — ${t("site.title")}`}
@@ -92,18 +98,37 @@ const badgeClass = badgeOf(entry.data.track);
       </header>
       <hr />
 
-      <!-- Callout e RunIt são passados como componentes para o MDX poder usá-los
-           sem cada arquivo precisar importá-los. -->
-      <Content components={{ Callout, RunIt }} />
+      <!-- Injetados para o MDX poder usá-los sem cada arquivo precisar
+           importá-los — e, mais importante, para que eles peguem o idioma da
+           URL em vez de exigir uma prop `lang` repetida à mão em cada uso.
+           Esquecer essa prop num arquivo EN deixava a lição inglesa com um
+           rótulo em português, calada. -->
+      <Content components={{ Callout, RunIt, Tradeoff, FieldNote, LabExercise, Quiz, Figure }} />
 
       {entry.data.sources.length > 0 && (
         <section class="sources">
           <h2>{t("lesson.sources")}</h2>
-          <ul>
-            {entry.data.sources.map((s) => (
-              <li><a href={s.url} rel="noopener noreferrer" target="_blank">{s.label}</a></li>
-            ))}
-          </ul>
+          {[
+            { label: t("lesson.sources.docs"), items: sourcesDocs },
+            { label: t("lesson.sources.field"), items: sourcesField },
+          ].filter((g) => g.items.length > 0).map((g) => (
+            <>
+              {/* O subtítulo só aparece quando existem os DOIS grupos: numa
+                  lição que cita apenas documentação, um cabeçalho solto
+                  chamado "Documentação" não informa nada. */}
+              {sourcesDocs.length > 0 && sourcesField.length > 0 && (
+                <h3 class="sources__group">{g.label}</h3>
+              )}
+              <ul>
+                {g.items.map((s) => (
+                  <li>
+                    <a href={s.url} rel="noopener noreferrer" target="_blank">{s.label}</a>
+                    {s.accessed && <span class="sources__when"> · {s.accessed}</span>}
+                  </li>
+                ))}
+              </ul>
+            </>
+          ))}
         </section>
       )}
 
