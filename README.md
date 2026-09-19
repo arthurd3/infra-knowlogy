@@ -132,10 +132,10 @@ seconds instead of paying for fifteen containers.
 ## The lessons
 
 22 lessons — 11 topics, in English and Portuguese — under
-`site/src/content/lessons/`, with 15 hand-drawn SVG diagrams and six interactive
-widgets. The diagrams are written as markup, not exported as pictures: they
-inherit the light/dark theme from CSS custom properties, stay sharp at any zoom
-and show up in `git diff` as text.
+`site/src/content/lessons/`, with 15 hand-drawn SVG diagrams and seven
+interactive widgets. The diagrams are written as markup, not exported as
+pictures: they inherit the light/dark theme from CSS custom properties, stay
+sharp at any zoom and show up in `git diff` as text.
 
 **Fundamentals track:** what a container actually is · images, layers and digests
 · the Dockerfile instruction by instruction · the build cache · lifecycle and
@@ -147,6 +147,34 @@ limits, measured · from compose.yaml to Deployment, block by block · liveness
 vs readiness, with the database outage staged and counted. The numbers these
 lessons cite are written by `make k8s-verify` into
 `site/src/data/k8s-measured.json`.
+
+**Two kinds of claim, told apart on the page.** Everything this repository
+measures is proven by a command in the gate. Plenty of what matters, though,
+cannot be measured here: how large organisations actually operate, when a VM
+beats a container, what went wrong for somebody else. That knowledge is welcome
+— under a different standard of proof. A `FieldNote` is drawn with a dashed
+border (a solid one means measured), always names its source and date, and
+always prints *"not measured here"*. A `Tradeoff` is refused by the test suite
+unless it states **when each side wins**, because a comparison table hands the
+decision back to the reader who lacked the background to make it.
+[ADR 0009](docs/adr/0009-afirmacao-medida-e-afirmacao-citada.md) records why.
+
+**Every lesson asks something back.** A `Quiz` explains *every* option, the
+wrong ones included — a widget that merely paints the right answer green
+teaches you to recognise the answer key, not the subject. A `LabExercise` asks
+a question whose answer is a command, and names the gate check that proves it.
+Two tests fail a lesson that arrives without a diagram, or without an exercise.
+
+**Third-party images, with provenance.** A canonical diagram — the Kubernetes
+components one, say — is worth showing as the reader will meet it elsewhere.
+`Figure` takes `src` only alongside a visible credit and a license that was
+actually checked; the generated HTML is verified for it. The catch this turned
+up is recorded in
+[ADR 0010](docs/adr/0010-imagens-de-terceiros.md): draw.io SVG exports embed a
+**base64 PNG of every text label**, and an `<img>` takes that raster path —
+254 KB for the Kubernetes diagram, blurry text, a frozen renderer.
+`tools/scripts/flatten-drawio-svg.py` turns the labels back into real `<text>`
+and the file drops to 80 KB.
 
 **Run the checks from the page.** Two widgets talk to the running stack instead
 of describing it. `GateRunner` fires the same seven checks as
@@ -227,7 +255,7 @@ docs/ROADMAP.md the modules: done, in progress, reserved
 ```
 
 Decisions and the alternatives that were **rejected** live in
-[`docs/adr/`](docs/adr/) — six records, written in Portuguese. `CLAUDE.md`
+[`docs/adr/`](docs/adr/) — ten records, written in Portuguese. `CLAUDE.md`
 records the conventions and the traps
 already hit — SELinux and Compose secrets, `cap_drop` breaking `exec()` on a
 binary with file capabilities, `build:` without `target:` shipping the wrong

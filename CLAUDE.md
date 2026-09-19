@@ -102,6 +102,15 @@ justamente por isso.
     widget fica no HTML servidor, inerte. Não é bug do site: ao tirar um
     screenshot — que força a pintura — a hidratação completa. Vale lembrar
     antes de sair caçando bug de hidratação que não existe.
+21. **SVG do draw.io rasteriza o texto quando servido por `<img>`.** O export
+    do draw.io — formato da maioria dos diagramas de documentação, o do
+    Kubernetes incluído — não usa `<text>`: cada rótulo é um `<switch>` com um
+    `<foreignObject>` de HTML e um `<image>` com um **PNG em base64** do rótulo.
+    Inline no HTML o navegador usa o HTML; dentro de `<img src="…svg">` ele cai
+    no PNG. Medido no diagrama de componentes do k8s: **254 KB, sendo 176 KB de
+    PNG**, texto borrado e o renderizador do Chrome congelando ao pintar.
+    `tools/scripts/flatten-drawio-svg.py` converte para `<text>` de verdade
+    (80 KB, vetor). Ver ADR 0010.
 
 ## Ao mexer na stack
 
@@ -121,8 +130,9 @@ justamente por isso.
 - Mudou um Dockerfile? Os tamanhos em `site/src/data/measured.json` ficam
   desatualizados — o `verify` os regrava, mas o `sizes.sh` sozinho também.
 - Adicionou uma lição? Escreva **as duas** versões, ou o build reprova. E ela
-  precisa de **pelo menos um diagrama ou widget**: um teste reprova lição que
-  nasce só com texto.
+  precisa de **pelo menos um diagrama ou widget** e de **pelo menos um
+  exercício** (`Quiz` ou `LabExercise`): dois testes reprovam lição que nasce
+  só com texto ou que não pergunta nada ao leitor.
 - Mexeu no site? `make site-verify` é o ciclo rápido (tipos, testes, build,
   HTML) e não precisa de Docker. Ele é a etapa 8 do `verify`, sem o resto.
 - Toda imagem base é pinada por digest. Para atualizar: `make pins`, e depois
@@ -183,9 +193,12 @@ avançada). Regras para módulo novo estão lá — em resumo: mesma aplicação
 `stack/services/`, portão `make <módulo>-verify` próprio, lições bilíngues em
 trilha nova, decisões em ADR, números medidos.
 
-Trilha nova no site exige editar 5 pontos (enum em `content.config.ts`, labels
-em `i18n/ui.ts`, array em `[lang]/index.astro`, mapa de badge em
-`[slug].astro`, cor em `global.css`) — a trilha `kubernetes` serve de gabarito.
+Trilha nova no site exige editar **3 pontos**, e não 5 como esta seção dizia
+antes: `TRACKS` em `i18n/ui.ts` (que é a fonte única da lista e da ordem), o
+enum em `content.config.ts` e a cor em `global.css` (três blocos de tema mais
+`.badge--<trilha>`). A home, a página da lição e os testes derivam de `TRACKS`
+— antes cada um repetia a lista à mão, e acrescentar uma trilha era caçar
+literais. A trilha `cicd` serve de gabarito.
 
 ## O que ainda não existe
 
@@ -197,9 +210,12 @@ stack — as lições é que faltam.
 
 Na trilha Kubernetes, só as 3 primeiras lições existem; ficaram para depois:
 Ingress de verdade (ingress-nginx), StatefulSets a fundo, HPA e o job de kind
-no CI. Dos dois widgets pendentes, a topologia do Compose virou o diagrama
-`StackTopology.astro` (lições 7 e 8) — continua faltando a demo de vazamento de
-segredo via `docker history`.
+no CI. Os dois widgets pendentes saíram: a topologia do Compose virou o
+diagrama `StackTopology.astro` (lições 7 e 8) e a demo de vazamento de segredo
+via `docker history` virou o `<LabExercise>` da lição 3.
+
+A trilha `cicd` está cadastrada e **vazia** — o módulo 3 é o próximo, e o
+primeiro passo dele é a sonda do BuildKit rootless sob SELinux.
 
 ## O site
 
@@ -224,9 +240,35 @@ pelo edge); sem stack, reencenam `site/src/data/recorded-gate.json`, gravado por
 `make record-gate`. A lógica mora em `site/src/lib/` — sem React, sem texto e
 com o `fetch` entrando por parâmetro, que é o que a torna testável.
 
-**Testes** (`site/tests/`, 43 casos, `make site-test`). Cobrem a lógica do
+**Os primitivos didáticos** (ADR 0009). Além de `Callout`, `Figure` e `RunIt`,
+a página da lição injeta quatro componentes — nenhum precisa de `import` no MDX,
+e todos pegam o idioma da URL:
+
+- **`Tradeoff`** — opção A × opção B, e o **critério** de quando cada uma ganha.
+  `whenA`/`whenB` são obrigatórios: sem eles é tabela comparativa, não tradeoff.
+- **`FieldNote`** — a afirmação **citada, não medida aqui**: postmortem, thread,
+  blog de engenharia, palestra, escala. Borda tracejada (a contínua é do que foi
+  medido), `source` e `url` obrigatórios, e o rodapé sempre diz "não medido
+  aqui". A URL também tem que estar em `sources:`.
+- **`Quiz`** — múltipla escolha. As perguntas ficam em
+  `site/src/data/quizzes/<key>.json`, com `pt` e `en` no mesmo arquivo;
+  `Quiz.astro` resolve o conjunto em tempo de build e só as perguntas daquele
+  idioma atravessam para o cliente. **Toda alternativa explica por que está
+  certa ou errada**, inclusive as erradas — é ali que está o ensino.
+- **`LabExercise`** — a pergunta cuja resposta é um comando, com o gabarito num
+  `<details>` e o nome da checagem do portão que a prova.
+
+**Imagens** (ADR 0010). `Figure` aceita `src`/`credit`/`creditUrl`/`license` e
+a prop `plate="light"` para diagrama de terceiro desenhado para fundo branco.
+Sem licença apurada, redesenhe em SVG e use `redrawnFrom`. O slot `legend` é o
+formato "figura anotada": lista numerada amarrando cada peça do desenho a algo
+que este repositório mede.
+
+**Testes** (`site/tests/`, 59 casos, `make site-test`). Cobrem a lógica do
 portão, o fluxo do laboratório, a fidelidade da gravação, a paridade das chaves
 de i18n e as invariantes do conteúdo bilíngue — inclusive a que os diagramas
 tornaram necessária: **as duas versões de uma lição usam os mesmos
 componentes**. Uma âncora de inserção escrita errado deixa a lição inglesa sem o
-desenho e o build passa igual; só o teste reprova.
+desenho e o build passa igual; só o teste reprova. Também reprovam: lição sem
+exercício, `FieldNote` sem fonte, `Tradeoff` sem critério, e quiz cujo gabarito
+está em posições diferentes nos dois idiomas.

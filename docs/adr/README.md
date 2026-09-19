@@ -19,3 +19,5 @@ não material didático.
 | [0006](0006-excecoes-de-scanner-com-prazo.md) | Exceções de scanner com prazo de validade | aceita |
 | [0007](0007-kind-e-o-porte-para-kubernetes.md) | kind e o porte para Kubernetes | aceita |
 | [0008](0008-acoes-ao-vivo-no-site-estatico.md) | Ações ao vivo num site que continua estático | aceita |
+| [0009](0009-afirmacao-medida-e-afirmacao-citada.md) | Afirmação medida e afirmação citada | aceita |
+| [0010](0010-imagens-de-terceiros.md) | Imagens de terceiros no site | aceita |
