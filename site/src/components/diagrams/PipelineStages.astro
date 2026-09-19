@@ -62,13 +62,16 @@ const W = 106, GAP = 10;
       );
     })}
 
-    <text x={6} y={16} class="dg-title" font-size="11">{C.total}</text>
-    <rect x={92} y={6} width={92} height={15} rx={7} class="dg-box dg-box--warn" />
-    <text x={138} y={17} text-anchor="middle" class="dg-mono" font-size="9.5">
+    {/* Os badges começam em 132 e não em 92: "pipeline completo" tem 17
+        caracteres a 11px e passava por baixo do primeiro. SVG não reflui —
+        colisão de texto aqui é invisível até alguém abrir a página. */}
+    <text x={6} y={17} class="dg-title" font-size="11">{C.total}</text>
+    <rect x={132} y={6} width={86} height={15} rx={7} class="dg-box dg-box--warn" />
+    <text x={175} y={17} text-anchor="middle" class="dg-mono" font-size="9.5">
       {C.frio} {s(m.pipelineColdSeconds)}
     </text>
-    <rect x={190} y={6} width={92} height={15} rx={7} class="dg-box dg-box--accent" />
-    <text x={236} y={17} text-anchor="middle" class="dg-mono" font-size="9.5">
+    <rect x={226} y={6} width={92} height={15} rx={7} class="dg-box dg-box--accent" />
+    <text x={272} y={17} text-anchor="middle" class="dg-mono" font-size="9.5">
       {C.quente} {s(m.pipelineWarmSeconds)}
     </text>
 
