@@ -86,7 +86,8 @@ pipeline {
                           --local dockerfile="$ctx" \
                           --opt target=dist \
                           --output type=docker,name=infra-knowlogy/$svc:ci,dest="$OUT/$svc.tar" \
-                          --output type=image,name=$REGISTRY/infra-knowlogy/$svc:ci,push=true,registry.insecure=true
+                          --output type=image,name=$REGISTRY/infra-knowlogy/$svc:ci,push=true,registry.insecure=true \
+                          --metadata-file "$OUT/$svc.meta.json"
                     }
 
                     build_one api-go    stack/services/api-go
@@ -129,16 +130,37 @@ pipeline {
             steps {
                 sh '''
                     set -eu
+                    # Lê `containerimage.digest` do metadata do buildctl.
+                    #
+                    # Sem jq e sem python no agente de propósito: o único
+                    # interpretador que ele precisa ter é o shell. O formato
+                    # aqui é conhecido e estável (JSON plano do buildctl), e um
+                    # `grep -o` num campo que não existisse devolveria vazio —
+                    # o `set -eu` e o `[ -n ]` abaixo transformam isso em falha
+                    # em vez de numa assinatura de referência errada.
+                    meta_digest() {
+                        d=$(grep -o '"containerimage.digest"[[:space:]]*:[[:space:]]*"[^"]*"' "$1" \
+                            | sed 's/.*"\(sha256:[a-f0-9]*\)".*/\1/')
+                        [ -n "$d" ] || { echo "sem digest em $1" >&2; exit 1; }
+                        printf '%s' "$d"
+                    }
+
                     # Assina POR DIGEST, nunca por tag: tag é ponteiro mutável
                     # (lição 2), e assinar um ponteiro assina o que ele apontar
-                    # amanhã. O digest é o conteúdo.
+                    # amanhã. O digest sai do `--metadata-file` do próprio
+                    # build — é o que ACABOU de ser publicado, sem uma segunda
+                    # consulta ao registry que poderia devolver outra coisa.
+                    #
+                    # `--allow-http-registry` e não `--allow-insecure-registry`:
+                    # o segundo permite TLS inválido, e o registry local fala
+                    # HTTP puro. Com a flag errada o erro é
+                    # `server gave HTTP response to HTTPS client`.
                     for svc in api-go worker-py web; do
-                        ref="$REGISTRY/infra-knowlogy/$svc:ci"
-                        digest=$(cosign triangulate --allow-insecure-registry --type digest "$ref" 2>/dev/null || true)
-                        [ -n "$digest" ] || digest="$ref"
-                        echo "── cosign sign $digest"
-                        cosign sign --yes --allow-insecure-registry \
-                          --key /run/secrets/cosign.key "$digest"
+                        digest=$(meta_digest "$OUT/$svc.meta.json")
+                        ref="$REGISTRY/infra-knowlogy/$svc@$digest"
+                        echo "── cosign sign $ref"
+                        cosign sign --yes --allow-http-registry \
+                          --key /run/secrets/cosign.key "$ref"
                     done
                 '''
             }
@@ -148,13 +170,29 @@ pipeline {
             steps {
                 sh '''
                     set -eu
+                    # Lê `containerimage.digest` do metadata do buildctl.
+                    #
+                    # Sem jq e sem python no agente de propósito: o único
+                    # interpretador que ele precisa ter é o shell. O formato
+                    # aqui é conhecido e estável (JSON plano do buildctl), e um
+                    # `grep -o` num campo que não existisse devolveria vazio —
+                    # o `set -eu` e o `[ -n ]` abaixo transformam isso em falha
+                    # em vez de numa assinatura de referência errada.
+                    meta_digest() {
+                        d=$(grep -o '"containerimage.digest"[[:space:]]*:[[:space:]]*"[^"]*"' "$1" \
+                            | sed 's/.*"\(sha256:[a-f0-9]*\)".*/\1/')
+                        [ -n "$d" ] || { echo "sem digest em $1" >&2; exit 1; }
+                        printf '%s' "$d"
+                    }
+
                     # Assinar sem verificar é fé. Este estágio existe para o
                     # pipeline provar a própria assinatura antes de chamar o
                     # artefato de confiável.
                     for svc in api-go worker-py web; do
-                        ref="$REGISTRY/infra-knowlogy/$svc:ci"
+                        digest=$(meta_digest "$OUT/$svc.meta.json")
+                        ref="$REGISTRY/infra-knowlogy/$svc@$digest"
                         echo "── cosign verify $ref"
-                        cosign verify --allow-insecure-registry \
+                        cosign verify --allow-http-registry \
                           --key /run/secrets/cosign.pub "$ref" >/dev/null
                         echo "   assinatura confere"
                     done
