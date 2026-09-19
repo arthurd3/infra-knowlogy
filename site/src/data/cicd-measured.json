@@ -1,13 +1,13 @@
 {
-  "generatedAt": "2026-09-19T15:25:56Z",
+  "generatedAt": "2026-09-19T15:27:21Z",
   "jenkinsVersion": "2.568.3",
   "pluginsPinned": 67,
   "measurements": {
-    "controllerBootSeconds": 2,
-    "pipelineColdSeconds": 15,
+    "controllerBootSeconds": 10,
+    "pipelineColdSeconds": 21,
     "pipelineWarmSeconds": 7,
-    "lintStageSeconds": 1.823,
-    "buildStageSeconds": 4.324,
+    "lintStageSeconds": 2.35,
+    "buildStageSeconds": 8.916,
     "goBinaryIdentical": true,
     "imageDigestIdentical": false
   }

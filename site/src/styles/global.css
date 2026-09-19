@@ -28,6 +28,7 @@
 
   --track-fund:    #0b6b5e;
   --track-prod:    #6a3fa0;
+  --track-seg:     #a8532a;
   --track-k8s:     #1d63c2;
   --track-cicd:    #a82a63;
 
@@ -89,6 +90,7 @@
 
     --track-fund:    #4dd4bd;
     --track-prod:    #b490e8;
+    --track-seg:     #f0a074;
     --track-k8s:     #74a9f0;
     --track-cicd:    #ef92ba;
 
@@ -118,6 +120,7 @@
   --danger-soft:   #2e1917;
   --track-fund:    #4dd4bd;
   --track-prod:    #b490e8;
+  --track-seg:     #f0a074;
   --track-k8s:     #74a9f0;
   --track-cicd:    #ef92ba;
   --shadow:        0 1px 2px rgb(0 0 0 / 0.4), 0 4px 14px rgb(0 0 0 / 0.25);
@@ -340,6 +343,7 @@ blockquote {
 }
 .badge--fund { color: var(--track-fund); border-color: color-mix(in srgb, var(--track-fund) 35%, transparent); }
 .badge--prod { color: var(--track-prod); border-color: color-mix(in srgb, var(--track-prod) 35%, transparent); }
+.badge--seg { color: var(--track-seg); border-color: color-mix(in srgb, var(--track-seg) 35%, transparent); }
 .badge--k8s { color: var(--track-k8s); border-color: color-mix(in srgb, var(--track-k8s) 35%, transparent); }
 .badge--cicd { color: var(--track-cicd); border-color: color-mix(in srgb, var(--track-cicd) 35%, transparent); }
 
