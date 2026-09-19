@@ -12,6 +12,58 @@ examples. When the base-image lesson shows a size table, those bytes came from
 And the site that teaches multi-stage builds is served by the very multi-stage
 Dockerfile it explains.
 
+<p align="center">
+  <img src="docs/images/home.jpg" alt="The lessons site: hero, measured statistics and the Fundamentals track" width="820">
+</p>
+
+The four numbers under the headline are read from `site/src/data/measured.json`
+at build time — the same file `tools/scripts/sizes.sh` rewrites on every
+`make verify`. Nothing on that page is typed by hand.
+
+### Run the gate from the page, not the terminal
+
+<p align="center">
+  <img src="docs/images/gate-runner.jpg" alt="Seven checks passing in the browser against the running stack" width="820">
+</p>
+
+These are the same seven checks as `tools/scripts/lib/smoke.sh`, fired by the
+browser against the stack `make up` just started: create a link, follow the
+redirect, wait for the worker to fetch the title, and watch the SSRF guard
+refuse `169.254.169.254`. The timings are real, and the links land in Postgres.
+
+It needs no new infrastructure — the edge already serves the site and the API on
+the same origin. With no stack up, the widget replays the responses recorded in
+`site/src/data/recorded-gate.json`, labelled as recorded, with the date. The
+site stays **100% static** either way; see
+[ADR 0008](docs/adr/0008-acoes-ao-vivo-no-site-estatico.md).
+
+### Diagrams that are markup, not pictures
+
+<p align="center">
+  <img src="docs/images/lesson-diagram.jpg" alt="The Compose topology drawn as an SVG diagram inside a lesson" width="820">
+</p>
+
+Fifteen hand-written SVG diagrams, at least one per lesson. They inherit the
+light/dark theme from CSS custom properties, stay sharp at any zoom, and show up
+in `git diff` as text. The gate refuses any SVG carrying a hard-coded colour —
+one would be illegible in one of the two themes.
+
+The topology above is the real `stack/compose.yaml`: three networks, six
+services, and the connection that **does not exist** (`edge` cannot reach
+`db:5432`) — which is check 5 of the gate.
+
+### The SSRF guard, refusing an address while you watch
+
+<p align="center">
+  <img src="docs/images/link-lab-ssrf.jpg" alt="Shortening the cloud metadata address and seeing the worker refuse it" width="820">
+</p>
+
+Type a URL, or take the cloud-metadata preset, and the whole path happens in
+front of you: the api writes, the redirect answers, the worker goes out to fetch
+the title — and comes back with the reason it refused. The refusal is the
+worker's own message, verbatim, which is why it reads in Portuguese even on the
+English page: it is the real response, not a caption.
+
 > A note on languages, so nothing surprises you: the **lessons are bilingual** —
 > every one exists in English and Portuguese. This README is English. The **code
 > comments and the ADRs are written in Portuguese**: they are the author's
@@ -25,6 +77,7 @@ make            # list everything you can do
 make up         # bring up the hardened stack and wait for every healthcheck
 make site-dev   # open the lessons at http://localhost:4321
 make verify     # the quality gate: build, boot, test, and prove the hardening
+make site-verify # the site alone — types, tests, build, generated HTML (no Docker)
 
 make k8s-up     # module 2: the SAME stack in a kind cluster, at 127.0.0.1:8081
 make k8s-verify # its own gate — 33 checks, from scratch, cluster destroyed after
@@ -79,8 +132,10 @@ seconds instead of paying for fifteen containers.
 ## The lessons
 
 22 lessons — 11 topics, in English and Portuguese — under
-`site/src/content/lessons/`, with three interactive widgets that run entirely in
-the browser (the site stays 100% static and deployable anywhere).
+`site/src/content/lessons/`, with 15 hand-drawn SVG diagrams and six interactive
+widgets. The diagrams are written as markup, not exported as pictures: they
+inherit the light/dark theme from CSS custom properties, stay sharp at any zoom
+and show up in `git diff` as text.
 
 **Fundamentals track:** what a container actually is · images, layers and digests
 · the Dockerfile instruction by instruction · the build cache · lifecycle and
@@ -92,6 +147,21 @@ limits, measured · from compose.yaml to Deployment, block by block · liveness
 vs readiness, with the database outage staged and counted. The numbers these
 lessons cite are written by `make k8s-verify` into
 `site/src/data/k8s-measured.json`.
+
+**Run the checks from the page.** Two widgets talk to the running stack instead
+of describing it. `GateRunner` fires the same seven checks as
+`tools/scripts/lib/smoke.sh` — create a link, follow the redirect, wait for the
+worker, watch the SSRF guard refuse an internal address — straight from the
+browser; `LinkLab` shortens a URL you type and shows the refusal reason the
+worker gave. This needs no new infrastructure: the edge already serves the site
+and the API on the same origin, so a `fetch('/api/links')` from the page is
+same-origin, with no CORS and no server of its own.
+
+The site is still **100% static**. With no stack up, both widgets replay the
+real responses recorded in `site/src/data/recorded-gate.json` — always labelled
+as recorded, with the date — and the test suite runs the gate over that file, so
+the recording cannot quietly drift from what the gate checks. See
+[ADR 0008](docs/adr/0008-acoes-ao-vivo-no-site-estatico.md).
 
 Every lesson ends with a **"Run it yourself"** block — real commands against this
 repository's stack, not pseudocode.
@@ -118,12 +188,16 @@ the code compiles — it **proves the lessons' claims**:
   `docker history` nor `env`, and `edge` **cannot reach** `db`;
 - graceful shutdown — fails if any service takes longer than 3 s to stop;
 - Trivy failing on HIGH/CRITICAL, with a CycloneDX SBOM per image;
-- site build and **EN/PT parity** (no lesson may exist in only one language);
+- the site in four layers: `astro check` (types), 43 unit tests, the build, and
+  a scan of the **generated HTML** — every internal link and anchor has to
+  resolve, both language trees must match, every lesson must ship a diagram or a
+  widget, and no SVG may carry a hard-coded colour;
 - with the `obs` profile, every Prometheus target must be `up`.
 
-Current state: **30 passed · 0 failed**.
+Current state: **32 passed · 0 failed**.
 
-For faster local iteration: `SKIP_SCAN=1 SKIP_OBS=1 make verify`.
+For faster local iteration: `SKIP_SCAN=1 SKIP_OBS=1 make verify` (**27 passed**).
+For the site alone, with no Docker at all: `make site-verify`.
 
 Module 2 has its own independent gate, `make k8s-verify` (**33 passed · 0
 failed**): it creates a kind cluster from scratch, loads the same images,
@@ -147,7 +221,7 @@ configuration management are reserved next. Details, rules and status:
 stack/          production code: compose + services/{api-go,worker-py,edge,db,observability}
 k8s/            module 2: the same stack as kind + kustomize manifests
 site/           the bilingual lessons site (Astro + MDX + React islands)
-tools/scripts/  verify · k8s-verify · sizes · scan · shutdown-test · update-pins · index-qdrant
+tools/scripts/  verify · k8s-verify · site-check · sizes · scan · shutdown-test · record-gate
 docs/adr/       why Compose and not k8s, why Caddy and not Traefik, and the rest
 docs/ROADMAP.md the modules: done, in progress, reserved
 ```

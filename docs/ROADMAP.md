@@ -11,7 +11,7 @@ lado a lado só é honesta porque a aplicação é a mesma.
 
 | # | Módulo | Diretório | Portão | Estado |
 |---|---|---|---|---|
-| 1 | **Docker** — imagens, Compose, hardening OWASP, observabilidade | `stack/` | `make verify` (30 checagens) | **feito** · pendências: Trilha Produção (12 lições), widget de topologia, demo do `docker history` |
+| 1 | **Docker** — imagens, Compose, hardening OWASP, observabilidade | `stack/` | `make verify` (32 checagens) | **feito** · pendências: Trilha Produção (12 lições), demo do `docker history` |
 | 2 | **Kubernetes** — a mesma stack portada para um cluster kind | `k8s/` | `make k8s-verify` (33 checagens) | **feito (v1)** · [ADR 0007](adr/0007-kind-e-o-porte-para-kubernetes.md) · pendências: lições 4+, Ingress, HPA, kind no CI |
 | 3 | **CI/CD self-hosted (Jenkins)** — rodar em um Jenkins conteinerizado o pipeline que hoje vive no GitHub Actions (lint → build → scan → assinatura), sobre a mesma stack, comparando os dois mundos | `cicd/` | a definir | reservado |
 | 4 | **IaC (Terraform/OpenTofu)** — provisionar o host (ou o cluster) que os módulos 1–2 assumem existir | `iac/` | a definir | reservado |
@@ -26,7 +26,9 @@ lado a lado só é honesta porque a aplicação é a mesma.
    `verify.sh`: cada afirmação de lição vira uma checagem que falha alto.
    Os portões são independentes — quem estuda só Docker não instala kind.
 3. **Toda lição nasce bilíngue** (PT-BR e EN, mesmo `key`) e ganha uma trilha
-   própria no site (`track` novo no enum).
+   própria no site (`track` novo no enum). Nasce também com **pelo menos um
+   diagrama ou widget** — e os dois idiomas usam os MESMOS componentes;
+   `site/tests/content.test.ts` reprova quem esquecer um dos dois.
 4. **Decisões viram ADR** — com as alternativas recusadas e o porquê.
 5. **Números são medidos, nunca copiados** — cada módulo grava suas medições em
    `site/src/data/` e as lições citam o arquivo.

@@ -82,12 +82,33 @@ justamente por isso.
     chega antes de o kube-proxy parar de mandar conexões novas. A api espera
     `SHUTDOWN_DELAY` (0 por padrão; 2s no Deployment) antes de fechar o
     listener — o preStop com `sleep` não existe em imagem distroless.
+17. **`deps.fetch(...)` quebra o `fetch` do navegador.** Chamado como método de
+    um objeto, ele recebe `this === deps` e lança
+    `Illegal invocation` — o `fetch` exige que o `this` seja a Window. Um fetch
+    falso (teste, modo gravado) não se importa com o `this`, então o erro só
+    aparece contra a stack de verdade. `gate.ts` e `lab.ts` guardam um alias
+    local (`const call = deps.fetch`) por causa disso.
+18. **Servidor de arquivos estático responde 404 com status 200.** O
+    `try_files … /404.html` do Caddy devolve a página de erro com 200, então
+    `res.ok` é verdadeiro para QUALQUER caminho. Por isso o probe do site exige
+    `204` exato em `/edge-health` e JSON com `count` em `/api/links` — aceitar
+    2xx anunciava "stack no ar" em cima de um site sem stack nenhuma.
+19. **Ordem importa entre classes CSS de mesma especificidade.** `.btn-ghost` e
+    `.btn--icon` mexem as duas em `padding`; com a ghost depois, o ícone do
+    botão quadrado era espremido para 3px e sumia. A regra de tamanho da
+    variante discreta fica ANTES de `.btn--icon` de propósito.
+20. **Aba sem pintura não hidrata ilha `client:visible`.** Numa aba oculta
+    (automação, aba em segundo plano) o `IntersectionObserver` não dispara e o
+    widget fica no HTML servidor, inerte. Não é bug do site: ao tirar um
+    screenshot — que força a pintura — a hidratação completa. Vale lembrar
+    antes de sair caçando bug de hidratação que não existe.
 
 ## Ao mexer na stack
 
 - Rode `make verify` antes de considerar qualquer coisa pronta. Para iterar
   rápido: `SKIP_SCAN=1 SKIP_OBS=1 make verify`. O estado bom conhecido é
-  **30 passaram · 0 falharam**.
+  **32 passaram · 0 falharam** (25 + as 4 checagens do site + scan + obs; com
+  os dois SKIP, **27 passaram**).
 - O módulo Kubernetes tem portão próprio: `make k8s-verify` (estado bom:
   **33 passaram · 0 falharam**). Para iterar sem recriar o cluster:
   `KEEP_CLUSTER=1 make k8s-verify`. Os portões são independentes de propósito
@@ -99,7 +120,11 @@ justamente por isso.
   socket e o resultado saía como "vulnerabilidades encontradas").
 - Mudou um Dockerfile? Os tamanhos em `site/src/data/measured.json` ficam
   desatualizados — o `verify` os regrava, mas o `sizes.sh` sozinho também.
-- Adicionou uma lição? Escreva **as duas** versões, ou o build reprova.
+- Adicionou uma lição? Escreva **as duas** versões, ou o build reprova. E ela
+  precisa de **pelo menos um diagrama ou widget**: um teste reprova lição que
+  nasce só com texto.
+- Mexeu no site? `make site-verify` é o ciclo rápido (tipos, testes, build,
+  HTML) e não precisa de Docker. Ele é a etapa 8 do `verify`, sem o resto.
 - Toda imagem base é pinada por digest. Para atualizar: `make pins`, e depois
   `make verify`. Não edite digest à mão.
 - Segredo **nunca** vai para `environment:`. A convenção é `<VAR>_FILE` apontando
@@ -172,5 +197,36 @@ stack — as lições é que faltam.
 
 Na trilha Kubernetes, só as 3 primeiras lições existem; ficaram para depois:
 Ingress de verdade (ingress-nginx), StatefulSets a fundo, HPA e o job de kind
-no CI. Dois widgets também ficaram para depois: o grafo de topologia do Compose
-e a demo de vazamento de segredo via `docker history`.
+no CI. Dos dois widgets pendentes, a topologia do Compose virou o diagrama
+`StackTopology.astro` (lições 7 e 8) — continua faltando a demo de vazamento de
+segredo via `docker history`.
+
+## O site
+
+A moldura visual tem convenções próprias, e todas elas têm teste.
+
+**Botões.** Uma base `.btn` e três variantes (`--primary`, `--secondary`,
+`--danger`), mais tamanhos (`--sm`, `--lg`, `--icon`). `.btn-ghost` é a variante
+discreta e continua valendo como nome antigo. Não crie uma classe de botão nova:
+o ponto do sistema é que a variante diz a **importância** da ação.
+
+**Diagramas** (`site/src/components/diagrams/`, 15 deles). São SVG escritos à
+mão, envolvidos por `Figure.astro`, que pintam **por classe** (`.dg-box`,
+`.dg-line`, `.dg-fill-accent`…) e nunca por hex — é o que faz eles seguirem o
+tema claro/escuro. O `site-check.mjs` reprova qualquer `fill="#…"` num SVG
+publicado. O texto é bilíngue pelo mesmo padrão das ilhas (um objeto `C` com
+`pt` e `en`), e o idioma sai da URL, não de uma prop.
+
+**Ações ao vivo** (ADR 0008). `GateRunner` roda as 7 checagens do
+`lib/smoke.sh` do próprio navegador; `LinkLab` encurta um link de verdade e
+mostra o SSRF sendo recusado. Com `make up` eles falam com a stack (mesmo-origem
+pelo edge); sem stack, reencenam `site/src/data/recorded-gate.json`, gravado por
+`make record-gate`. A lógica mora em `site/src/lib/` — sem React, sem texto e
+com o `fetch` entrando por parâmetro, que é o que a torna testável.
+
+**Testes** (`site/tests/`, 43 casos, `make site-test`). Cobrem a lógica do
+portão, o fluxo do laboratório, a fidelidade da gravação, a paridade das chaves
+de i18n e as invariantes do conteúdo bilíngue — inclusive a que os diagramas
+tornaram necessária: **as duas versões de uma lição usam os mesmos
+componentes**. Uma âncora de inserção escrita errado deixa a lição inglesa sem o
+desenho e o build passa igual; só o teste reprova.
