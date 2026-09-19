@@ -133,6 +133,22 @@ k8s-verify: ## O portão do módulo Kubernetes, end-to-end
 cicd-prereqs: ## Checa o host e prova que dá para construir imagem sem daemon
 	@bash tools/scripts/cicd-prereqs.sh
 
+.PHONY: cicd-up
+cicd-up: ## Sobe o Jenkins (controller, buildkitd, agente e registry)
+	@bash tools/scripts/cicd-up.sh
+
+.PHONY: cicd-down
+cicd-down: ## Derruba o módulo CI/CD (mantém os volumes)
+	docker compose -f cicd/compose.yaml down --remove-orphans
+
+.PHONY: cicd-nuke
+cicd-nuke: ## Derruba E apaga os volumes (jenkins_home, cache do buildkit, registry)
+	docker compose -f cicd/compose.yaml down --remove-orphans --volumes
+
+.PHONY: cicd-plugins
+cicd-plugins: ## Atualiza as versões pinadas dos plugins do Jenkins
+	@bash tools/scripts/update-jenkins-plugins.sh
+
 # ─── Site didático / Teaching site ───────────────────────────────────────────
 
 .PHONY: site-install

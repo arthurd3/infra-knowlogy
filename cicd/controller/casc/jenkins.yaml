@@ -1,0 +1,76 @@
+# O controller inteiro, declarado. Nenhum clique em nenhum momento.
+#
+# O JCasC tem uma armadilha que vale mais que o resto deste arquivo: chave
+# escrita errado é IGNORADA EM SILÊNCIO. O controller sobe, parece certo, e
+# `numExecutor` (sem o "s") deixa dois executores no built-in. É o primo do
+# kind < 0.23 aceitando NetworkPolicy e não aplicando. Por isso o portão lê o
+# log procurando "Unknown key" — ver a checagem correspondente em
+# tools/scripts/cicd-verify.sh.
+jenkins:
+  systemMessage: |
+    infra-knowlogy — módulo 3. Este controller nasceu de cicd/controller/casc/,
+    sem um clique. Os jobs vieram do seed em jobs/. Nada aqui foi criado à mão.
+
+  # A checagem mais importante do isolamento: o controller NÃO constrói nada.
+  # Qualquer build rodando aqui tem o mesmo acesso ao sistema de arquivos que o
+  # processo do Jenkins — logo, às credenciais e à configuração dele.
+  numExecutors: 0
+
+  # Realm local: o módulo não tem LDAP nem OIDC, e fingir que tem seria uma
+  # lição sobre um sistema que não existe. A senha vem de /run/secrets pelo
+  # SecretSource de arquivo — nunca de `environment:`.
+  securityRealm:
+    local:
+      allowsSignup: false
+      users:
+        - id: "admin"
+          password: "${jenkins_admin_password}"
+
+  authorizationStrategy:
+    globalMatrix:
+      entries:
+        - user:
+            name: "admin"
+            permissions:
+              - "Overall/Administer"
+        # Anônimo não lê nada. O portão prova isso pedindo /api/json sem
+        # credencial e exigindo 403.
+        - group:
+            name: "authenticated"
+            permissions:
+              - "Overall/Read"
+
+  # -1 desliga o listener TCP de agente. O agente entra por WebSocket sobre a
+  # mesma porta da UI, o que evita publicar uma segunda porta só para ele.
+  slaveAgentPort: -1
+
+  nodes:
+    - permanent:
+        name: "builder"
+        labelString: "builder linux"
+        numExecutors: 2
+        remoteFS: "/home/jenkins/agent"
+        # EXCLUSIVE: só roda job que pediu este nó por label. Sem isso, um job
+        # sem `agent { label }` cairia em qualquer lugar disponível.
+        mode: EXCLUSIVE
+        retentionStrategy: "always"
+        launcher:
+          inbound:
+            webSocket: true
+
+security:
+  # O seed do Job DSL vem da imagem que NÓS construímos, não de um usuário.
+  # Com a script security ligada, a primeira execução do seed fica pendurada
+  # esperando aprovação humana — e o portão morre num timeout sem explicação.
+  globalJobDslSecurityConfiguration:
+    useScriptSecurity: false
+
+# O seed roda a cada boot e a cada reload do JCasC. Não é "criar se não
+# existir": é reconciliar. Job editado pela UI volta ao que o código diz.
+jobs:
+  - file: /opt/jobs-dsl/seed.groovy
+
+unclassified:
+  location:
+    url: "http://localhost:8090/"
+    adminAddress: "nobody@infra-knowlogy.local"

@@ -1,0 +1,134 @@
+# O módulo 3: um Jenkins que constrói a stack deste repositório.
+#
+# Projeto Compose PRÓPRIO, separado do stack/. O Jenkins não é a aplicação —
+# ele constrói a aplicação. Misturar os dois faria `make up` subir um CI e
+# obrigaria o verify.sh a ignorar containers que não são dele.
+#
+# Portas: 8090 e 5001, presas ao loopback. 8080 é a stack do módulo 1 e 8081 é
+# o kind do módulo 2, de propósito — as lições comparam os três rodando ao
+# mesmo tempo.
+name: infra-knowlogy-cicd
+
+services:
+  # ── O controller ───────────────────────────────────────────────────────────
+  # 0 executores (ver casc/jenkins.yaml). Ele agenda, guarda credencial e serve
+  # a UI; quem constrói é o agente.
+  controller:
+    build:
+      context: ./controller
+    image: infra-knowlogy/jenkins-controller:dev
+    ports:
+      - "127.0.0.1:${JENKINS_PORT:-8090}:8080"
+    volumes:
+      - jenkins-home:/var/jenkins_home
+      # Os segredos entram como ARQUIVO, lidos pelo SecretSource do JCasC.
+      # Nunca por `environment:` — mesma convenção do config.go e do config.py.
+      - ./secrets:/run/secrets:ro
+    environment:
+      # O JCasC usa isto para montar a URL pública. O jenkins-cli recusa com
+      # "Unexpected request origin" quando a origem usada não bate com ela.
+      JENKINS_URL: "http://localhost:${JENKINS_PORT:-8090}/"
+    healthcheck:
+      # Mesmo teste do jk_wait_ready: o header X-Jenkins só aparece depois de
+      # o core subir. O 200 da página "aguarde" não o traz.
+      test: ["CMD-SHELL", "curl -sI http://localhost:8080/login | grep -qi '^x-jenkins:'"]
+      interval: 5s
+      timeout: 4s
+      retries: 30
+      start_period: 20s
+    restart: unless-stopped
+
+  # ── O construtor ───────────────────────────────────────────────────────────
+  # ADR 0011. Os três `unconfined` vêm da documentação do BuildKit e NÃO são
+  # privilégio de root; o quarto é a descoberta desta máquina, e mantém o
+  # SELinux CONFINADO em vez de desligá-lo com label=disable.
+  #
+  # Cuidado ao conferir: `systempaths=unconfined` NÃO aparece em
+  # `.HostConfig.SecurityOpt`. O Docker o traduz em MaskedPaths/ReadonlyPaths
+  # vazios, e é lá que se prova que ele foi aplicado.
+  buildkitd:
+    image: moby/buildkit:rootless@sha256:80b15f0735e87bab7bf59ec4d695dfb4a7cfb25521cf56dc75d6f256285b63ef
+    command:
+      # O socket fica na RAIZ de /run/user/1000, não num subdiretório.
+      # Armadilha 10 do CLAUDE.md, pela terceira vez neste repositório: um
+      # volume nomeado apontado para um caminho que NÃO existe na imagem nasce
+      # pertencendo ao root, e o buildkitd (uid 1000) morre com
+      # `bind: permission denied`. Apontado para /run/user/1000, que existe e
+      # pertence ao `user`, o volume herda o dono certo.
+      - --addr
+      - unix:///run/user/1000/buildkitd.sock
+    security_opt:
+      - seccomp=unconfined
+      - apparmor=unconfined
+      - systempaths=unconfined
+      - label=type:container_engine_t
+    volumes:
+      # O socket é Unix num volume compartilhado, e não TCP: a documentação do
+      # buildx é explícita em dizer que BuildKit sobre TCP sem TLS dá acesso
+      # irrestrito ao builder. Volume remove o listener de rede inteiro.
+      - buildkit-sock:/run/user/1000:z
+      - buildkit-cache:/home/user/.local/share/buildkit
+    healthcheck:
+      test: ["CMD", "buildctl", "--addr", "unix:///run/user/1000/buildkitd.sock", "debug", "workers"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    restart: unless-stopped
+
+  # ── O agente ───────────────────────────────────────────────────────────────
+  # Sem docker CLI, sem socket, sem privilégio, não-root. O que um `RUN` de um
+  # pull request alcança daqui é um container rootless — não a máquina.
+  agent:
+    build:
+      context: ./agent
+    image: infra-knowlogy/jenkins-agent:dev
+    depends_on:
+      controller:
+        condition: service_healthy
+      buildkitd:
+        condition: service_healthy
+    # O agente é CLIENTE do buildkitd, e no SELinux isso não é detalhe.
+    # A permissão `connectto` de um socket Unix é checada contra o rótulo do
+    # processo que ESCUTA, não contra o rótulo do arquivo do socket. Por isso
+    # `ls -Z` mostra um `container_file_t:s0` perfeitamente acessível e o
+    # `connect()` falha assim mesmo, com um `permission denied` que parece
+    # problema de dono. Medido: com `container_t` falha, com
+    # `container_engine_t` passa, com `label=disable` passa. Ficamos com o
+    # tipo, que mantém o confinamento — ver ADR 0011 e a armadilha 23.
+    security_opt:
+      - label=type:container_engine_t
+    environment:
+      JENKINS_URL: "http://controller:8080"
+      JENKINS_AGENT_NAME: "builder"
+      JENKINS_WEB_SOCKET: "true"
+      JENKINS_SECRET_FILE: "/run/secrets/agent_secret"
+      BUILDKIT_HOST: "unix:///run/buildkit/buildkitd.sock"
+    volumes:
+      # SEM `:ro`: conectar num socket Unix exige permissão de ESCRITA no
+      # arquivo do socket. Montado somente-leitura, o `connect()` falha com
+      # `permission denied` — que parece problema de dono ou de SELinux e não é.
+      - buildkit-sock:/run/buildkit:z
+      - ./secrets:/run/secrets:ro
+      # O repositório, somente leitura: o pipeline clona dele para o workspace.
+      # `:ro` porque um build não tem por que escrever no seu código-fonte.
+      - ../:/repo:ro
+      - agent-work:/home/jenkins/agent
+    restart: unless-stopped
+
+  # ── O registry local ───────────────────────────────────────────────────────
+  # Para onde o pipeline publica, e onde o `cosign verify` do portão vai olhar.
+  registry:
+    image: registry:3@sha256:fd374bae807c225661adfe2c0c1f9970a0b8fab1761fd7dfb91e0fd9a8748f9b
+    ports:
+      - "127.0.0.1:${REGISTRY_PORT:-5001}:5000"
+    volumes:
+      - registry-data:/var/lib/registry
+    restart: unless-stopped
+
+volumes:
+  jenkins-home:
+  buildkit-sock:
+  buildkit-cache:
+  agent-work:
+  registry-data:

@@ -1,0 +1,91 @@
+// O pipeline da stack, no Jenkins.
+//
+// Ele espelha .github/workflows/ci.yml de propósito: os dois constroem as
+// MESMAS imagens, a partir dos mesmos Dockerfiles, para que a comparação
+// entre os dois mundos seja medida e não opinada.
+//
+// Três coisas que valem atenção:
+//
+//   1. `agent { label 'builder' }` não é decoração. O controller tem 0
+//      executores; sem o label o build ficaria eternamente na fila, e o
+//      `why` do item diria "Waiting for next available executor".
+//   2. Nenhum estágio chama `docker`. O agente não tem o binário. Tudo passa
+//      pelo buildctl, que fala com um buildkitd rootless (ADR 0011).
+//   3. O checkout vem do SCM do job: o CI constrói o que está COMMITADO, não
+//      o seu working tree.
+
+pipeline {
+    agent { label 'builder' }
+
+    options {
+        // Sem `timestamps()`: ele exige o plugin timestamper, e este módulo
+        // ensina cadeia de suprimentos — cada plugin a mais é superfície a
+        // mais para escanear e justificar. O linter declarativo do próprio
+        // Jenkins recusa a opção quando o plugin não está instalado, o que é
+        // como este comentário nasceu.
+        buildDiscarder(logRotator(numToKeepStr: '20'))
+        timeout(time: 30, unit: 'MINUTES')
+    }
+
+    environment {
+        BUILDKIT_HOST = 'unix:///run/buildkit/buildkitd.sock'
+        OUT = 'out'
+    }
+
+    stages {
+        stage('lint') {
+            steps {
+                sh '''
+                    set -eu
+                    buildctl build \
+                      --frontend dockerfile.v0 \
+                      --local context=. \
+                      --local dockerfile=cicd/lint \
+                      --output type=cacheonly
+                '''
+            }
+        }
+
+        stage('build') {
+            steps {
+                sh '''
+                    set -eu
+                    mkdir -p "$OUT"
+
+                    # Os três serviços que o ci.yml também constrói, com o
+                    # mesmo `target`. A saída é um tarball por imagem — o
+                    # mesmo padrão do scan.sh, que escaneia um `docker save`
+                    # em vez de falar com o socket.
+                    build_one() {
+                        svc="$1"; ctx="$2"
+                        echo "── $svc  (contexto: $ctx)"
+                        buildctl build \
+                          --frontend dockerfile.v0 \
+                          --local context="$ctx" \
+                          --local dockerfile="$ctx" \
+                          --opt target=dist \
+                          --output type=docker,name=infra-knowlogy/$svc:ci,dest="$OUT/$svc.tar"
+                    }
+
+                    build_one api-go    stack/services/api-go
+                    build_one worker-py stack/services/worker-py
+                    build_one web       site
+
+                    ls -la "$OUT"
+                '''
+            }
+        }
+
+        stage('archive') {
+            steps {
+                archiveArtifacts artifacts: 'out/*.tar', fingerprint: true
+            }
+        }
+    }
+
+    post {
+        always {
+            sh 'rm -rf "$OUT" || true'
+        }
+    }
+}
