@@ -5,13 +5,42 @@
  * Todo comando aqui roda contra a stack DESTE repositório. É a diferença entre
  * ler sobre `--read-only` e ver o próprio `docker exec` falhar ao tentar
  * escrever no rootfs.
+ *
+ * O botão de copiar não é escrito aqui: o script do Base.astro varre todo
+ * `<pre>` de `.runit` e `.prose` e injeta um. Um lugar só, todos os blocos.
+ *
+ * `file` aponta para o arquivo real do repositório que o comando exercita —
+ * o leitor sai do comando para o código sem procurar.
  */
+import { useTranslations, repoFile, type Lang } from "../i18n/ui";
+
 interface Props {
   title?: string;
+  /** Caminho no repositório, relativo à raiz. Ex.: "stack/compose.prod.yaml" */
+  file?: string;
+  /** Onde o comando roda. Padrão: seu terminal, na raiz do repositório. */
+  where?: string;
 }
-const { title = "Rode você mesmo" } = Astro.props;
+const { title, file, where } = Astro.props;
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+const t = useTranslations(lang);
 ---
 <section class="runit">
-  <header class="runit__head">{title}</header>
+  <header class="runit__head">
+    <span class="runit__title">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="m4 17 6-6-6-6M12 19h8"></path>
+      </svg>
+      {title ?? t("lesson.runIt")}
+    </span>
+    <span class="runit__where">{where ?? t("lesson.runItWhere")}</span>
+  </header>
   <div class="runit__body"><slot /></div>
+  {file && (
+    <div class="runit__foot">
+      <a href={repoFile(file)} rel="noopener noreferrer" target="_blank"><code>{file}</code></a>
+    </div>
+  )}
 </section>

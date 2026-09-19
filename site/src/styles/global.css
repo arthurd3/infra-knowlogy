@@ -39,6 +39,23 @@
   --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", "Fira Code",
                Menlo, Consolas, monospace;
 
+  /* Cor do texto SOBRE a cor de acento. No claro o acento é escuro, então o
+     texto é branco; no escuro o acento é claro, então o texto é quase preto.
+     Sem este token, um botão primário fica ilegível em um dos dois temas. */
+  --on-accent:     #ffffff;
+
+  /* Escala de espaçamento. Antes cada padding era um literal solto e dois
+     blocos vizinhos discordavam por 0,05rem sem que ninguém percebesse. */
+  --space-2xs: 0.25rem;
+  --space-xs:  0.4rem;
+  --space-sm:  0.65rem;
+  --space-md:  1rem;
+  --space-lg:  1.5rem;
+  --space-xl:  2.5rem;
+  --space-2xl: 4rem;
+
+  --transition: 0.15s ease;
+
   --measure: 68ch;
   --nav-h: 3.5rem;
 
@@ -62,6 +79,7 @@
     --accent:        #4dd4bd;
     --accent-soft:   #10312c;
     --accent-text:   #7ce3d1;
+    --on-accent:     #08201c;
 
     --warn:          #e0a458;
     --warn-soft:     #2e2416;
@@ -91,6 +109,7 @@
   --accent:        #4dd4bd;
   --accent-soft:   #10312c;
   --accent-text:   #7ce3d1;
+  --on-accent:     #08201c;
   --warn:          #e0a458;
   --warn-soft:     #2e2416;
   --danger:        #f08b82;
@@ -221,13 +240,86 @@ blockquote {
 }
 .nav__link:hover, .nav__link[aria-current="page"] { color: var(--text); border-bottom-color: var(--accent); }
 
-.btn-ghost {
-  font: inherit; font-size: 0.8125rem;
-  background: var(--bg-raised); color: var(--text-muted);
-  border: 1px solid var(--border); border-radius: 999px;
-  padding: 0.3rem 0.7rem; cursor: pointer; white-space: nowrap;
+/* ── Botões ────────────────────────────────────────────────────────────────
+   Uma base (.btn) e três variantes que dizem QUAL é a importância da ação.
+   Antes existia uma classe só, reaproveitada para o seletor de idioma, o
+   toggle de tema e o CTA principal da home — tudo com o mesmo peso visual, e
+   o botão mais importante do site herdando o estilo do menos importante. */
+
+.btn, .btn-ghost {
+  --btn-bg:     var(--bg-raised);
+  --btn-fg:     var(--text-muted);
+  --btn-border: var(--border);
+
+  display: inline-flex; align-items: center; justify-content: center;
+  gap: var(--space-xs);
+  font: inherit; font-size: 0.875rem; font-weight: 560; line-height: 1.25;
+  padding: 0.45rem 0.95rem;
+  border: 1px solid var(--btn-border); border-radius: 999px;
+  background: var(--btn-bg); color: var(--btn-fg);
+  text-decoration: none; white-space: nowrap; cursor: pointer;
+  transition: background-color var(--transition), border-color var(--transition),
+              color var(--transition), transform var(--transition);
 }
-.btn-ghost:hover { color: var(--text); border-color: var(--border-strong); }
+.btn:hover, .btn-ghost:hover { --btn-border: var(--border-strong); --btn-fg: var(--text); }
+.btn:active, .btn-ghost:active { transform: translateY(1px); }
+.btn:disabled, .btn-ghost:disabled, .btn[aria-disabled="true"] {
+  opacity: 0.45; cursor: not-allowed; transform: none; pointer-events: none;
+}
+
+.btn--primary {
+  --btn-bg: var(--accent); --btn-fg: var(--on-accent); --btn-border: var(--accent);
+  font-weight: 620;
+}
+.btn--primary:hover {
+  --btn-bg: color-mix(in srgb, var(--accent) 86%, var(--text));
+  --btn-border: var(--btn-bg); --btn-fg: var(--on-accent);
+}
+
+.btn--secondary {
+  --btn-bg: var(--accent-soft); --btn-fg: var(--accent-text);
+  --btn-border: color-mix(in srgb, var(--accent) 35%, transparent);
+}
+.btn--secondary:hover {
+  --btn-fg: var(--accent-text);
+  --btn-border: color-mix(in srgb, var(--accent) 60%, transparent);
+}
+
+.btn--danger {
+  --btn-bg: var(--danger-soft); --btn-fg: var(--danger);
+  --btn-border: color-mix(in srgb, var(--danger) 35%, transparent);
+}
+.btn--danger:hover { --btn-fg: var(--danger); --btn-border: var(--danger); }
+
+/* Compatibilidade: .btn-ghost era a classe única antiga. Continua valendo, e
+   agora é só o nome da variante mais discreta. Fica ANTES de .btn--icon de
+   propósito: as duas mexem em padding com a mesma especificidade, e a que vem
+   depois vence — com a ordem trocada, o ícone do botão quadrado é espremido
+   para 3px e some. */
+.btn-ghost, .btn--ghost { font-size: 0.8125rem; padding: 0.3rem 0.7rem; }
+
+.btn--lg { font-size: 0.9375rem; padding: 0.6rem 1.25rem; }
+.btn--sm { font-size: 0.8125rem; padding: 0.3rem 0.7rem; }
+/* Quadrado, para um ícone só: sem isto o padding lateral deforma o círculo. */
+.btn--icon { padding: 0; width: 2rem; height: 2rem; flex: none; }
+.btn--icon.btn--sm { width: 1.75rem; height: 1.75rem; }
+
+.btn.is-active {
+  --btn-bg: var(--accent-soft); --btn-fg: var(--accent-text);
+  --btn-border: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+/* ── Foco visível ──────────────────────────────────────────────────────────
+   Uma regra só, em todo elemento focável. O outline padrão do navegador some
+   contra superfícies escuras e some de vez em cima de border-radius: 999px —
+   quem navega por teclado ficava sem saber onde está. */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.btn:focus-visible, .btn-ghost:focus-visible, .badge:focus-visible { border-radius: 999px; }
+.card:focus-visible { border-radius: var(--radius-lg); }
 
 .footer {
   margin-top: 5rem; padding: 2.5rem 0 3.5rem;
@@ -328,3 +420,280 @@ blockquote {
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
   overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
 }
+
+/* Skip-link: escondido até receber foco, e então visível de verdade. Antes era
+   só .visually-hidden — ou seja, existia para o leitor de tela e desaparecia
+   para quem navega por Tab enxergando a tela. */
+.skip-link {
+  position: fixed; top: var(--space-sm); left: var(--space-sm); z-index: 100;
+  padding: 0.5rem 0.9rem; border-radius: var(--radius);
+  background: var(--accent); color: var(--on-accent);
+  font-size: 0.875rem; font-weight: 600; text-decoration: none;
+  box-shadow: var(--shadow);
+  transform: translateY(calc(-100% - var(--space-lg)));
+  transition: transform var(--transition);
+}
+.skip-link:focus { transform: translateY(0); }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Home
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.hero { padding: var(--space-2xl) 0 var(--space-xl); }
+.hero__inner { max-width: 46rem; }
+.hero__eyebrow {
+  display: inline-flex; align-items: center; gap: var(--space-xs);
+  font-size: 0.75rem; font-weight: 640; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--accent-text);
+  margin-bottom: var(--space-sm);
+}
+.hero__lead { font-size: 1.0625rem; color: var(--text-muted); }
+.hero__actions {
+  display: flex; flex-wrap: wrap; gap: var(--space-sm);
+  margin-top: var(--space-lg);
+}
+
+/* Fatos medidos, não adjetivos. Cada número vem de um arquivo em src/data/. */
+.stats {
+  display: grid; gap: var(--space-sm);
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  margin-top: var(--space-xl);
+}
+.stat {
+  background: var(--bg-raised); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); padding: var(--space-sm) var(--space-md);
+}
+.stat__value {
+  display: block; font-size: 1.4rem; font-weight: 640;
+  letter-spacing: -0.02em; font-variant-numeric: tabular-nums;
+}
+.stat__label { display: block; font-size: 0.75rem; color: var(--text-muted); line-height: 1.4; }
+
+.track-section { margin-bottom: var(--space-2xl); }
+.track-section__head {
+  display: flex; align-items: center; gap: var(--space-sm);
+  flex-wrap: wrap; margin: 0 0 var(--space-2xs);
+}
+.track-section__count { font-size: 0.8125rem; color: var(--text-faint); font-weight: 400; }
+.track-section__desc {
+  color: var(--text-muted); margin: 0 0 var(--space-md); max-width: 46rem;
+}
+/* Trilha ainda não escrita: o cartão explica em vez de sumir da página. */
+.track-section--empty .track-section__desc { margin-bottom: var(--space-sm); }
+.soon {
+  border: 1px dashed var(--border-strong); border-radius: var(--radius-lg);
+  padding: var(--space-md); color: var(--text-faint); font-size: 0.9375rem;
+  background: var(--bg-sunken);
+}
+
+.card__foot {
+  display: flex; align-items: center; gap: var(--space-xs);
+  margin-top: var(--space-sm); font-size: 0.8125rem; color: var(--accent-text);
+  font-weight: 560;
+}
+.card:hover .card__foot .card__arrow { transform: translateX(3px); }
+.card__arrow { display: inline-block; transition: transform var(--transition); }
+.card__tags { display: flex; flex-wrap: wrap; gap: var(--space-2xs); margin-top: var(--space-sm); }
+.tag {
+  font-size: 0.6875rem; font-family: var(--font-mono);
+  color: var(--text-faint); background: var(--bg-sunken);
+  border: 1px solid var(--border); border-radius: 4px; padding: 0.05rem 0.35rem;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Figuras e diagramas
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.figure {
+  margin: var(--space-xl) 0;
+  padding: var(--space-md) var(--space-md) var(--space-sm);
+  border: 1px solid var(--border); border-radius: var(--radius-lg);
+  background: var(--bg-raised);
+}
+.figure__canvas { display: block; width: 100%; overflow-x: auto; }
+.figure__canvas svg { display: block; width: 100%; height: auto; max-width: 100%; }
+/* Os diagramas são densos: um viewBox de 700 unidades espremido num celular
+   de 390px renderiza rótulo de 9px a ~5px, ilegível. Abaixo do piso, o
+   desenho para de encolher e o contêiner rola na horizontal — ler rolando é
+   melhor que não ler. O body nunca rola junto: o overflow é do .figure__canvas. */
+@media (max-width: 660px) {
+  .figure__canvas svg { min-width: 34rem; max-width: none; }
+}
+.figure figcaption, .figure__caption {
+  margin: var(--space-sm) 0 0; padding-top: var(--space-sm);
+  border-top: 1px solid var(--border);
+  font-size: 0.8125rem; color: var(--text-muted); line-height: 1.5;
+}
+.figure__caption b, .figure figcaption b { color: var(--text); font-weight: 620; }
+
+/* Tipografia dentro dos SVGs: um lugar só, herdada por todos os diagramas. */
+.figure svg text { font-family: var(--font-sans); fill: var(--text); }
+.figure svg .dg-mono { font-family: var(--font-mono); }
+.figure svg .dg-muted { fill: var(--text-muted); }
+.figure svg .dg-faint { fill: var(--text-faint); }
+.figure svg .dg-title { font-weight: 640; letter-spacing: -0.01em; }
+.figure svg .dg-box { fill: var(--bg-sunken); stroke: var(--border); stroke-width: 1.5; }
+.figure svg .dg-box--raised { fill: var(--bg-raised); }
+.figure svg .dg-box--accent {
+  fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.5;
+}
+.figure svg .dg-box--warn {
+  fill: var(--warn-soft); stroke: color-mix(in srgb, var(--warn) 60%, transparent);
+}
+.figure svg .dg-box--danger {
+  fill: var(--danger-soft); stroke: color-mix(in srgb, var(--danger) 60%, transparent);
+}
+.figure svg .dg-box--dashed { stroke-dasharray: 5 4; }
+.figure svg .dg-line { stroke: var(--border-strong); stroke-width: 1.5; fill: none; }
+.figure svg .dg-line--accent { stroke: var(--accent); }
+.figure svg .dg-line--warn { stroke: var(--warn); }
+.figure svg .dg-line--danger { stroke: var(--danger); }
+.figure svg .dg-line--dashed { stroke-dasharray: 5 4; }
+.figure svg .dg-fill-accent { fill: var(--accent); }
+.figure svg .dg-fill-warn { fill: var(--warn); }
+.figure svg .dg-fill-danger { fill: var(--danger); }
+.figure svg .dg-on-accent { fill: var(--on-accent); }
+
+.figure__legend {
+  display: flex; flex-wrap: wrap; gap: var(--space-md);
+  margin-top: var(--space-sm); font-size: 0.75rem; color: var(--text-muted);
+}
+.figure__legend-item { display: inline-flex; align-items: center; gap: var(--space-2xs); }
+.figure__key {
+  width: 0.7rem; height: 0.7rem; border-radius: 3px; flex: none;
+  border: 1px solid var(--border-strong);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Blocos de código — copiar
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* O botão é injetado por JS (Base.astro). Sem JS, o bloco continua idêntico —
+   só não ganha o botão. É melhoria progressiva, não requisito. */
+.code-wrap { position: relative; }
+.code-wrap > pre { margin: 0; }
+.copy-btn {
+  position: absolute; top: 0.5rem; right: 0.5rem; z-index: 2;
+  opacity: 0; transition: opacity var(--transition), color var(--transition),
+                          border-color var(--transition);
+}
+.code-wrap:hover .copy-btn,
+.copy-btn:focus-visible,
+.copy-btn.is-done { opacity: 1; }
+.copy-btn.is-done { --btn-fg: var(--accent-text); --btn-border: var(--accent); }
+@media (hover: none) { .copy-btn { opacity: 1; } }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Navegação e leitura
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* Barra de progresso de leitura: largura escrita por JS numa custom property. */
+.progress {
+  position: fixed; top: 0; left: 0; right: 0; height: 2px; z-index: 60;
+  background: transparent; pointer-events: none;
+}
+.progress__bar {
+  height: 100%; width: var(--progress, 0%);
+  background: var(--accent); transition: width 0.1s linear;
+}
+
+.nav__group { display: flex; align-items: center; gap: var(--space-md); }
+@media (max-width: 719px) {
+  .nav__link--optional { display: none; }
+}
+.nav__icon-link {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 2rem; height: 2rem; border-radius: 999px;
+  color: var(--text-muted); text-decoration: none;
+}
+.nav__icon-link:hover { color: var(--text); background: var(--bg-sunken); }
+
+/* TOC: coluna fixa no desktop, <details> recolhível no mobile. Antes ela
+   simplesmente sumia abaixo de 1000px e o leitor perdia o índice inteiro. */
+.toc li a[aria-current="true"] {
+  color: var(--accent-text); border-left-color: var(--accent); font-weight: 560;
+}
+.toc-mobile {
+  margin: var(--space-md) 0 0;
+  border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--bg-raised); font-size: 0.875rem;
+}
+.toc-mobile > summary {
+  cursor: pointer; padding: var(--space-sm) var(--space-md);
+  font-size: 0.8125rem; font-weight: 640; text-transform: uppercase;
+  letter-spacing: 0.05em; color: var(--text-muted);
+}
+.toc-mobile > summary::marker { color: var(--text-faint); }
+.toc-mobile ol { list-style: none; margin: 0; padding: 0 var(--space-md) var(--space-sm); }
+.toc-mobile li a { display: block; padding: 0.25rem 0; color: var(--text-muted); text-decoration: none; }
+.toc-mobile li a:hover { color: var(--text); }
+.toc-mobile li[data-depth="3"] a { padding-left: var(--space-md); font-size: 0.8125rem; }
+@media (min-width: 1000px) { .toc-mobile { display: none; } }
+
+/* O pager agora atravessa trilhas: o fim de "fundamentos" leva à primeira
+   lição de "kubernetes" em vez de virar um beco sem saída. */
+.pager__track { font-size: 0.6875rem; color: var(--text-faint); letter-spacing: 0.04em; }
+.pager__link--next .pager__track { display: block; }
+
+.lesson__head { margin-bottom: var(--space-md); }
+.lesson__summary { font-size: 1.0625rem; color: var(--text-muted); margin-top: 0; }
+.lesson__meta {
+  display: flex; align-items: center; gap: var(--space-sm);
+  flex-wrap: wrap; margin-bottom: var(--space-sm);
+}
+
+/* Barra de ações no topo da lição — ir ao código no repositório, etc. */
+.lesson__actions {
+  display: flex; flex-wrap: wrap; gap: var(--space-xs);
+  margin: var(--space-md) 0 0;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Callout e RunIt
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.callout { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0 var(--space-sm); }
+.callout__icon {
+  grid-row: 1 / span 2; width: 1.15rem; height: 1.15rem; margin-top: 0.1rem;
+  flex: none;
+}
+.callout--why    .callout__icon { color: var(--accent-text); }
+.callout--trap   .callout__icon { color: var(--warn); }
+.callout--danger .callout__icon { color: var(--danger); }
+.callout__body > :first-child { margin-top: 0; }
+.callout__body > :last-child { margin-bottom: 0; }
+
+.runit__head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--space-sm);
+}
+.runit__title { display: inline-flex; align-items: center; gap: var(--space-xs); }
+.runit__where {
+  font-family: var(--font-mono); font-size: 0.6875rem; text-transform: none;
+  letter-spacing: 0; color: var(--text-faint); font-weight: 400;
+}
+.runit__foot {
+  padding: var(--space-xs) var(--space-md) var(--space-sm);
+  font-size: 0.75rem; color: var(--text-faint);
+  border-top: 1px dashed var(--border);
+}
+.runit__foot code { font-size: 0.75rem; }
+
+/* Ícones que dependem do tema ativo (sol no escuro, lua no claro). Os dois
+   blocos existem porque o tema tem três estados: escolhido, escolhido claro,
+   e "o que o sistema disser". */
+.icon-dark { display: none; }
+:root[data-theme="dark"] .icon-dark { display: inline-block; }
+:root[data-theme="dark"] .icon-light { display: none; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .icon-dark { display: inline-block; }
+  :root:not([data-theme="light"]) .icon-light { display: none; }
+}
+
+.footer__inner {
+  display: flex; flex-wrap: wrap; gap: var(--space-md);
+  align-items: center; justify-content: space-between;
+}
+.footer__links { display: flex; flex-wrap: wrap; gap: var(--space-md); }
+.footer a { color: var(--text-muted); text-decoration: none; }
+.footer a:hover { color: var(--text); text-decoration: underline; }

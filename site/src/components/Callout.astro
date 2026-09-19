@@ -5,15 +5,49 @@
  *   why    — por que a prática existe (o raciocínio, não a regra)
  *   trap   — a pegadinha que morde quem só leu a regra
  *   danger — o erro que causa incidente de segurança
+ *
+ * O idioma sai da URL (/pt/… ou /en/…) e não de uma prop: o MDX recebe este
+ * componente já injetado pela página da lição, sem importá-lo, então não há
+ * onde passar `lang`. Antes disso, todo arquivo EN precisava repetir
+ * `label="Gotcha"` à mão — e esquecer um deixava a lição inglesa com um
+ * rótulo em português.
  */
+import { useTranslations, type Lang } from "../i18n/ui";
+
 interface Props {
   type?: "why" | "trap" | "danger";
   label?: string;
 }
 const { type = "why", label } = Astro.props;
-const defaults = { why: "Por quê", trap: "Pegadinha", danger: "Perigo" } as const;
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+const t = useTranslations(lang);
+const defaults = {
+  why: t("callout.why"),
+  trap: t("callout.trap"),
+  danger: t("callout.danger"),
+} as const;
 ---
 <aside class={`callout callout--${type}`}>
+  {type === "why" && (
+    <svg class="callout__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+         stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2Z"></path>
+    </svg>
+  )}
+  {type === "trap" && (
+    <svg class="callout__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+         stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"></path>
+    </svg>
+  )}
+  {type === "danger" && (
+    <svg class="callout__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+         stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="9"></circle>
+      <path d="M12 7v6M12 16.5h.01"></path>
+    </svg>
+  )}
   <strong class="callout__label">{label ?? defaults[type]}</strong>
-  <slot />
+  <div class="callout__body"><slot /></div>
 </aside>

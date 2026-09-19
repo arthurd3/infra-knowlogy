@@ -3,7 +3,7 @@ import { getCollection, render } from "astro:content";
 import Base from "../../../layouts/Base.astro";
 import Callout from "../../../components/Callout.astro";
 import RunIt from "../../../components/RunIt.astro";
-import { useTranslations, otherLang, type Lang } from "../../../i18n/ui";
+import { useTranslations, otherLang, repoUrl, type Lang } from "../../../i18n/ui";
 
 export async function getStaticPaths() {
   const lessons = await getCollection("lessons");
@@ -26,34 +26,70 @@ const siblings = (await getCollection("lessons", (e) =>
 
 const index = siblings.findIndex((e) => e.data.key === entry.data.key);
 const prev = index > 0 ? siblings[index - 1] : undefined;
-const next = index >= 0 && index < siblings.length - 1 ? siblings[index + 1] : undefined;
+let next = index >= 0 && index < siblings.length - 1 ? siblings[index + 1] : undefined;
+
+// Fim de trilha não é fim do site. Sem isto, quem termina "fundamentos" cai
+// num beco sem saída e precisa voltar à home para descobrir que há mais.
+const ORDER = ["fundamentos", "producao", "kubernetes"] as const;
+let crossTrack: (typeof siblings)[number] | undefined;
+if (!next) {
+  const rest = ORDER.slice(ORDER.indexOf(entry.data.track as (typeof ORDER)[number]) + 1);
+  for (const track of rest) {
+    const firstOf = (await getCollection("lessons", (e) => e.data.lang === lang && e.data.track === track))
+      .sort((a, b) => a.data.order - b.data.order)[0];
+    if (firstOf) { next = firstOf; crossTrack = firstOf; break; }
+  }
+}
 
 // O slug é compartilhado entre os idiomas, então o link do outro idioma é
 // determinístico — sem tabela de tradução de URL.
 const altPath = `/${otherLang(lang)}/lessons/${entry.data.key}/`;
 const toc = headings.filter((h) => h.depth === 2 || h.depth === 3);
-const badgeClass = {
+const badgeOf = (track: string) => ({
   fundamentos: "badge--fund",
   producao: "badge--prod",
   kubernetes: "badge--k8s",
-}[entry.data.track];
+}[track] ?? "");
+const badgeClass = badgeOf(entry.data.track);
 ---
 
 <Base lang={lang} title={`${entry.data.title} — ${t("site.title")}`}
-      description={entry.data.summary} altPath={altPath}>
+      description={entry.data.summary} altPath={altPath} progress>
   <article class="lesson">
     <div class="prose">
-      <div class="card__meta" style="margin-bottom: 0.75rem;">
-        <span class={`badge ${badgeClass}`}>{t(`track.${entry.data.track}`)}</span>
-        <span>{t("lesson.lesson")} {entry.data.order}</span>
-        <span>·</span>
-        <span>{entry.data.minutes} {t("lesson.minutes")}</span>
-      </div>
+      <header class="lesson__head">
+        <div class="card__meta lesson__meta">
+          <a class={`badge ${badgeClass}`} href={`/${lang}/#${entry.data.track}`}>
+            {t(`track.${entry.data.track}`)}
+          </a>
+          <span>{t("lesson.lesson")} {entry.data.order}</span>
+          <span>·</span>
+          <span>{entry.data.minutes} {t("lesson.minutes")}</span>
+        </div>
 
-      <h1>{entry.data.title}</h1>
-      <p style="font-size: 1.0625rem; color: var(--text-muted); margin-top: 0;">
-        {entry.data.summary}
-      </p>
+        <h1>{entry.data.title}</h1>
+        <p class="lesson__summary">{entry.data.summary}</p>
+
+        {entry.data.tags.length > 0 && (
+          <div class="card__tags" aria-label={t("lesson.tags")}>
+            {entry.data.tags.map((tag) => <span class="tag">{tag}</span>)}
+          </div>
+        )}
+
+        <!-- Índice recolhível: no desktop a coluna lateral dá conta, mas abaixo
+             de 1000px ela some — e sumir sem substituto tira o índice de quem
+             lê no celular, que é justamente quem mais precisa dele. -->
+        {toc.length > 0 && (
+          <details class="toc-mobile">
+            <summary>{t("lesson.onThisPage")}</summary>
+            <ol>
+              {toc.map((h) => (
+                <li data-depth={h.depth}><a href={`#${h.slug}`}>{h.text}</a></li>
+              ))}
+            </ol>
+          </details>
+        )}
+      </header>
       <hr />
 
       <!-- Callout e RunIt são passados como componentes para o MDX poder usá-los
@@ -77,11 +113,21 @@ const badgeClass = {
             <div class="pager__dir">← {t("lesson.prev")}</div>
             <div class="pager__title">{prev.data.title}</div>
           </a>
-        ) : <span></span>}
+        ) : (
+          <a class="pager__link" href={`/${lang}/`}>
+            <div class="pager__dir">← {t("lesson.backToTracks")}</div>
+            <div class="pager__title">{t("site.title")}</div>
+          </a>
+        )}
         {next && (
           <a class="pager__link pager__link--next" href={`/${lang}/lessons/${next.data.key}/`}>
             <div class="pager__dir">{t("lesson.next")} →</div>
             <div class="pager__title">{next.data.title}</div>
+            {crossTrack && (
+              <span class="pager__track">
+                {t("pager.otherTrack")} {t(`track.${crossTrack.data.track}`)}
+              </span>
+            )}
           </a>
         )}
       </nav>
@@ -95,6 +141,11 @@ const badgeClass = {
             <li data-depth={h.depth}><a href={`#${h.slug}`}>{h.text}</a></li>
           ))}
         </ol>
+        <p class="lesson__actions">
+          <a class="btn btn-ghost" href={repoUrl} rel="noopener noreferrer" target="_blank">
+            {t("nav.repo")}
+          </a>
+        </p>
       </aside>
     )}
   </article>

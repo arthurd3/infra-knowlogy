@@ -193,3 +193,150 @@
   .lx__layer { grid-template-columns: minmax(0, 1fr) 4rem; }
   .lx__viz { display: none; }
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Ações ao vivo (.gx, .lab) — os widgets que falam com a stack de verdade
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.gx {
+  margin: 2rem 0;
+  border: 1px solid var(--border); border-radius: var(--radius-lg);
+  background: var(--bg-raised); font-size: 0.9375rem;
+  overflow: hidden;
+}
+.gx__head {
+  display: flex; align-items: center; gap: var(--space-sm); flex-wrap: wrap;
+  padding: var(--space-sm) var(--space-md);
+  border-bottom: 1px solid var(--border); background: var(--bg-sunken);
+}
+.gx__title { font-weight: 640; letter-spacing: -0.01em; }
+.gx__spacer { flex: 1; }
+
+/* Estado da conexão com a stack, decidido por um probe real e não por adivinhação. */
+.gx__chip {
+  display: inline-flex; align-items: center; gap: 0.4rem;
+  font-size: 0.75rem; font-weight: 600; padding: 0.15rem 0.6rem;
+  border-radius: 999px; border: 1px solid var(--border);
+  color: var(--text-muted); background: var(--bg-raised); white-space: nowrap;
+}
+.gx__chip--online {
+  color: var(--accent-text); border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  background: var(--accent-soft);
+}
+.gx__chip--partial {
+  color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, transparent);
+  background: var(--warn-soft);
+}
+.gx__dot { width: 0.5rem; height: 0.5rem; border-radius: 999px; background: currentColor; flex: none; }
+.gx__chip--online .gx__dot { animation: gx-pulse 2s ease-in-out infinite; }
+@keyframes gx-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+.gx__banner {
+  padding: var(--space-sm) var(--space-md);
+  font-size: 0.8125rem; color: var(--text-muted);
+  background: var(--bg-sunken); border-bottom: 1px solid var(--border);
+}
+.gx__banner code { font-size: 0.75rem; }
+
+.gx__steps { list-style: none; margin: 0; padding: 0; }
+.gx__step { border-bottom: 1px solid var(--border); }
+.gx__step:last-child { border-bottom: none; }
+.gx__row {
+  display: grid; grid-template-columns: 1.4rem minmax(0, 15rem) minmax(0, 1fr) auto;
+  gap: var(--space-sm); align-items: baseline;
+  width: 100%; text-align: left; font: inherit; color: inherit;
+  padding: var(--space-sm) var(--space-md);
+  background: none; border: none; cursor: default;
+}
+.gx__row--expandable { cursor: pointer; }
+.gx__row--expandable:hover { background: var(--bg-sunken); }
+.gx__step.is-running { background: var(--accent-soft); }
+.gx__step.is-fail { background: var(--danger-soft); }
+
+.gx__icon { font-size: 0.9rem; line-height: 1.4; text-align: center; }
+.gx__icon--pass { color: var(--accent-text); }
+.gx__icon--fail { color: var(--danger); }
+.gx__icon--idle { color: var(--text-faint); }
+.gx__icon--running { color: var(--accent); animation: gx-spin 1s linear infinite; display: inline-block; }
+@keyframes gx-spin { to { transform: rotate(360deg); } }
+
+.gx__req {
+  font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.gx__msg { font-size: 0.875rem; min-width: 0; }
+.gx__msg strong { font-weight: 640; }
+.gx__ms { font-size: 0.75rem; color: var(--text-faint); font-variant-numeric: tabular-nums; }
+
+.gx__body {
+  margin: 0; padding: 0 var(--space-md) var(--space-sm) calc(var(--space-md) + 2rem);
+  font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-muted);
+  white-space: pre-wrap; word-break: break-all;
+}
+.gx__foot {
+  display: flex; align-items: center; gap: var(--space-md); flex-wrap: wrap;
+  padding: var(--space-sm) var(--space-md);
+  border-top: 1px solid var(--border); background: var(--bg-sunken);
+  font-size: 0.8125rem; color: var(--text-muted);
+}
+.gx__score strong { font-size: 1rem; }
+.gx__score .is-pass { color: var(--accent-text); }
+.gx__score .is-fail { color: var(--danger); }
+
+@media (max-width: 720px) {
+  .gx__row { grid-template-columns: 1.4rem minmax(0, 1fr) auto; }
+  .gx__req { grid-column: 2 / -1; grid-row: 2; }
+  .gx__body { padding-left: var(--space-md); }
+}
+
+/* ── Laboratório do encurtador (.lab) ──────────────────────────────────── */
+
+.lab {
+  margin: 2rem 0; padding: var(--space-md);
+  border: 1px solid var(--border); border-radius: var(--radius-lg);
+  background: var(--bg-raised); font-size: 0.9375rem;
+}
+.lab__form { display: flex; gap: var(--space-sm); flex-wrap: wrap; align-items: flex-end; }
+.lab__field { display: flex; flex-direction: column; gap: 0.25rem; flex: 1; min-width: 14rem; }
+.lab__field label { font-size: 0.75rem; color: var(--text-muted); font-weight: 600; }
+.lab__input {
+  font: inherit; font-family: var(--font-mono); font-size: 0.8125rem;
+  padding: 0.5rem 0.7rem; border-radius: var(--radius);
+  border: 1px solid var(--border); background: var(--bg); color: var(--text);
+  width: 100%;
+}
+.lab__input:focus { border-color: var(--accent); }
+.lab__presets { display: flex; gap: var(--space-xs); flex-wrap: wrap; margin-top: var(--space-sm); }
+
+.lab__result { margin-top: var(--space-md); display: grid; gap: var(--space-sm); }
+.lab__card {
+  border: 1px solid var(--border); border-radius: var(--radius);
+  padding: var(--space-sm) var(--space-md); background: var(--bg-sunken);
+}
+.lab__card--danger { background: var(--danger-soft); border-color: color-mix(in srgb, var(--danger) 35%, transparent); }
+.lab__card--accent { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 35%, transparent); }
+.lab__label {
+  font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--text-faint); font-weight: 680; display: block; margin-bottom: 0.2rem;
+}
+.lab__value { font-family: var(--font-mono); font-size: 0.8125rem; word-break: break-all; }
+.lab__hint { margin: var(--space-sm) 0 0; font-size: 0.8125rem; color: var(--text-faint); }
+.lab__error { color: var(--danger); font-size: 0.8125rem; margin: var(--space-sm) 0 0; }
+
+/* ── Medições do módulo Kubernetes (.km) ───────────────────────────────── */
+
+.km { margin: 2rem 0; padding: var(--space-md) var(--space-md) var(--space-sm);
+      border: 1px solid var(--border); border-radius: var(--radius-lg);
+      background: var(--bg-raised); }
+.km__grid { display: grid; gap: var(--space-sm);
+            grid-template-columns: repeat(auto-fit, minmax(10.5rem, 1fr)); }
+.km__cell { border: 1px solid var(--border); border-radius: var(--radius);
+            padding: var(--space-sm) var(--space-md); background: var(--bg-sunken); }
+.km__value { font-size: 1.5rem; font-weight: 640; letter-spacing: -0.02em;
+             font-variant-numeric: tabular-nums; display: block; line-height: 1.2; }
+.km__value .km__unit { font-size: 0.875rem; font-weight: 400; color: var(--text-muted); margin-left: 0.15rem; }
+.km__name { font-size: 0.8125rem; color: var(--text); display: block; margin-top: 0.2rem; }
+.km__note { font-size: 0.75rem; color: var(--text-faint); display: block; line-height: 1.45; margin-top: 0.15rem; }
+.km__cell--good .km__value { color: var(--accent-text); }
+.km__caption { margin: var(--space-sm) 0 0; padding-top: var(--space-sm);
+               border-top: 1px solid var(--border); font-size: 0.75rem; color: var(--text-faint); }

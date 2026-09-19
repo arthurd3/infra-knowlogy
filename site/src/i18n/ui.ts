@@ -10,6 +10,14 @@ export type Lang = keyof typeof languages;
 
 export const defaultLang: Lang = "pt";
 
+/** Endereço do repositório. Usado pela nav e pelos links "ver o código". */
+export const repoUrl = "https://github.com/arthurd3/infra-knowlogy";
+
+/** Link direto para um arquivo do repositório, no branch principal. */
+export function repoFile(path: string): string {
+  return `${repoUrl}/blob/main/${path}`;
+}
+
 export const ui = {
   pt: {
     "site.title": "infra-knowlogy",
@@ -17,6 +25,24 @@ export const ui = {
     "site.description":
       "Uma stack Docker de produção — endurecida, medida e verificada — e as lições que explicam cada decisão dela.",
     "nav.home": "Início",
+    "nav.repo": "Ver no GitHub",
+    "nav.theme": "Alternar tema claro/escuro",
+    "a11y.skip": "Pular para o conteúdo",
+    "action.copy": "Copiar",
+    "action.copied": "Copiado",
+    "action.copyCode": "Copiar o bloco de código",
+    "lesson.runItWhere": "no seu terminal, na raiz do repositório",
+    "lesson.tags": "Assuntos",
+    "lesson.backToTracks": "Todas as lições",
+    "pager.otherTrack": "Começa a trilha",
+    "home.verify.title": "Verifique você mesmo, daqui",
+    "home.verify.desc":
+      "As mesmas checagens que o make verify roda no terminal, disparadas pelo navegador contra a stack em execução. Sem a stack no ar, cada passo mostra a resposta gravada do último portão que passou.",
+    "home.stats.images": "imagens medidas",
+    "home.stats.checks": "checagens no portão",
+    "home.stats.services": "serviços na stack",
+    "home.stats.langs": "linguagens",
+    "home.soon": "Trilha planejada: o código que ela explica já está no repositório, as lições é que faltam.",
     "nav.tracks": "Trilhas",
     "nav.stack": "A stack",
     "track.fundamentos": "Fundamentos",
@@ -34,6 +60,9 @@ export const ui = {
     "lesson.prev": "Anterior",
     "lesson.onThisPage": "Nesta página",
     "lesson.runIt": "Rode você mesmo",
+    "callout.why": "Por quê",
+    "callout.trap": "Pegadinha",
+    "callout.danger": "Perigo",
     "lesson.lesson": "Lição",
     "lang.switch": "Ver em inglês",
     "footer.built":
@@ -49,6 +78,24 @@ export const ui = {
     "site.description":
       "A production Docker stack — hardened, measured and verified — and the lessons that explain every decision in it.",
     "nav.home": "Home",
+    "nav.repo": "View on GitHub",
+    "nav.theme": "Toggle light/dark theme",
+    "a11y.skip": "Skip to content",
+    "action.copy": "Copy",
+    "action.copied": "Copied",
+    "action.copyCode": "Copy the code block",
+    "lesson.runItWhere": "in your terminal, at the repository root",
+    "lesson.tags": "Topics",
+    "lesson.backToTracks": "All lessons",
+    "pager.otherTrack": "Starts the track",
+    "home.verify.title": "Check it yourself, from here",
+    "home.verify.desc":
+      "The same checks make verify runs in the terminal, fired from the browser against the running stack. With no stack up, every step shows the recorded response from the last gate that passed.",
+    "home.stats.images": "images measured",
+    "home.stats.checks": "checks in the gate",
+    "home.stats.services": "services in the stack",
+    "home.stats.langs": "languages",
+    "home.soon": "Planned track: the code it explains is already in the repository — the lessons are what is missing.",
     "nav.tracks": "Tracks",
     "nav.stack": "The stack",
     "track.fundamentos": "Fundamentals",
@@ -66,6 +113,9 @@ export const ui = {
     "lesson.prev": "Previous",
     "lesson.onThisPage": "On this page",
     "lesson.runIt": "Run it yourself",
+    "callout.why": "Why",
+    "callout.trap": "Gotcha",
+    "callout.danger": "Danger",
     "lesson.lesson": "Lesson",
     "lang.switch": "Ver em português",
     "footer.built":
