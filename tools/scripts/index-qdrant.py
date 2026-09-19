@@ -67,8 +67,6 @@ def parse_frontmatter(text: str) -> tuple[dict[str, str], str]:
 def clean(body: str) -> str:
     """Tira ruído de MDX que não ajuda a busca semântica."""
     body = re.sub(r"^import .+$", "", body, flags=re.M)
-    body = re.sub(r"^<[A-Z]\w*[^>]*/>$", "", body, flags=re.M)
-    body = re.sub(r"^</?(Callout|RunIt|LabExercise|Fragment)[^>]*>$", "", body, flags=re.M)
     # O <Tradeoff> carrega o critério de decisão nas PROPS, não no corpo — sem
     # isto, "quando usar VM em vez de container" não teria resposta no índice.
     body = re.sub(
@@ -79,10 +77,24 @@ def clean(body: str) -> str:
         ),
         body,
     )
+    body = re.sub(r"^<[A-Z]\w*[^>]*/>$", "", body, flags=re.M)
+    body = re.sub(r"^</?(Callout|RunIt|LabExercise|Fragment)[^>]*>$", "", body, flags=re.M)
     # O que sobrar de tag some: para busca semântica, markup é ruído. Isto
     # roda DEPOIS do Tradeoff, que precisa das props antes de perder as tags.
+    #
+    # Mas trecho entre crases é CONTEÚDO, não markup: o CLAUDE.md escreve
+    # "virou o `<LabExercise>` da lição 3" e o ADR fala em pôr algo "num
+    # `<Callout>`". Sem a proteção abaixo, essas frases chegavam ao índice com
+    # um buraco no lugar do nome — e era justamente o nome que se procurava.
+    guarda: list[str] = []
+
+    def proteger(m: re.Match) -> str:
+        guarda.append(m.group(0))
+        return f"\x00{len(guarda) - 1}\x00"
+
+    body = re.sub(r"```[\s\S]*?```|`[^`\n]+`", proteger, body)
     body = re.sub(r"</?\w+[^>]*>", "", body)
-    return body
+    return re.sub(r"\x00(\d+)\x00", lambda m: guarda[int(m.group(1))], body)
 
 
 def point(kind: str, path: Path, heading: str, text: str, extra: dict) -> models.PointStruct | None:
