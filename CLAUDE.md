@@ -122,12 +122,44 @@ justamente por isso.
     categorias MCS, o que prova que não houve fallback). Medido:
     `make cicd-prereqs`. Ver ADR 0011.
 
+23. **SELinux checa `connectto` de socket Unix contra o PROCESSO que escuta**,
+    não contra o rótulo do arquivo. Por isso `ls -Z` mostra um
+    `container_file_t:s0` perfeitamente acessível e o `connect()` falha com
+    `permission denied` — que parece problema de dono e não é. Medido no
+    agente falando com o buildkitd: `container_t` falha, `container_engine_t`
+    passa. (Antes disso, cheque o óbvio: conectar num socket Unix exige
+    permissão de ESCRITA, então `:ro` no volume também quebra.)
+24. **`systempaths=unconfined` não aparece em `.HostConfig.SecurityOpt`.** O
+    Docker o traduz em `MaskedPaths` e `ReadonlyPaths` vazios. Conferir pelo
+    `SecurityOpt` faz parecer que o Compose engoliu a opção; a prova está nos
+    outros dois campos.
+25. **Prontidão de HTTP não é configuração aplicada.** O Jenkins responde
+    `/login` com 200 e o header `X-Jenkins` ANTES de o JCasC terminar e de o
+    seed do Job DSL rodar. Quem depende de job criado precisa esperar o job.
+    A primeira versão do `cicd-verify` reprovava por corrida e parecia defeito.
+26. **O `builtOn` de um build de Pipeline é string vazia** mesmo quando todos
+    os estágios rodaram no agente — ele reporta o executor *flyweight*, que
+    fica no controller. E flyweight NÃO conta para `numExecutors`: 0
+    executores significa "nenhum BUILD roda aqui", não "nada roda aqui". Quem
+    prova onde o trabalho aconteceu é a linha `Running on <nó>` do console.
+27. **O ERE do `grep -E` não conhece `\s` nem `\S`** — `\s` casa a letra "s".
+    Uma checagem de pin escrita assim reprova arquivos perfeitamente pinados.
+    Use `[[:space:]]`.
+28. **A diretiva `# hadolint ignore=` precisa ser a ÚLTIMA linha antes da
+    instrução.** Com qualquer comentário entre as duas ela é ignorada em
+    silêncio, e você acha que suprimiu.
+
 ## Ao mexer na stack
 
 - Rode `make verify` antes de considerar qualquer coisa pronta. Para iterar
   rápido: `SKIP_SCAN=1 SKIP_OBS=1 make verify`. O estado bom conhecido é
   **32 passaram · 0 falharam** (25 + as 4 checagens do site + scan + obs; com
   os dois SKIP, **27 passaram**).
+- O módulo CI/CD também: `make cicd-verify` (estado bom: **32 passaram ·
+  0 falharam**). Para iterar sem reconstruir tudo:
+  `KEEP_JENKINS=1 SKIP_BUILD=1 SKIP_NEGATIVE=1 make cicd-verify`. Antes de
+  qualquer coisa nele, `make cicd-prereqs` — a sonda que prova que este host
+  constrói imagem sem daemon.
 - O módulo Kubernetes tem portão próprio: `make k8s-verify` (estado bom:
   **33 passaram · 0 falharam**). Para iterar sem recriar o cluster:
   `KEEP_CLUSTER=1 make k8s-verify`. Os portões são independentes de propósito
@@ -224,12 +256,12 @@ no CI. Os dois widgets pendentes saíram: a topologia do Compose virou o
 diagrama `StackTopology.astro` (lições 7 e 8) e a demo de vazamento de segredo
 via `docker history` virou o `<LabExercise>` da lição 3.
 
-A trilha `cicd` está cadastrada e **vazia**. A sonda do BuildKit rootless sob
-SELinux — que era o risco número um do módulo 3 — **passou**: `make cicd-prereqs`
-constrói sem daemon, sem privilégio e com o SELinux confinado, e o binário sai
-byte a byte igual ao do `docker build` (ADR 0011). O que falta do módulo é o
-Jenkins em si: `cicd/compose.yaml`, controller com JCasC e plugins pinados,
-agente sem socket, `Jenkinsfile`, o portão `make cicd-verify` e as 8 lições.
+O módulo 3 (`cicd/`) está **de pé e verde**: controller com JCasC e 67 plugins
+pinados, buildkitd rootless, agente sem socket, `git daemon` servindo o
+repositório, registry local, pipeline lint → build → archive e o portão
+`make cicd-verify` (**32 passaram · 0 falharam**). Faltam **as 8 lições** da
+trilha `cicd`, que está cadastrada e vazia, e dois estágios no pipeline: `scan`
+com Trivy e `sign` com cosign.
 
 ## O site
 

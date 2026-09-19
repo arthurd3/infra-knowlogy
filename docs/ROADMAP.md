@@ -13,7 +13,7 @@ lado a lado só é honesta porque a aplicação é a mesma.
 |---|---|---|---|---|
 | 1 | **Docker** — imagens, Compose, hardening OWASP, observabilidade | `stack/` | `make verify` (32 checagens) | **feito** · pendência: Trilha Produção (12 lições) |
 | 2 | **Kubernetes** — a mesma stack portada para um cluster kind | `k8s/` | `make k8s-verify` (33 checagens) | **feito (v1)** · [ADR 0007](adr/0007-kind-e-o-porte-para-kubernetes.md) · pendências: lições 4+, Ingress, HPA, kind no CI |
-| 3 | **CI/CD self-hosted (Jenkins)** — rodar em um Jenkins conteinerizado o pipeline que hoje vive no GitHub Actions (lint → build → scan → assinatura), sobre a mesma stack, comparando os dois mundos | `cicd/` | `make cicd-verify` | **em andamento** · trilha `cicd` já cadastrada no site, sem lição ainda |
+| 3 | **CI/CD self-hosted (Jenkins)** — o mesmo pipeline do GitHub Actions rodando num Jenkins que é seu, sobre a mesma stack | `cicd/` | `make cicd-verify` (32 checagens) | **feito (v1)** · [ADR 0011](adr/0011-como-o-agente-de-build-constroi-imagens.md) e [0012](adr/0012-jenkins-conteinerizado.md) · pendências: as 8 lições, scan e assinatura no pipeline |
 | 4 | **IaC (Terraform/OpenTofu)** — provisionar o host (ou o cluster) que os módulos 1–2 assumem existir | `iac/` | a definir | reservado |
 | 5 | **Configuração (Ansible)** — preparar um host Fedora real: Docker, SELinux, firewall, usuários — as coisas que o módulo 1 encontrou na marra | `config/` | a definir | reservado |
 | 6 | **Observabilidade avançada** — SLOs, alerting e tracing por cima do profile `obs` já existente | `stack/` (profile) | a definir | reservado |
@@ -44,16 +44,11 @@ lado a lado só é honesta porque a aplicação é a mesma.
   (multi-stage nos três idiomas, BuildKit, PID 1 e sinais, hardening, segredos,
   rootless/Podman, observabilidade, cadeia de suprimentos, CI/CD, limites do
   Compose, 12-Factor).
-- **Módulo 3:** a trilha `cicd` existe no site e está vazia. O desenho está no
-  plano: 8 lições (o que um pipeline prova · Jenkins sem clique com JCasC e
-  Job DSL · isolamento controller/agente · construir imagem sem entregar o host
-  · pipeline como código · credenciais no CI · assinar o que você entrega ·
-  controle de fluxo e ramificação). A sonda do BuildKit rootless sob SELinux —
-  o risco número um do módulo — **passou** e está em `make cicd-prereqs`:
-  constrói sem daemon, sem privilégio e com o SELinux confinado por
-  `container_engine_t`, e o binário sai idêntico ao do `docker build`
-  ([ADR 0011](adr/0011-como-o-agente-de-build-constroi-imagens.md)). Falta o
-  Jenkins: compose, controller com JCasC, agente, Jenkinsfile e o portão.
+- **Módulo 3:** a infraestrutura está de pé e o portão verde (32 checagens).
+  Faltam **as 8 lições** da trilha `cicd`, e dois estágios no pipeline: `scan`
+  (Trivy) e `sign` (cosign). A assinatura é a parte interessante — no GitHub
+  Actions ela é keyless pelo OIDC do workflow; num Jenkins self-hosted custa
+  uma chave gerenciada, e essa assimetria é o assunto de uma das lições.
 - **Módulo 2:** depois das 3 lições iniciais — Ingress de verdade
   (ingress-nginx), StatefulSets a fundo, HPA, e um job de kind no CI (o nome
   fica reservado aqui até o portão estabilizar localmente).

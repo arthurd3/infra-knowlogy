@@ -88,7 +88,7 @@ for (const dir of ["", "diagrams", "islands"]) {
 // Injetados pela página da lição ([slug].astro), sem import no MDX. Eles
 // pegam o idioma da URL; passá-los como prop em cada arquivo era o que fazia
 // a lição inglesa herdar rótulo em português quando alguém esquecia.
-const INJETADOS = ["Callout", "RunIt", "Tradeoff", "FieldNote", "LabExercise", "Quiz", "Figure"];
+const INJETADOS = ["Callout", "RunIt", "Tradeoff", "FieldNote", "LabExercise", "Term", "Quiz", "Figure"];
 for (const c of INJETADOS) available.add(c);
 // `Fragment` é do próprio Astro e é como o MDX preenche um slot nomeado.
 available.add("Fragment");
@@ -133,6 +133,10 @@ describe("paridade entre os idiomas", () => {
         ["```", /```/g], ["<Callout", /<Callout/g], ["<RunIt", /<RunIt/g],
         ["<Tradeoff", /<Tradeoff/g], ["<FieldNote", /<FieldNote/g],
         ["<LabExercise", /<LabExercise/g], ["<Quiz", /<Quiz/g],
+        // Um <Term> a mais em pt que em en é um conceito que o leitor inglês
+        // ficou sem — o defeito exato que a trilha de Segurança introduziu o
+        // risco de cometer, já que ela define dezenas de termos.
+        ["<Term", /<Term[\s/>]/g],
       ] as const;
       for (const [label, re] of PARES) {
         if (count(a.body, re) !== count(b.body, re)) {
@@ -214,7 +218,7 @@ describe("cobertura visual", () => {
     //
     // Componentes de moldura não contam: uma lição feita só de Callout e Quiz
     // continua sendo uma lição sem desenho nenhum.
-    const MOLDURA = new Set(["Callout", "RunIt", "Tradeoff", "FieldNote", "LabExercise", "Quiz", "Fragment"]);
+    const MOLDURA = new Set(["Callout", "RunIt", "Tradeoff", "FieldNote", "LabExercise", "Term", "Quiz", "Fragment"]);
     const semNada = lessons
       .filter((l) => !l.components.some((c) => !MOLDURA.has(c)))
       .map((l) => l.file);

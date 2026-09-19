@@ -6,6 +6,7 @@ import RunIt from "../../../components/RunIt.astro";
 import Tradeoff from "../../../components/Tradeoff.astro";
 import FieldNote from "../../../components/FieldNote.astro";
 import LabExercise from "../../../components/LabExercise.astro";
+import Term from "../../../components/Term.astro";
 import Quiz from "../../../components/Quiz.astro";
 import Figure from "../../../components/Figure.astro";
 import { useTranslations, otherLang, repoUrl, TRACKS, trackBadge, type Lang, type Track } from "../../../i18n/ui";
@@ -103,7 +104,7 @@ const sourcesField = entry.data.sources.filter((s) => !DOCS.has(s.kind));
            URL em vez de exigir uma prop `lang` repetida à mão em cada uso.
            Esquecer essa prop num arquivo EN deixava a lição inglesa com um
            rótulo em português, calada. -->
-      <Content components={{ Callout, RunIt, Tradeoff, FieldNote, LabExercise, Quiz, Figure }} />
+      <Content components={{ Callout, RunIt, Tradeoff, FieldNote, LabExercise, Term, Quiz, Figure }} />
 
       {entry.data.sources.length > 0 && (
         <section class="sources">

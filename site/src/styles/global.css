@@ -839,6 +839,40 @@ blockquote {
 }
 .lab__foot code { font-size: 0.75rem; }
 
+/* ── Term: o conceito aberto ali mesmo ────────────────────────────────────── */
+
+/* Mais leve que um Callout de propósito: um Callout interrompe para avisar de
+   alguma coisa, e este bloco só define uma palavra. Se os dois tivessem o mesmo
+   peso visual, uma lição cheia de termos novos viraria uma sequência de
+   alarmes. Daí a régua na lateral em vez de caixa fechada, e o fundo afundado
+   em vez de borda colorida. */
+.term {
+  margin: var(--space-md) 0;
+  border-left: 3px solid var(--border-strong);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  background: var(--bg-sunken);
+}
+.term__head {
+  display: flex; align-items: baseline; flex-wrap: wrap; gap: 0.45rem;
+  cursor: pointer; padding: 0.5rem var(--space-md);
+}
+.term__head::marker { color: var(--text-faint); }
+.term__eyebrow {
+  font-size: 0.625rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.08em; color: var(--text-faint);
+}
+.term__word { font-weight: 650; color: var(--text); }
+.term__head:hover .term__word { color: var(--accent-text); }
+.term__alt { font-size: 0.8125rem; font-style: italic; color: var(--text-faint); }
+.term[open] > .term__head { border-bottom: 1px dashed var(--border); }
+.term__def {
+  padding: var(--space-sm) var(--space-md);
+  font-size: 0.9375rem; color: var(--text-muted);
+}
+.term__def > :first-child { margin-top: 0; }
+.term__def > :last-child { margin-bottom: 0; }
+.term__def pre { margin: var(--space-sm) 0; }
+
 /* ── Figura que carrega imagem de terceiro ────────────────────────────────── */
 
 .figure__canvas--raster img {

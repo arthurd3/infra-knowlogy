@@ -1,0 +1,47 @@
+---
+/**
+ * O conceito, aberto ali mesmo.
+ *
+ * A trilha de Segurança é escrita para quem não é da área, e ela cita muito
+ * termo que só significa alguma coisa para quem já sabe: varredura de portas,
+ * hash, amplificação, prepared statement. Empurrar tudo para um glossário no
+ * fim é perder o leitor no meio da frase; explicar cada um em linha infla o
+ * parágrafo até ninguém achar mais a afirmação principal.
+ *
+ * Este bloco é o meio-termo: o termo fica visível na altura em que é citado, e
+ * a definição completa abre no lugar, sem tirar o leitor da página. Quem já
+ * conhece o termo passa reto — a linha fechada ocupa três centímetros.
+ *
+ * É um `<details>`, e não um balão flutuante, por um motivo prático: a
+ * definição pode ter parágrafo, lista e bloco de código, e nada disso é válido
+ * dentro de um elemento em linha. O `<details>` também não precisa de
+ * JavaScript, o que mantém a lição legível numa aba que nunca pintou
+ * (armadilha 20).
+ *
+ * `alt` carrega o nome em inglês porque é ele que o leitor vai digitar quando
+ * for pesquisar o assunto depois — traduzir "pass-the-hash" e não dizer o
+ * original deixa a pessoa sem o termo de busca.
+ */
+import { useTranslations, type Lang } from "../i18n/ui";
+
+interface Props {
+  /** O termo, no idioma da página. */
+  word: string;
+  /** Como o termo é conhecido na literatura — quase sempre o nome em inglês. */
+  alt?: string;
+  /** Já aberto. Para o conceito de que a lição inteira depende. */
+  open?: boolean;
+}
+const { word, alt, open = false } = Astro.props;
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+const t = useTranslations(lang);
+---
+<details class="term" open={open}>
+  <summary class="term__head">
+    <span class="term__eyebrow">{t("term.label")}</span>
+    <span class="term__word">{word}</span>
+    {alt && <span class="term__alt">{alt}</span>}
+  </summary>
+  <div class="term__def"><slot /></div>
+</details>
