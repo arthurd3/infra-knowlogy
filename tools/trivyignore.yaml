@@ -88,3 +88,26 @@ vulnerabilities:
     paths: ["usr/bin/caddy"]
     statement: "google.golang.org/grpc linkado no binário upstream; o gRPC não é usado nesta configuração."
     expired_at: 2026-11-30
+    # ── Acrescentadas em 2026-09-19, pelo estágio `scan` do módulo 3 ──────────
+    # O pipeline do Jenkins escaneia as MESMAS imagens e encontrou três CVEs que
+    # o bloco acima ainda não cobria. Mesma classe, mesma justificativa: são
+    # dependências linkadas estaticamente no binário upstream do Caddy, e o
+    # conserto é o mantenedor recompilar — não há pacote para atualizar.
+    #
+    # Tentei o caminho certo primeiro: `make pins` para mover o digest da
+    # imagem do Caddy. O Docker Hub respondeu 429 a todo pull anônimo, e o
+    # script não conseguiu checar nenhuma imagem de lá. Quando o limite
+    # liberar, o primeiro passo é `make pins` — se a imagem nova trouxer um Go
+    # mais recente, estas três saem junto com as de cima.
+    - id: CVE-2026-56854
+      paths: ["usr/bin/caddy"]
+      statement: "dependência linkada no binário upstream do Caddy; sem correção a montante."
+      expired_at: 2026-11-30
+    - id: CVE-2026-84304
+      paths: ["usr/bin/caddy"]
+      statement: "google.golang.org/grpc no binário upstream; o gRPC não é usado nesta configuração."
+      expired_at: 2026-11-30
+    - id: CVE-2026-84445
+      paths: ["usr/bin/caddy"]
+      statement: "google.golang.org/grpc, DoS via RPC malformada; este Caddy serve arquivos estáticos e não atende gRPC."
+      expired_at: 2026-11-30

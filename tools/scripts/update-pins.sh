@@ -8,6 +8,12 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 changed=0
+# "Não consegui checar" NÃO é "está atualizado". O Docker Hub responde 429 a
+# pull anônimo com alguma frequência, e a primeira versão deste script
+# terminava com "todos os pins já estão atualizados" depois de falhar em
+# resolver dez imagens. É a mesma distinção que o scan.sh faz entre "o scanner
+# quebrou" e "o scanner achou CVE": juntar as duas faz o portão mentir.
+unresolved=0
 
 while IFS= read -r file; do
   # Casa `FROM ref:tag@sha256:...` e também as imagens pinadas no Compose.
@@ -18,6 +24,7 @@ while IFS= read -r file; do
 
     if [ -z "$new" ]; then
       echo "   ⊘ não consegui resolver $image" >&2
+      unresolved=$((unresolved+1))
       continue
     fi
     if [ "$new" = "$old" ]; then
@@ -36,9 +43,16 @@ done < <({ find "$ROOT/stack" "$ROOT/site" "$ROOT/cicd" -name Dockerfile -o -nam
            echo "$ROOT/Makefile";
            echo "$ROOT/tools/scripts/k8s-verify.sh"; } | grep -v node_modules)
 
+echo
 if [ "$changed" -eq 1 ]; then
-  echo
   echo "   pins atualizados. Rode 'make verify' antes de commitar."
-else
-  echo "   todos os pins já estão atualizados."
 fi
+if [ "$unresolved" -gt 0 ]; then
+  echo "   ⚠  $unresolved imagem(ns) NÃO puderam ser checadas — o pin delas pode"
+  echo "      estar velho e este script não tem como saber. Causa comum: o"
+  echo "      Docker Hub responde 429 a pull anônimo. Tente de novo mais tarde"
+  echo "      ou autentique-se com 'docker login'."
+  exit 2
+fi
+[ "$changed" -eq 0 ] && echo "   todos os pins conferidos e atualizados."
+exit 0
