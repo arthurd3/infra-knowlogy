@@ -1,0 +1,124 @@
+{
+  "note_pt": "O que custa uma série, o rótulo que é bomba, e por que o portão mede o descarte.",
+  "note_en": "What a series costs, the label that is a bomb, and why the gate measures the drop.",
+  "pt": [
+    {
+      "q": "Qual destes rótulos derruba o Prometheus mais cedo?",
+      "options": [
+        {
+          "text": "`path=\"/r/abc123\"` — o caminho completo, com o código do link.",
+          "correct": true,
+          "why": "Cada link encurtado vira uma série nova, então o número de séries passa a crescer com os DADOS. É por isso que a api usa `route=\"/{code}\"`, o padrão e não o valor: seis séries em vez de infinitas."
+        },
+        {
+          "text": "`status=\"404\"` — o código de resposta HTTP.",
+          "why": "Conjunto pequeno e conhecido: alguns códigos, e pronto. É exatamente o tipo de rótulo que vale a pena ter."
+        },
+        {
+          "text": "`method=\"POST\"` — o método HTTP.",
+          "why": "Menos de dez valores possíveis, fixos pela especificação. Não cresce com nada."
+        },
+        {
+          "text": "`service=\"api\"` — o nome do serviço.",
+          "why": "Cresce com o número de serviços que você opera, que é um número que você controla e revisa. É o caso saudável."
+        }
+      ]
+    },
+    {
+      "q": "Por que o filtro do cAdvisor usa `action: keep` e não `action: drop`?",
+      "options": [
+        {
+          "text": "Porque `keep` é allowlist: uma métrica nova que o exporter passe a publicar fica de fora até alguém decidir incluí-la.",
+          "correct": true,
+          "why": "Com `drop` você bloqueia o que conhece, e a próxima versão do exporter entra de contrabando com métricas que ninguém revisou. É a mesma lógica do `cap_drop: [ALL]` da stack e do `keep` do Alloy na lição 5."
+        },
+        {
+          "text": "Porque `drop` não existe em `metric_relabel_configs`.",
+          "why": "Existe e funciona. A escolha entre os dois é de postura — negar por padrão ou permitir por padrão —, não de disponibilidade."
+        },
+        {
+          "text": "Porque `keep` é mais rápido de avaliar.",
+          "why": "A diferença de custo é irrelevante: as duas ações percorrem a mesma lista de amostras uma vez."
+        }
+      ]
+    },
+    {
+      "q": "Por que o portão mede o DESCARTE do relabel em vez do total de séries?",
+      "options": [
+        {
+          "text": "Porque o total muda por muitos motivos legítimos, e um limiar sobre ele daria alarme falso até alguém desligar a checagem.",
+          "correct": true,
+          "why": "O descarte mede uma coisa só: o filtro ainda está lá e ainda corta. Apagou o bloco, o número vai a zero e o portão reprova com a causa no nome. É a mesma disciplina do `verify.sh` separando 'o scanner quebrou' de 'achou CVE'."
+        },
+        {
+          "text": "Porque o total de séries não é exposto pelo Prometheus.",
+          "why": "É exposto — `prometheus_tsdb_head_series` — e a medição do módulo grava justamente esse número. O problema é usá-lo como limiar, não obtê-lo."
+        },
+        {
+          "text": "Porque o descarte é medido pelo cAdvisor e é mais confiável.",
+          "why": "Quem mede é o PRÓPRIO Prometheus, com `scrape_samples_scraped` e `scrape_samples_post_metric_relabeling`. Não é a stack se auto-declarando saudável: é o coletor contando o que ele mesmo fez."
+        }
+      ]
+    }
+  ],
+  "en": [
+    {
+      "q": "Which of these labels takes Prometheus down soonest?",
+      "options": [
+        {
+          "text": "`path=\"/r/abc123\"` — the full path, including the link code.",
+          "correct": true,
+          "why": "Every shortened link becomes a new series, so the series count starts growing with your DATA. That is why the api uses `route=\"/{code}\"`, the pattern rather than the value: six series instead of unbounded ones."
+        },
+        {
+          "text": "`status=\"404\"` — the HTTP response code.",
+          "why": "A small, known set: a handful of codes and that is it. Exactly the kind of label worth having."
+        },
+        {
+          "text": "`method=\"POST\"` — the HTTP method.",
+          "why": "Fewer than ten possible values, fixed by the specification. It grows with nothing."
+        },
+        {
+          "text": "`service=\"api\"` — the service name.",
+          "why": "It grows with the number of services you operate, a number you control and review. This is the healthy case."
+        }
+      ]
+    },
+    {
+      "q": "Why does the cAdvisor filter use `action: keep` rather than `action: drop`?",
+      "options": [
+        {
+          "text": "Because `keep` is an allowlist: a new metric the exporter starts publishing stays out until somebody decides to include it.",
+          "correct": true,
+          "why": "With `drop` you block what you know about, and the exporter's next version smuggles in metrics nobody reviewed. It is the same logic as the stack's `cap_drop: [ALL]` and Alloy's `keep` in lesson 5."
+        },
+        {
+          "text": "Because `drop` does not exist in `metric_relabel_configs`.",
+          "why": "It exists and works. Choosing between them is a matter of posture — deny by default or allow by default — not availability."
+        },
+        {
+          "text": "Because `keep` is faster to evaluate.",
+          "why": "The cost difference is irrelevant: both actions walk the same sample list once."
+        }
+      ]
+    },
+    {
+      "q": "Why does the gate measure the relabel's DROP rather than the total series count?",
+      "options": [
+        {
+          "text": "Because the total moves for many legitimate reasons, and a threshold on it would produce false alarms until somebody switched the check off.",
+          "correct": true,
+          "why": "The drop measures one thing only: the filter is still there and still cutting. Delete the block and the number goes to zero, failing the gate with the cause in its name. Same discipline as `verify.sh` separating 'the scanner broke' from 'it found a CVE'."
+        },
+        {
+          "text": "Because the total series count is not exposed by Prometheus.",
+          "why": "It is exposed — `prometheus_tsdb_head_series` — and the module's measurement records exactly that number. The problem is using it as a threshold, not obtaining it."
+        },
+        {
+          "text": "Because the drop is measured by cAdvisor and is more reliable.",
+          "why": "It is measured by Prometheus ITSELF, with `scrape_samples_scraped` and `scrape_samples_post_metric_relabeling`. It is not the stack declaring itself healthy: it is the collector reporting what it did."
+        }
+      ]
+    }
+  ]
+}

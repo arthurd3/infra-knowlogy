@@ -1,0 +1,116 @@
+{
+  "note_pt": "Velocidade em vez de taxa, o E entre janelas, e o que o módulo não tem.",
+  "note_en": "Speed instead of rate, the AND between windows, and what the module lacks.",
+  "pt": [
+    {
+      "q": "De onde vem o número 14,4?",
+      "options": [
+        {
+          "text": "De `(30 dias / 1 hora) × 2%` — é a taxa que consome 2% do orçamento em uma hora.",
+          "correct": true,
+          "why": "Os números da receita do SRE Workbook são derivados, não mágicos. Trocar a janela do SLO de 30 dias para 7 muda o 14,4 junto — e quem copia a tabela sem entender a derivação acaba com limiares errados."
+        },
+        {
+          "text": "É o valor que o Prometheus recomenda por padrão.",
+          "why": "O Prometheus não recomenda limiar nenhum: ele avalia a expressão que você escrever. A receita é do SRE Workbook do Google, não da ferramenta."
+        },
+        {
+          "text": "É a razão entre a janela longa e a curta (1h / 5min ≈ 12, arredondado).",
+          "why": "Coincidência de ordem de grandeza, e não a origem. As janelas escolhem QUANDO olhar; o 14,4 escolhe a partir de qual velocidade se acorda alguém."
+        }
+      ]
+    },
+    {
+      "q": "Por que o alerta continuou `firing` depois de o banco voltar?",
+      "options": [
+        {
+          "text": "Porque a janela de 5 minutos ainda contém os erros — ela precisa escoar. O alerta some quando a janela esvazia, não quando você conserta.",
+          "correct": true,
+          "why": "Não é defeito, é o que a janela significa. E é exatamente por isso que a janela curta existe: sem ela, a espera seria a janela de uma hora. Vale saber antes do incidente — alerta vermelho depois do conserto faz metade da sala achar que o problema voltou."
+        },
+        {
+          "text": "Porque o `for: 2m` reinicia a contagem a cada avaliação.",
+          "why": "O `for:` conta enquanto a condição segue verdadeira e zera quando ela deixa de ser. Ele atrasa o início do `firing`, não o fim."
+        },
+        {
+          "text": "Porque o alerta precisa ser silenciado manualmente.",
+          "why": "Silenciamento é função do Alertmanager, que este módulo não tem. E não seria necessário: o alerta se resolve sozinho quando a janela escoa."
+        }
+      ]
+    },
+    {
+      "q": "O que falta neste módulo para o alerta virar operação?",
+      "options": [
+        {
+          "text": "O Alertmanager: roteamento por severidade, agrupamento, silenciamento e escalonamento. Aqui `firing` não notifica ninguém.",
+          "correct": true,
+          "why": "O Prometheus avalia a regra e marca o estado — e para aí. Está declarado no roadmap: uma trilha que ensinasse SLO fingindo que `firing` é o fim da história estaria ensinando a metade fácil."
+        },
+        {
+          "text": "Mais regras de gravação para as janelas de 3 dias.",
+          "why": "Faltam mesmo, e é uma limitação menor e declarada: janela de 3 dias exige 3 dias de dado. Não é o que impede o alerta de virar notificação."
+        },
+        {
+          "text": "Um painel do Grafana mostrando o orçamento restante.",
+          "why": "Ajudaria a comunicar e não resolve o problema: painel exige alguém olhando, que é exatamente o que o alerta existe para evitar."
+        }
+      ]
+    }
+  ],
+  "en": [
+    {
+      "q": "Where does the number 14.4 come from?",
+      "options": [
+        {
+          "text": "From `(30 days / 1 hour) × 2%` — it is the rate that consumes 2% of the budget in one hour.",
+          "correct": true,
+          "why": "The SRE Workbook recipe's numbers are derived, not magic. Changing the SLO window from 30 days to 7 changes 14.4 along with it — and anyone copying the table without understanding the derivation ends up with wrong thresholds."
+        },
+        {
+          "text": "It is the value Prometheus recommends by default.",
+          "why": "Prometheus recommends no threshold at all: it evaluates whatever expression you write. The recipe is from Google's SRE Workbook, not from the tool."
+        },
+        {
+          "text": "It is the ratio between the long and short windows (1h / 5min ≈ 12, rounded).",
+          "why": "A coincidence of magnitude, not the origin. The windows choose WHEN to look; 14.4 chooses at what speed somebody gets woken up."
+        }
+      ]
+    },
+    {
+      "q": "Why did the alert keep `firing` after the database came back?",
+      "options": [
+        {
+          "text": "Because the five-minute window still contains the errors — it has to drain. The alert clears when the window empties, not when you fix things.",
+          "correct": true,
+          "why": "Not a defect, it is what the window means. And it is exactly why the short window exists: without it, the wait would be the one-hour window. Worth knowing before the incident — a red alert after the fix makes half the room think the problem returned."
+        },
+        {
+          "text": "Because `for: 2m` restarts the countdown on every evaluation.",
+          "why": "`for:` counts while the condition stays true and resets when it stops. It delays the start of `firing`, not the end."
+        },
+        {
+          "text": "Because the alert has to be silenced manually.",
+          "why": "Silencing is an Alertmanager feature, which this module lacks. And it would not be needed: the alert resolves itself once the window drains."
+        }
+      ]
+    },
+    {
+      "q": "What does this module lack for the alert to become operations?",
+      "options": [
+        {
+          "text": "Alertmanager: routing by severity, grouping, silencing and escalation. Here `firing` notifies nobody.",
+          "correct": true,
+          "why": "Prometheus evaluates the rule and marks the state — and stops there. It is declared in the roadmap: a track teaching SLOs while pretending `firing` is the end of the story would be teaching the easy half."
+        },
+        {
+          "text": "More recording rules for the three-day windows.",
+          "why": "Those are indeed missing, and it is a smaller, declared limitation: a three-day window needs three days of data. It is not what stops the alert from becoming a notification."
+        },
+        {
+          "text": "A Grafana dashboard showing the remaining budget.",
+          "why": "It would help communicate and does not solve the problem: a dashboard needs somebody watching, which is exactly what an alert exists to avoid."
+        }
+      ]
+    }
+  ]
+}

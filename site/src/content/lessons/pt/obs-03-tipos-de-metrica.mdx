@@ -1,0 +1,170 @@
+---
+key: metric-types
+lang: pt
+track: observabilidade
+order: 3
+title: Os quatro tipos, e o histograma que engana
+summary: "Contador, gauge, histograma e summary. O p99 não é um valor medido — é interpolação dentro de um balde, e média de p99 não significa nada."
+minutes: 15
+tags: [observabilidade, prometheus, promql, histograma, percentil, rate]
+sources:
+  - label: "Prometheus — tipos de métrica"
+    url: "https://prometheus.io/docs/concepts/metric_types/"
+    kind: docs
+    accessed: "2026-09-20"
+  - label: "Prometheus — histogramas e summaries"
+    url: "https://prometheus.io/docs/practices/histograms/"
+    kind: docs
+    accessed: "2026-09-20"
+  - label: "Prometheus — convenções de nome"
+    url: "https://prometheus.io/docs/practices/naming/"
+    kind: docs
+    accessed: "2026-09-20"
+---
+
+import HistogramBuckets from "../../../components/diagrams/HistogramBuckets.astro";
+
+São quatro tipos, e a confusão se concentra num só.
+
+| tipo | o que é | exemplo nesta stack |
+|---|---|---|
+| **counter** | número que só cresce (ou zera no restart) | `api_http_requests_total` |
+| **gauge** | número que sobe e desce | `container_memory_working_set_bytes` |
+| **histogram** | contadores acumulados por balde | `api_http_request_duration_seconds` |
+| **summary** | quantis calculados **no cliente** | — |
+
+## Contador não se lê, se deriva
+
+Um contador sozinho quase nunca responde nada. `api_http_requests_total` vale
+4.688 — é muito? Depende de desde quando ele conta, e ele zera a cada restart do
+processo.
+
+```promql
+rate(api_http_requests_total[5m])
+```
+
+<Callout type="why" label="O que o `rate()` faz além de dividir">
+Ele calcula a inclinação por segundo dentro da janela **e trata o reset**:
+quando o valor cai — porque o processo reiniciou — o `rate()` entende que houve
+reinício em vez de contabilizar uma taxa negativa gigante.
+
+É por isso que a convenção de nome importa. Aplicar `rate()` num gauge dá um
+número, e o número é lixo: um gauge que cai não reiniciou, ele só diminuiu.
+</Callout>
+
+<Term word="janela de tempo" alt="range vector" open>
+O `[5m]` não é um filtro: ele muda o **tipo** do que a expressão devolve.
+
+Sem colchete, a expressão devolve um valor por série — o mais recente. Com
+colchete, devolve a **série de amostras** daquela janela, e é isso que funções
+como `rate()` e `increase()` exigem para existir.
+
+A regra prática que evita o erro mais comum: a janela precisa conter pelo menos
+**duas** raspagens. Com `scrape_interval: 15s`, `[30s]` é o mínimo honesto —
+`[10s]` devolve vazio, e vazio não dispara alerta.
+</Term>
+
+## O histograma, e o que ele realmente guarda
+
+<HistogramBuckets />
+
+A aplicação **não** manda durações. Ela manda um punhado de contadores:
+`..._bucket{le="0.005"}`, `le="0.01"`, e assim por diante, cada um contando
+quantas requisições ficaram abaixo daquele limite.
+
+```promql
+histogram_quantile(0.99, sum by (le) (rate(api_http_request_duration_seconds_bucket[10m])))
+```
+
+<Callout type="danger" label="Média de percentil não existe">
+Se você tem dez servidores, cada um com seu p99, a média dos dez **não é** o p99
+do conjunto. Não é uma aproximação ruim: é um número que não corresponde a
+requisição nenhuma.
+
+O certo é somar os **baldes** dos dez e calcular o percentil no fim — que é
+exatamente o que o `sum by (le)` da expressão acima faz, e a razão de ele estar
+lá.
+
+É também a diferença prática entre `histogram` e `summary`: o summary calcula o
+quantil dentro do processo, e quantil calculado no cliente **não pode ser
+agregado depois**. Por isso esta stack usa histograma.
+</Callout>
+
+## A precisão é a largura do balde
+
+O p99 é interpolado dentro do balde onde o 99º percentil cai. Se os baldes vão
+de `0.05` direto para `0.1`, todo p99 nessa faixa é um chute linear entre 50 ms
+e 100 ms.
+
+Os `DefBuckets` do cliente Go são um padrão genérico, pensado para requisições
+web de dezenas a centenas de milissegundos. Medido nesta stack em operação
+normal: **p50 de 2,8 ms**, bem abaixo do primeiro balde — ou seja, quase toda
+requisição cai no balde `le="0.005"` e a resolução ali é grossa.
+
+<Callout type="trap" label="O histograma carrega o incidente pela janela inteira">
+Durante a escrita desta trilha, o portão derrubou o Postgres de propósito para
+provar o alerta de burn rate. Nas medições logo depois, o p99 subiu para
+**4,7 segundos** — e ficou assim por trinta minutos, porque a janela
+`[30m]` ainda continha as requisições da queda.
+
+Não é erro de medição: é o que a janela significa. Quem olha percentil durante
+um incidente precisa saber quanto tempo de história está olhando, ou vai achar
+que o problema continua depois de resolvido.
+</Callout>
+
+<RunIt>
+```bash
+make obs
+curl -s --get http://127.0.0.1:9090/api/v1/query \
+  --data-urlencode 'query=histogram_quantile(0.99, sum by (le) (rate(api_http_request_duration_seconds_bucket[10m])))'
+```
+</RunIt>
+
+<LabExercise check="regras de SLO carregadas" file="stack/services/api-go/metrics.go">
+
+O `metrics.go` declara `api_cache_hits_total` e `api_cache_misses_total` como
+dois contadores separados.
+
+Pergunta: por que não um só, com um rótulo `result="hit"|"miss"`?
+
+<Fragment slot="hint">
+Pense em como você escreveria a taxa de acerto do cache em PromQL nos dois
+desenhos.
+</Fragment>
+
+<Fragment slot="answer">
+
+Os dois desenhos funcionam, e o de rótulo único é **melhor** — é a convenção que
+o próprio Prometheus recomenda.
+
+Com um rótulo, a taxa de acerto sai direto:
+
+```promql
+rate(api_cache_requests_total{result="hit"}[5m])
+  / ignoring(result) sum without (result) (rate(api_cache_requests_total[5m]))
+```
+
+Com dois nomes, você precisa escrever os dois nomes em toda expressão, e não dá
+para somar "todas as consultas ao cache" sem listá-los à mão. Acrescentar um
+terceiro resultado — `error`, por exemplo — exige mexer em cada painel.
+
+A regra geral: **o que varia vira rótulo, o que é uma coisa diferente vira
+nome.** `hit` e `miss` são o mesmo evento com resultado diferente; `requests` e
+`duration` são coisas diferentes.
+
+O limite dessa regra é a lição 4: rótulo é barato até deixar de ser. Dois
+valores fixos, sem problema; um `user_id`, e você derruba o Prometheus.
+
+</Fragment>
+</LabExercise>
+
+## O que fica
+
+- Contador não se lê, se deriva — e `rate()` trata o reset do processo.
+- `[5m]` muda o **tipo** do resultado, e precisa conter ao menos duas raspagens.
+- Histograma guarda **contadores acumulados por balde**, não durações.
+- `histogram_quantile` interpola: a precisão é a largura do balde.
+- **Média de p99 não significa nada.** Some os baldes, calcule o quantil no fim.
+- Summary calcula o quantil no cliente, e por isso não agrega entre instâncias.
+
+<Quiz set="metric-types" />

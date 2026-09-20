@@ -96,22 +96,36 @@
       "id": "observabilidade",
       "demand": 80,
       "quadrant": "observabilidade",
-      "status": "parcial",
+      "status": "coberto",
       "pt": {
         "label": "Observabilidade (Prometheus, Grafana, Datadog)",
-        "gap": "É a maior desproporção do repositório: o profile `obs` sobe Prometheus, Grafana, Loki, Alloy e quatro exporters, tudo endurecido e com o socket atrás de um proxy de allowlist (ADR 0003) — e NÃO existe uma única lição sobre isso. Falta também o que nenhuma infra sozinha dá: SLI, SLO, error budget e alerta por burn rate."
+        "gap": "A trilha existe: 7 lições bilíngues sobre pull, tipos de métrica, cardinalidade, Loki, SLI/SLO/orçamento de erro e alerta por burn rate — com regras de SLO que o Prometheus carrega e um alerta que o portão faz disparar parando o banco. Falta o que vem DEPOIS do `firing`: Alertmanager com roteamento, agrupamento, silenciamento e escalonamento. E falta trace: não há OpenTelemetry, e nenhuma das três aplicações propaga contexto."
       },
       "en": {
         "label": "Observability (Prometheus, Grafana, Datadog)",
-        "gap": "The biggest mismatch in the repository: the `obs` profile brings up Prometheus, Grafana, Loki, Alloy and four exporters, all hardened and with the socket behind an allowlist proxy (ADR 0003) — and there is not a single lesson about any of it. Also missing is what no infrastructure gives you by itself: SLIs, SLOs, error budgets and burn-rate alerting."
+        "gap": "The track exists: 7 bilingual lessons on pull, metric types, cardinality, Loki, SLI/SLO/error budget and burn-rate alerting — with SLO rules Prometheus loads and an alert the gate makes fire by stopping the database. What is missing is what comes AFTER `firing`: an Alertmanager with routing, grouping, silencing and escalation. And tracing is missing: there is no OpenTelemetry, and none of the three applications propagates context."
       },
       "evidence": {
-        "lessons": [],
+        "lessons": [
+          "why-observe",
+          "pull-not-push",
+          "metric-types",
+          "cardinality",
+          "logs-without-indexing",
+          "sli-slo-error-budget",
+          "burn-rate-alerting"
+        ],
         "checks": [
           "todos os alvos do prometheus estão up",
-          "stack de observabilidade saudável"
+          "stack de observabilidade saudável",
+          "regras de SLO carregadas",
+          "toda regra de SLO avalia sem erro",
+          "o SLI de disponibilidade tem valor",
+          "o relabel do cAdvisor descarta"
         ],
-        "measurements": []
+        "measurements": [
+          "obs-measured.json"
+        ]
       }
     },
     {
@@ -310,21 +324,15 @@
       "items": [
         {
           "name": "Prometheus",
-          "status": "parcial",
-          "note_pt": "roda na stack, sem lição",
-          "note_en": "runs in the stack, no lesson"
+          "status": "coberto"
         },
         {
           "name": "Grafana",
-          "status": "parcial",
-          "note_pt": "roda na stack, sem lição",
-          "note_en": "runs in the stack, no lesson"
+          "status": "coberto"
         },
         {
           "name": "Loki",
-          "status": "parcial",
-          "note_pt": "roda na stack, sem lição",
-          "note_en": "runs in the stack, no lesson"
+          "status": "coberto"
         },
         {
           "name": "OpenTelemetry",
@@ -344,11 +352,11 @@
         },
         {
           "name": "SLIs · SLOs",
-          "status": "ausente"
+          "status": "coberto"
         },
         {
           "name": "Error budgets",
-          "status": "ausente"
+          "status": "coberto"
         }
       ]
     },

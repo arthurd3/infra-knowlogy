@@ -1,0 +1,174 @@
+---
+key: why-observe
+lang: en
+track: observabilidade
+order: 1
+title: What observing adds to monitoring
+summary: "The stack already exposes all of this and almost nobody reads it. The three signals answer three different questions — and there is a fourth none of them answers alone."
+minutes: 13
+tags: [observability, prometheus, grafana, loki, signals, slo]
+sources:
+  - label: "Prometheus — overview"
+    url: "https://prometheus.io/docs/introduction/overview/"
+    kind: docs
+    accessed: "2026-09-20"
+  - label: "What is OpenTelemetry"
+    url: "https://opentelemetry.io/docs/what-is-opentelemetry/"
+    kind: docs
+    accessed: "2026-09-20"
+  - label: "Google SRE Workbook — Implementing SLOs"
+    url: "https://sre.google/workbook/implementing-slos/"
+    kind: book
+    accessed: "2026-09-20"
+---
+
+import SignalsAndQuestions from "../../../components/diagrams/SignalsAndQuestions.astro";
+
+This track has a peculiarity: **the code it explains has been running since the
+first module.** `make obs` brings up Prometheus, Grafana, Loki, Alloy and four
+exporters — hardened, resource-capped, with the Docker socket behind an
+allowlist proxy (ADR 0003). What was missing was the lesson.
+
+## Monitoring and observing are not synonyms
+
+The distinction repeated everywhere — "monitoring is *known unknowns*,
+observability is *unknown unknowns*" — is true and nearly useless in practice,
+because it does not tell you what to do.
+
+The useful version is operational: **monitoring is having the answer ready to a
+question you already asked; observing is being able to ask a new question
+without touching the code.** A CPU dashboard is monitoring. Discovering, during
+an incident, that the problem only affects requests that went through the cache
+is observability — and it is only possible if the cache label is already in the
+data.
+
+<Term word="cardinality" alt="cardinality" open>
+How many distinct label combinations a metric can have.
+
+`api_http_requests_total{method, route, status}` with 4 methods, 6 routes and 5
+statuses has a maximum cardinality of 4 × 6 × 5 = 120 series. Adding a `user_id`
+label multiplies that by the number of users — and that is how a monitoring
+system goes down.
+
+It is the price of the new question: every label you store today is a question
+you can ask tomorrow, and a cost you pay continuously. Lesson 4 measures it in
+this stack.
+</Term>
+
+## The three signals, and what each refuses to do
+
+<SignalsAndQuestions />
+
+What the figure shows and almost no "three pillars" text says: they are neither
+interchangeable nor hierarchical. They are **expensive along different
+dimensions**.
+
+<Callout type="why" label="Why a metric is cheap and a log is not">
+A metric is one number per series per scrape. A thousand requests in fifteen
+seconds become **one** counter increment — the cost does not grow with traffic,
+it grows with **cardinality**.
+
+A log is one line per event. A thousand requests become a thousand lines. The
+cost grows linearly with traffic, which is why everybody ends up sampling logs
+and nobody samples metrics.
+</Callout>
+
+## What this stack has, measured
+
+<RunIt>
+```bash
+make obs
+curl -s http://127.0.0.1:9090/api/v1/targets?state=active \
+  | python3 -c 'import sys,json; d=json.load(sys.stdin)["data"]["activeTargets"]; print(len(d), "targets,", sum(1 for t in d if t["health"]=="up"), "up")'
+```
+</RunIt>
+
+Seven targets: the Go api and the Python worker, instrumented in the
+application; cAdvisor reading cgroups per container; node-exporter reading the
+host; the Postgres and Redis exporters; and Prometheus itself.
+
+`site/src/data/obs-measured.json` carries this machine's numbers, rewritten by
+`make verify`: active series, Prometheus resident memory, and how much each
+target publishes before and after filtering.
+
+<Callout type="trap" label="Tracing is the signal this stack does NOT have">
+And the lesson will not pretend otherwise. Distributed tracing requires
+propagating a context identifier along the whole chain — api, Redis, worker —
+and none of the three applications does that today.
+
+The path would be OpenTelemetry, which became the standard after OpenTracing
+merged with OpenCensus in 2019. It is declared as a gap in the roadmap, not
+hidden behind a "three pillars" diagram that implies completeness.
+</Callout>
+
+## The fourth question
+
+Metrics, logs and traces together still do not answer: **is this bad enough to
+wake somebody up?**
+
+That is not a technical question. It depends on an agreement about how much
+failure is acceptable — which is what SLIs, SLOs and error budgets are for, and
+they are lessons 6 and 7 of this track. Without them, what remains is somebody
+staring at a dashboard and deciding under pressure.
+
+<FieldNote
+  source="Google SRE Workbook — Implementing SLOs"
+  url="https://sre.google/workbook/implementing-slos/"
+  kind="book"
+  accessed="2026-09-20"
+>
+The book is explicit about this: alerting on symptoms (high CPU, full disk)
+produces pages nobody knows what to do with, because a symptom does not imply
+impact. The alert worth having starts from **how much of the error budget is
+being spent** — and that requires having defined the budget first.
+</FieldNote>
+
+<LabExercise check="todos os alvos do prometheus estão up" file="stack/services/observability/prometheus.yml">
+
+`prometheus.yml` has seven `scrape_configs`. One of them scrapes
+`localhost:9090`.
+
+Question: why does Prometheus scrape itself, and what is lost without that?
+
+<Fragment slot="hint">
+Think about what happens when the problem is the monitoring itself.
+</Fragment>
+
+<Fragment slot="answer">
+
+Because Prometheus is also a service that can be unwell — and if it does not
+measure itself, the only sign that it is in trouble is the absence of signal,
+which is precisely what nobody notices.
+
+It publishes metrics about itself: how many series it holds in memory, how many
+samples it ingests per second, how long each rule evaluation takes, how many
+scrapes failed.
+
+```bash
+curl -s --get http://127.0.0.1:9090/api/v1/query \
+  --data-urlencode 'query=prometheus_tsdb_head_series'
+```
+
+It is also what makes lesson 4 measurable: `scrape_samples_scraped` and
+`scrape_samples_post_metric_relabeling` are metrics Prometheus keeps about its
+own collection work, and they are what the gate uses to prove the cardinality
+filter is cutting.
+
+The honest limit: if Prometheus goes down entirely, it will not report its own
+outage. What solves that is a second Prometheus scraping the first — a common
+arrangement in production, and one this stack does not have.
+
+</Fragment>
+</LabExercise>
+
+## What sticks
+
+- Monitoring is having the answer ready; observing is being able to ask the new
+  question.
+- The three signals answer **different** questions and cost along different
+  dimensions: metrics grow with cardinality, logs grow with traffic.
+- This stack has metrics and logs, and **has no traces** — that is declared.
+- The fourth question, "does this deserve waking somebody?", is not technical,
+  and it is the subject of lessons 6 and 7.
+
+<Quiz set="why-observe" />

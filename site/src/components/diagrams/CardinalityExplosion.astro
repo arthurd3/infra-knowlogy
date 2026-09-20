@@ -1,0 +1,68 @@
+---
+/**
+ * obs-04 — o que cada alvo publica e o que sobra depois do filtro.
+ *
+ * Os números NÃO estão escritos aqui: vêm de obs-measured.json, que o
+ * `make verify` regrava. Número de diagrama que envelhece é número que mente.
+ */
+import Figure from "../Figure.astro";
+import type { Lang } from "../../i18n/ui";
+import m from "../../data/obs-measured.json";
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+const C = {
+  pt: {
+    head: "amostras por raspagem, antes e depois do metric_relabel_configs",
+    kept: "guardadas", dropped: "descartadas",
+    total: `total: ${m.collection.scrapedTotal} raspadas · ${m.collection.keptTotal} guardadas`,
+    punch: `o cAdvisor publica ${m.collection.perJob.find((j) => j.job === "cadvisor")?.scraped ?? 0} e sobram ${m.collection.perJob.find((j) => j.job === "cadvisor")?.kept ?? 0} — o filtro corta 96%`,
+    aside: `e a api, que é o que interessa, são ${m.collection.perJob.find((j) => j.job === "api")?.kept ?? 0} amostras`,
+    caption:
+      "Cada raspagem tem um custo, e ele não está distribuído como a intuição sugere. O <b>cAdvisor</b> publica métrica por container × por dispositivo × por interface, e o <code>metric_relabel_configs</code> do <code>prometheus.yml</code> guarda só uma lista curta — o resto é descartado <b>antes</b> de virar série. Repare no que sobra: as métricas da sua própria aplicação são a menor fatia do que você armazena, e o exporter de host é a maior.",
+    alt: "Barras por alvo mostrando amostras guardadas e descartadas em cada raspagem.",
+  },
+  en: {
+    head: "samples per scrape, before and after metric_relabel_configs",
+    kept: "kept", dropped: "dropped",
+    total: `total: ${m.collection.scrapedTotal} scraped · ${m.collection.keptTotal} kept`,
+    punch: `cAdvisor publishes ${m.collection.perJob.find((j) => j.job === "cadvisor")?.scraped ?? 0} and ${m.collection.perJob.find((j) => j.job === "cadvisor")?.kept ?? 0} survive — the filter cuts 96%`,
+    aside: `and the api, the thing that matters, is ${m.collection.perJob.find((j) => j.job === "api")?.kept ?? 0} samples`,
+    caption:
+      "Every scrape has a cost, and it is not distributed the way intuition suggests. <b>cAdvisor</b> publishes metrics per container × per device × per interface, and the <code>metric_relabel_configs</code> in <code>prometheus.yml</code> keeps only a short list — the rest is dropped <b>before</b> becoming a series. Notice what remains: your own application's metrics are the smallest slice of what you store, and the host exporter is the largest.",
+    alt: "Bars per target showing kept and dropped samples in each scrape.",
+  },
+}[lang];
+
+const jobs = [...m.collection.perJob].sort((a, b) => b.scraped - a.scraped);
+const max = Math.max(...jobs.map((j) => j.scraped));
+const W = 470;
+---
+<Figure caption={C.caption} alt={C.alt}>
+  <svg viewBox="0 0 700 272" xmlns="http://www.w3.org/2000/svg" font-size="11">
+    <text x="14" y="16" class="dg-faint" font-size="9">{C.head}</text>
+    <rect x="490" y="8" width="9" height="9" rx="2" class="dg-fill-accent" />
+    <text x="504" y="16" class="dg-faint" font-size="8.5">{C.kept}</text>
+    <rect x="566" y="8" width="9" height="9" rx="2" class="dg-fill-danger" />
+    <text x="580" y="16" class="dg-faint" font-size="8.5">{C.dropped}</text>
+
+    {jobs.map((j, i) => {
+      const y = 30 + i * 26;
+      const wk = Math.max(2, Math.round((j.kept / max) * W));
+      const wd = Math.round((j.dropped / max) * W);
+      return (
+        <g>
+          <text x="14" y={y + 13} class="dg-mono dg-title" font-size="9.5">{j.job}</text>
+          <rect x="100" y={y + 2} width={wk} height={14} rx={2} class="dg-fill-accent" />
+          {wd > 0 && <rect x={100 + wk} y={y + 2} width={wd} height={14} rx={2} class="dg-fill-danger" />}
+          <text x={100 + wk + wd + 8} y={y + 13} class="dg-mono dg-faint" font-size="8.5">
+            {j.scraped}{j.dropped > 0 ? ` → ${j.kept}` : ""}
+          </text>
+        </g>
+      );
+    })}
+
+    <text x="14" y="242" class="dg-faint" font-size="9">{C.total}</text>
+    <text x="14" y="256" class="dg-muted" font-size="9.5" font-weight="620">{C.punch}</text>
+    <text x="686" y="256" text-anchor="end" class="dg-faint" font-size="9">{C.aside}</text>
+  </svg>
+</Figure>

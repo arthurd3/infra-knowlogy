@@ -1,0 +1,124 @@
+{
+  "note_pt": "O que o histograma guarda, e a média de percentil que não existe.",
+  "note_en": "What a histogram stores, and the average percentile that does not exist.",
+  "pt": [
+    {
+      "q": "Você tem dez servidores, cada um com seu p99. Como obter o p99 do conjunto?",
+      "options": [
+        {
+          "text": "Somar os BALDES dos dez e aplicar `histogram_quantile` no fim.",
+          "correct": true,
+          "why": "É o que o `sum by (le)` faz na expressão da lição. Os baldes são contadores acumulados e somam-se bem; o percentil é calculado uma vez, sobre a distribuição completa."
+        },
+        {
+          "text": "Tirar a média dos dez valores de p99.",
+          "why": "É o erro mais comum da área, e não é uma aproximação ruim: o resultado não corresponde a requisição nenhuma. Percentil não é linear e não se agrega por média."
+        },
+        {
+          "text": "Pegar o maior dos dez p99.",
+          "why": "Dá um limite superior, não o p99 do conjunto. Se um servidor recebe 1% do tráfego, o p99 dele não deveria dominar o resultado — e nesse cálculo domina."
+        },
+        {
+          "text": "Usar um `summary` em vez de `histogram`.",
+          "why": "Piora: o summary calcula o quantil DENTRO do processo, e quantil calculado no cliente não pode ser agregado depois de jeito nenhum. É exatamente por isso que esta stack usa histograma."
+        }
+      ]
+    },
+    {
+      "q": "Por que `rate()` não deve ser aplicado a um gauge?",
+      "options": [
+        {
+          "text": "Porque `rate()` trata queda de valor como reinício de contador — e um gauge que cai apenas diminuiu.",
+          "correct": true,
+          "why": "O resultado é um número plausível e errado. É também por isso que a convenção de nome importa: o sufixo `_total` avisa a ferramenta e a pessoa que aquilo é contador e aceita `rate()`."
+        },
+        {
+          "text": "Porque gauge não tem carimbo de tempo.",
+          "why": "Tem — toda amostra de toda série tem carimbo de tempo. A diferença está na semântica do valor, não no armazenamento."
+        },
+        {
+          "text": "Porque `rate()` só aceita séries com sufixo `_total`.",
+          "why": "O PromQL não verifica isso: ele aplica a função em qualquer série e devolve um número. A proteção é convenção, não linguagem — o que torna o erro silencioso."
+        }
+      ]
+    },
+    {
+      "q": "O que significa uma janela `[10s]` com `scrape_interval: 15s`?",
+      "options": [
+        {
+          "text": "Menos de duas amostras na janela — a expressão devolve vazio, e alerta sobre vazio não dispara.",
+          "correct": true,
+          "why": "`rate()` precisa de pelo menos duas amostras para calcular inclinação. Com 15s de intervalo, `[30s]` é o mínimo honesto. É a mesma família de armadilha do `or vector(0)` da lição 6: expressão que pode devolver vazio é alerta que pode não existir."
+        },
+        {
+          "text": "Uma resolução mais fina, com mais precisão no resultado.",
+          "why": "Não há de onde tirar precisão: os dados chegam de 15 em 15 segundos, e pedir uma janela menor que isso não cria amostra nenhuma."
+        },
+        {
+          "text": "Um erro de sintaxe, recusado pelo Prometheus.",
+          "why": "É sintaticamente válido e é exatamente esse o problema: ele aceita, avalia e devolve vazio, sem reclamar de nada."
+        }
+      ]
+    }
+  ],
+  "en": [
+    {
+      "q": "You have ten servers, each with its own p99. How do you get the p99 of the whole?",
+      "options": [
+        {
+          "text": "Sum the ten servers' BUCKETS and apply `histogram_quantile` at the end.",
+          "correct": true,
+          "why": "That is what `sum by (le)` does in the lesson's expression. Buckets are cumulative counters and add up correctly; the percentile is computed once, over the complete distribution."
+        },
+        {
+          "text": "Average the ten p99 values.",
+          "why": "It is the most common mistake in the field, and it is not a poor approximation: the result corresponds to no request at all. Percentiles are not linear and do not aggregate by averaging."
+        },
+        {
+          "text": "Take the largest of the ten p99 values.",
+          "why": "That gives an upper bound, not the p99 of the whole. If one server takes 1% of the traffic, its p99 should not dominate the result — and in this calculation it does."
+        },
+        {
+          "text": "Use a `summary` instead of a `histogram`.",
+          "why": "That makes it worse: a summary computes the quantile INSIDE the process, and a client-side quantile cannot be aggregated afterwards at all. That is exactly why this stack uses histograms."
+        }
+      ]
+    },
+    {
+      "q": "Why should `rate()` not be applied to a gauge?",
+      "options": [
+        {
+          "text": "Because `rate()` treats a drop in value as a counter reset — and a gauge that falls has merely gone down.",
+          "correct": true,
+          "why": "The result is a plausible, wrong number. It is also why naming matters: the `_total` suffix tells both the tool and the person that this is a counter and accepts `rate()`."
+        },
+        {
+          "text": "Because a gauge has no timestamp.",
+          "why": "It does — every sample of every series has a timestamp. The difference is in the value's semantics, not the storage."
+        },
+        {
+          "text": "Because `rate()` only accepts series with the `_total` suffix.",
+          "why": "PromQL does not check that: it applies the function to any series and returns a number. The protection is convention, not language — which is what makes the mistake silent."
+        }
+      ]
+    },
+    {
+      "q": "What does a `[10s]` window mean with `scrape_interval: 15s`?",
+      "options": [
+        {
+          "text": "Fewer than two samples in the window — the expression returns empty, and an alert over empty does not fire.",
+          "correct": true,
+          "why": "`rate()` needs at least two samples to compute a slope. With a 15s interval, `[30s]` is the honest minimum. It is the same family of trap as lesson 6's `or vector(0)`: an expression that can return empty is an alert that can fail to exist."
+        },
+        {
+          "text": "A finer resolution, with more precision in the result.",
+          "why": "There is nowhere to get precision from: data arrives every 15 seconds, and asking for a smaller window creates no samples."
+        },
+        {
+          "text": "A syntax error, rejected by Prometheus.",
+          "why": "It is syntactically valid, and that is precisely the problem: it accepts, evaluates and returns empty, complaining about nothing."
+        }
+      ]
+    }
+  ]
+}

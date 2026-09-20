@@ -21,7 +21,7 @@ const lessons = defineCollection({
     // delas seria descartada silenciosamente da coleção.
     key: z.string(),
     lang: z.enum(["pt", "en"]),
-    track: z.enum(["fundamentos", "producao", "seguranca", "kubernetes", "cicd", "iac"]),
+    track: z.enum(["fundamentos", "producao", "seguranca", "kubernetes", "cicd", "iac", "observabilidade"]),
     order: z.number().int().positive(),
 
     title: z.string(),

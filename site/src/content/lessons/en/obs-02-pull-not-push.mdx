@@ -1,0 +1,177 @@
+---
+key: pull-not-push
+lang: en
+track: observabilidade
+order: 2
+title: Prometheus pulls, and that changes the design
+summary: "No service in this stack knows Prometheus exists. That is not a configuration detail: it is what makes a target's silence a piece of data rather than an absence."
+minutes: 14
+tags: [observability, prometheus, pull, push, scrape, service-discovery]
+sources:
+  - label: "Prometheus — \"Pull doesn't scale — or does it?\""
+    url: "https://prometheus.io/blog/2016/07/23/pull-does-not-scale-or-does-it/"
+    kind: blog
+    accessed: "2026-09-20"
+  - label: "Prometheus — metric and label naming"
+    url: "https://prometheus.io/docs/practices/naming/"
+    kind: docs
+    accessed: "2026-09-20"
+  - label: "Prometheus — agent mode"
+    url: "https://prometheus.io/blog/2021/11/16/agent/"
+    kind: blog
+    accessed: "2026-09-20"
+---
+
+import PullVsPush from "../../../components/diagrams/PullVsPush.astro";
+
+Search for "prometheus" in this stack's applications and you find the
+instrumentation library — and **no metrics server address**. That is
+deliberate.
+
+<PullVsPush />
+
+## What the application does, and what it does not
+
+```go
+httpRequests = promauto.NewCounterVec(prometheus.CounterOpts{
+    Name: "api_http_requests_total",
+    Help: "Total de requisições HTTP por método, rota e status.",
+}, []string{"method", "route", "status"})
+```
+
+The api increments counters and exposes `/metrics`. That is all. It opens no
+connection, knows no collector host, holds no monitoring credential, keeps no
+send queue, and does not fail if Prometheus goes down.
+
+<Term word="scrape" alt="scrape" open>
+An HTTP request Prometheus makes to a target's `/metrics` endpoint, at a fixed
+interval — 15 seconds in this stack.
+
+What comes back is plain text: one line per series, with name, labels and value.
+You can look at it with `curl`, which is more useful than it sounds — when a
+metric does not show up on a dashboard, the first question is whether it exists
+at the source, and the answer costs one command.
+</Term>
+
+<RunIt>
+```bash
+# What Prometheus sees, you see the same way
+docker compose -f stack/compose.yaml -f stack/compose.prod.yaml \
+  exec -T api wget -qO- http://127.0.0.1:8080/metrics | grep api_http_requests_total | head -5
+```
+</RunIt>
+
+## The side effect that justifies the whole decision
+
+<Callout type="why" label="Silence becomes data">
+Every scrape produces a synthetic series called `up`: **1** if the target
+answered, **0** if it did not. It does not come from the application —
+Prometheus writes it itself.
+
+In the push model, a target that stopped sending is indistinguishable from a
+healthy target with no events. You find out the difference when somebody asks
+"how long has this graph been without a point?".
+
+```promql
+up == 0
+```
+
+One expression, and you have the list of everything that should be answering and
+is not.
+</Callout>
+
+## When pull is the wrong model
+
+Honesty matters more here than defending the model.
+
+<Tradeoff
+  a="Pull (Prometheus)"
+  b="Push (StatsD, OTLP to a collector)"
+  whenA="Long-lived, addressable targets: a service in a container, an exporter, a node. The collector discovers who exists, and a target's silence is already a signal."
+  whenB="<b>Ephemeral</b> work — an 8-second cron job, a serverless function, a CI build. It may finish before any scrape, and no service discovery arrives in time."
+  chose="a"
+  verdict="pull, because every target in this stack is a long-lived container. For the ephemeral case there is the Pushgateway, and Prometheus' own documentation recommends NOT using it as a shortcut to general push."
+  adr="0003-socket-do-docker-na-observabilidade"
+/>
+
+And there is a second limit: the target must be **reachable by the collector**.
+In this stack that took work and is visible in `compose.obs.yaml` — Prometheus
+sits on **two** networks, `obs` to publish its port and `data` to be able to
+reach the api, the worker and the exporters, which live in there.
+
+<Callout type="trap" label="Discovering targets means asking Docker, and that is where ADR 0003 lives">
+In this stack the targets are static in `prometheus.yml`, which works because
+the list is known. In a dynamic environment the collector has to **discover**
+containers — and discovering containers means talking to the Docker socket,
+which is root on the host.
+
+That is why Alloy does not see the socket: it talks to `docker-socket-proxy`,
+which only allows reading `/containers` and `/networks` and refuses everything
+else. The tension is recorded in ADR 0003, and it has no perfect solution — it
+has a deliberately chosen cost.
+</Callout>
+
+## The naming convention, which is not taste
+
+`api_http_requests_total` is not a pretty name by accident. The Prometheus
+convention is `<namespace>_<name>_<unit>`, with the `_total` suffix for
+counters — and it exists because **tools read that name**: `rate()` only makes
+sense over a counter, and whoever writes a dashboard needs to know, from the
+name, whether they may apply it.
+
+Metrics in seconds, never milliseconds. Bytes, never kilobytes. The base unit
+avoids the wrong conversion that nobody reviews.
+
+<LabExercise check="o SLI de disponibilidade tem valor" file="stack/services/observability/prometheus.yml">
+
+`prometheus.yml` has `scrape_interval: 15s`. Somebody proposes lowering it to
+`1s` "for more resolution".
+
+Question: what does that cost, exactly?
+
+<Fragment slot="hint">
+Look at what the measurements say about samples per second and active series.
+</Fragment>
+
+<Fragment slot="answer">
+
+It multiplies ingestion volume by **15** — and improves almost nothing that
+matters.
+
+On this machine, at 15s, `obs-measured.json` records about 275 samples per
+second and ~100 MB resident in Prometheus. At 1s it would be ~4,100 samples per
+second, with disk and memory following.
+
+What does not improve: most metrics do not change within 1 second. A request
+counter scraped every second gives the same five-minute `rate()` as one scraped
+every fifteen — you paid 15× for noise.
+
+And there is a hard limit on the other side: `rate()` needs at least **two**
+samples inside the window. With a 15s `scrape_interval`, a `[30s]` window is the
+honest minimum; a window shorter than two scrapes returns empty, and an alert
+over empty never fires — which is lesson 7's trap.
+
+```bash
+curl -s --get http://127.0.0.1:9090/api/v1/query \
+  --data-urlencode 'query=rate(prometheus_tsdb_head_samples_appended_total[5m])'
+```
+
+The right question is not "how much resolution can I get", it is "what is the
+smallest event I need to see" — and then `scrape_interval` stops being taste and
+becomes a decision.
+
+</Fragment>
+</LabExercise>
+
+## What sticks
+
+- The application publishes `/metrics` and **does not know** Prometheus exists.
+- Pull turns silence into data: the `up` series is written by the collector, not
+  the target.
+- Push wins for **ephemeral** work, which may die before any scrape.
+- The target must be reachable: which is why Prometheus is on two networks here.
+- Dynamic discovery costs Docker socket access — ADR 0003.
+- A metric name is a contract with tooling: `_total` for counters, base units
+  always.
+
+<Quiz set="pull-not-push" />

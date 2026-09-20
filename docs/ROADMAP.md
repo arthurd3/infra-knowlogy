@@ -16,7 +16,7 @@ lado a lado só é honesta porque a aplicação é a mesma.
 | 3 | **CI/CD self-hosted (Jenkins)** — o mesmo pipeline do GitHub Actions rodando num Jenkins que é seu, sobre a mesma stack | `cicd/` | `make cicd-verify` (35 checagens) | **feito (v1)** · [ADR 0011](adr/0011-como-o-agente-de-build-constroi-imagens.md) e [0012](adr/0012-jenkins-conteinerizado.md) · pendências: as 8 lições, scan e assinatura no pipeline |
 | 4 | **IaC (OpenTofu)** — a mesma stack declarada em HCL e provisionada contra o daemon local | `iac/` | `make iac-verify` (28 checagens) | **feito (v1)** · [ADR 0015](adr/0015-opentofu-e-o-provider-docker.md) e [0016](adr/0016-como-o-tofu-alcanca-o-daemon.md) · 8 lições bilíngues na trilha `iac` |
 | 5 | **Configuração (Ansible)** — preparar um host Fedora real: Docker, SELinux, firewall, usuários — as coisas que o módulo 1 encontrou na marra | `config/` | a definir | reservado |
-| 6 | **Observabilidade avançada** — SLOs, alerting e tracing por cima do profile `obs` já existente | `stack/` (profile) | a definir | reservado |
+| 6 | **Observabilidade** — o profile `obs` que já existia, agora com regras de SLO que rodam e alerta de burn rate que dispara | `stack/` (profile) | `make verify` (passo 9, 9 checagens) | **feito (v1)** · [ADR 0018](adr/0018-slo-como-regra-que-roda.md) · 7 lições bilíngues na trilha `observabilidade` · pendências: Alertmanager e tracing |
 | — | **Segurança (transversal)** — a superfície de ataque da MESMA stack, atacada de dentro: portas, credenciais, injeção, exfiltração | `tools/scripts/attack-lab.sh` | `make attack-lab` (11 ataques) | **feito** · [ADR 0013](adr/0013-laboratorio-de-ataque-na-propria-stack.md) · 6 lições bilíngues na trilha `seguranca` |
 
 > **Por que a Segurança não tem número.** Os módulos numerados são *vistas de
@@ -61,7 +61,7 @@ As maiores lacunas hoje, em ordem de demanda:
 
 | Demanda | % | Estado |
 |---|---|---|
-| Observabilidade | 80% | a infra roda (`make obs`) e **não há uma lição sequer** — é a frente mais barata |
+| Observabilidade | 80% | **coberta**: 7 lições, regras de SLO rodando, alerta de burn rate provado pelo portão. Falta Alertmanager e tracing |
 | Kubernetes | 88% | 3 lições de ~10; falta Gateway API, Helm, RBAC, HPA |
 | CI/CD | 75% | forte, menos **GitOps**: ArgoCD e Flux não existem aqui |
 | Linux & troubleshooting | 70% | falta o troubleshooting real: /proc, strace, eBPF, PSI, OOM |
@@ -77,6 +77,7 @@ depois de a trilha de Fundamentos ser retrabalhada (ADR 0017):
 | trilha | lições | `Term` | `Tradeoff` | `FieldNote` |
 |---|---|---|---|---|
 | fundamentos | 8 | 15 | 1 | 1 |
+| observabilidade | 7 | 7 | 3 | 1 |
 | seguranca | 6 | 13 | 3 | 9 |
 | **kubernetes** | 3 | **0** | **0** | **0** |
 | **cicd** | 8 | **0** | 1 | 1 |

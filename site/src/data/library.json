@@ -29,6 +29,10 @@
     "docs": {
       "pt": "documentação",
       "en": "documentation"
+    },
+    "blog": {
+      "pt": "post",
+      "en": "blog post"
     }
   },
   "concepts": [
@@ -799,6 +803,230 @@
           "accessed": "2026-09-20",
           "why_pt": "O curso completo, em português, liberado no YouTube pelo próprio autor. A sintaxe do Docker mudou desde 2016 em alguns pontos, mas a explicação dos conceitos continua válida — e é material audiovisual gratuito em português, que é raro.",
           "why_en": "The complete course, in Portuguese, released on YouTube by the author himself. Docker syntax has changed in places since 2016, but the conceptual explanation still holds — and free audiovisual material in Portuguese is rare."
+        }
+      ]
+    },
+    {
+      "id": "metrics-and-promql",
+      "lessons": [
+        "pull-not-push",
+        "metric-types"
+      ],
+      "pt": {
+        "label": "Métricas, PromQL e o modelo de coleta",
+        "what": "Como uma métrica sai da aplicação, vira série no coletor e é consultada depois — e por que `rate()` sobre contador é a operação mais importante da linguagem."
+      },
+      "en": {
+        "label": "Metrics, PromQL and the collection model",
+        "what": "How a metric leaves the application, becomes a series in the collector and is queried later — and why `rate()` over a counter is the language's most important operation."
+      },
+      "refs": [
+        {
+          "kind": "book",
+          "title": "Prometheus: Up & Running, 2nd Edition",
+          "author": "Julien Pivotto e Brian Brazil",
+          "where": "O'Reilly",
+          "year": 2023,
+          "lang": "en",
+          "url": "https://www.oreilly.com/library/view/prometheus-up/9781098131135/",
+          "free": false,
+          "accessed": "2026-09-20",
+          "why_pt": "Escrito por um mantenedor do servidor e por um desenvolvedor do núcleo, o que se nota nos capítulos sobre instrumentação e exporters — eles explicam por que a API é daquele jeito, e não só como usá-la. A 2ª edição cobre a fase pós-2.x, que a 1ª não alcançava.",
+          "why_en": "Written by a server maintainer and a core developer, which shows in the instrumentation and exporter chapters — they explain why the API is the way it is, not just how to use it. The 2nd edition covers the post-2.x era the 1st could not reach.",
+          "isbn": "978-1-0981-3114-2"
+        },
+        {
+          "kind": "talk",
+          "title": "Prometheus Intro and Deep Dive",
+          "author": "Julius Volz, Björn Rabenstein e Matthias Rampke",
+          "where": "KubeCon + CloudNativeCon Europe 2022",
+          "year": 2022,
+          "lang": "en",
+          "url": "https://www.youtube.com/watch?v=eM3RXdK1yys",
+          "free": true,
+          "accessed": "2026-09-20",
+          "why_pt": "Volz é cofundador do Prometheus e Rampke esteve no SoundCloud, onde ele nasceu. A primeira metade é introdução e a segunda desce ao desenho interno — é a forma mais rápida de entender as decisões de projeto pela boca de quem as tomou.",
+          "why_en": "Volz co-founded Prometheus and Rampke was at SoundCloud, where it was born. The first half is an introduction and the second descends into internal design — the fastest way to understand the design decisions from the people who made them."
+        },
+        {
+          "kind": "docs",
+          "title": "Prometheus — tipos de métrica",
+          "author": "mantenedores do Prometheus",
+          "where": "prometheus.io",
+          "year": 2025,
+          "lang": "en",
+          "url": "https://prometheus.io/docs/concepts/metric_types/",
+          "free": true,
+          "accessed": "2026-09-20",
+          "why_pt": "Curta e é a fonte normativa dos quatro tipos. Vale ler antes de qualquer tutorial: quase toda confusão entre contador e gauge vem de nunca ter lido as duas definições lado a lado, que aqui cabem numa tela.",
+          "why_en": "Short, and the normative source for the four types. Worth reading before any tutorial: almost every counter-versus-gauge confusion comes from never having read the two definitions side by side, which here fit on one screen."
+        },
+        {
+          "kind": "blog",
+          "title": "Pull não escala — ou escala?",
+          "author": "Julius Volz",
+          "where": "prometheus.io",
+          "year": 2016,
+          "lang": "en",
+          "url": "https://prometheus.io/blog/2016/07/23/pull-does-not-scale-or-does-it/",
+          "free": true,
+          "accessed": "2026-09-20",
+          "why_pt": "O cofundador respondendo à objeção mais comum ao modelo, com o argumento do Borgmon do Google monitorando datacenters inteiros por pull. É o texto para ler antes de entrar numa discussão de pull contra push.",
+          "why_en": "The co-founder answering the model's most common objection, with the argument of Google's Borgmon monitoring whole datacenters by pull. It is the text to read before entering any pull-versus-push argument."
+        }
+      ]
+    },
+    {
+      "id": "cardinality-cost",
+      "lessons": [
+        "cardinality",
+        "logs-without-indexing"
+      ],
+      "pt": {
+        "label": "Cardinalidade e o custo de guardar",
+        "what": "Por que o custo de um sistema de métricas cresce com combinações de rótulo e não com tráfego — e por que a mesma matemática vale para fluxo de log."
+      },
+      "en": {
+        "label": "Cardinality and the cost of storing",
+        "what": "Why a metrics system's cost grows with label combinations rather than traffic — and why the same arithmetic applies to log streams."
+      },
+      "refs": [
+        {
+          "kind": "talk",
+          "title": "The Prometheus Time Series Database",
+          "author": "Björn Rabenstein",
+          "where": "PromCon 2016",
+          "year": 2016,
+          "lang": "en",
+          "url": "https://www.youtube.com/watch?v=HbnGSNEjhUc",
+          "free": true,
+          "accessed": "2026-09-20",
+          "why_pt": "Antiga e ainda a melhor explicação de por que cardinalidade é o custo dominante: ele mostra como as séries viram blocos em disco e o que acontece quando o número de séries cresce. Entender isso é entender por que um rótulo com id derruba o servidor.",
+          "why_en": "Old and still the best explanation of why cardinality is the dominant cost: he shows how series become chunks on disk and what happens when the series count grows. Understanding that is understanding why a label holding an id takes the server down."
+        },
+        {
+          "kind": "talk",
+          "title": "Prometheus Histograms — Past, Present, and Future",
+          "author": "Björn Rabenstein",
+          "where": "PromCon EU 2019",
+          "year": 2019,
+          "lang": "en",
+          "url": "https://www.youtube.com/watch?v=7sQFkaMCyEI",
+          "free": true,
+          "accessed": "2026-09-20",
+          "why_pt": "A palestra que explica por que o histograma é do jeito que é: os baldes fixos, o custo de cardinalidade deles e as tentativas de resolver isso. Quem assistir entende de onde veio o histograma nativo que apareceu depois, na 2.40.",
+          "why_en": "The talk explaining why the histogram is the way it is: the fixed buckets, their cardinality cost, and the attempts to fix that. Whoever watches it understands where the native histogram that landed later, in 2.40, came from."
+        },
+        {
+          "kind": "book",
+          "title": "Prometheus: Up & Running, 2nd Edition",
+          "author": "Julien Pivotto e Brian Brazil",
+          "where": "O'Reilly",
+          "year": 2023,
+          "lang": "en",
+          "url": "https://www.oreilly.com/library/view/prometheus-up/9781098131135/",
+          "free": false,
+          "accessed": "2026-09-20",
+          "why_pt": "Escrito por um mantenedor do servidor e por um desenvolvedor do núcleo, o que se nota nos capítulos sobre instrumentação e exporters — eles explicam por que a API é daquele jeito, e não só como usá-la. A 2ª edição cobre a fase pós-2.x, que a 1ª não alcançava.",
+          "why_en": "Written by a server maintainer and a core developer, which shows in the instrumentation and exporter chapters — they explain why the API is the way it is, not just how to use it. The 2nd edition covers the post-2.x era the 1st could not reach.",
+          "isbn": "978-1-0981-3114-2"
+        },
+        {
+          "kind": "docs",
+          "title": "Loki — rótulos e boas práticas",
+          "author": "Grafana Labs",
+          "where": "grafana.com",
+          "year": 2025,
+          "lang": "en",
+          "url": "https://grafana.com/docs/loki/latest/get-started/labels/",
+          "free": true,
+          "accessed": "2026-09-20",
+          "why_pt": "A página que explica por que o Loki pede poucos rótulos, com exemplos do que NÃO usar. É a leitura que evita o erro mais caro do Loki: promover a rótulo um campo que deveria ter ficado no conteúdo da linha.",
+          "why_en": "The page explaining why Loki wants few labels, with examples of what NOT to use. It is the reading that prevents Loki's most expensive mistake: promoting to a label a field that should have stayed in the line's content."
+        }
+      ]
+    },
+    {
+      "id": "slo-and-error-budget",
+      "lessons": [
+        "sli-slo-error-budget",
+        "burn-rate-alerting",
+        "why-observe"
+      ],
+      "pt": {
+        "label": "SLI, SLO, orçamento de erro e alerta",
+        "what": "Como uma porcentagem vira decisão de engenharia: definir a medida, combinar o alvo, e transformar a velocidade de gasto do orçamento em página ou ticket."
+      },
+      "en": {
+        "label": "SLI, SLO, error budget and alerting",
+        "what": "How a percentage becomes an engineering decision: define the measure, agree the target, and turn the budget's spending speed into a page or a ticket."
+      },
+      "refs": [
+        {
+          "kind": "book",
+          "title": "The Site Reliability Workbook",
+          "author": "Betsy Beyer e outros (org.)",
+          "where": "O'Reilly / Google",
+          "year": 2018,
+          "lang": "en",
+          "url": "https://sre.google/workbook/table-of-contents/",
+          "free": true,
+          "accessed": "2026-09-20",
+          "why_pt": "O companheiro prático do anterior, e o mais útil dos dois aqui: o capítulo 5 traz a receita multi-janela multi-burn-rate com os números 14,4×, 6× e 1× que o `slo.yml` desta stack implementa. É a fonte direta do que o portão executa.",
+          "why_en": "The practical companion to the previous one, and the more useful of the two here: chapter 5 carries the multi-window multi-burn-rate recipe with the 14.4×, 6× and 1× numbers this stack's `slo.yml` implements. It is the direct source of what the gate runs."
+        },
+        {
+          "kind": "book",
+          "title": "Site Reliability Engineering (o livro do Google)",
+          "author": "Betsy Beyer e outros (org.)",
+          "where": "O'Reilly / Google",
+          "year": 2016,
+          "lang": "en",
+          "url": "https://sre.google/sre-book/table-of-contents/",
+          "free": true,
+          "accessed": "2026-09-20",
+          "why_pt": "Gratuito na íntegra no site do Google. O capítulo 4, sobre objetivos de nível de serviço, é onde SLI, SLO e orçamento de erro ganham a definição que o resto da indústria adotou — vale ler esse capítulo isolado antes de tentar o livro inteiro.",
+          "why_en": "Free in full on Google's site. Chapter 4, on service level objectives, is where SLI, SLO and error budget get the definition the rest of the industry adopted — worth reading that chapter alone before attempting the whole book."
+        },
+        {
+          "kind": "talk",
+          "title": "How to Alert on SLOs using Error Budget Burn Rate (DoK Talks #81)",
+          "author": "Yuri Grinshteyn (Google)",
+          "where": "Data on Kubernetes Community",
+          "year": 2021,
+          "lang": "en",
+          "url": "https://www.youtube.com/watch?v=F0vIIxoBom0",
+          "free": true,
+          "accessed": "2026-09-20",
+          "why_pt": "Um engenheiro do Google percorrendo a receita multi-janela na tela, com as contas de onde saem 14,4× e 6×. É o complemento certo do capítulo do Workbook para quem entende melhor vendo alguém derivar os números do que lendo a tabela pronta.",
+          "why_en": "A Google engineer walking through the multi-window recipe on screen, with the arithmetic behind where 14.4× and 6× come from. It is the right complement to the Workbook chapter for anyone who learns better watching someone derive the numbers than reading the finished table."
+        },
+        {
+          "kind": "book",
+          "title": "Observability Engineering",
+          "author": "Charity Majors, Liz Fong-Jones e George Miranda",
+          "where": "O'Reilly",
+          "year": 2022,
+          "lang": "en",
+          "url": "https://www.oreilly.com/library/view/observability-engineering/9781492076438/",
+          "free": false,
+          "accessed": "2026-09-20",
+          "why_pt": "É o livro que argumenta CONTRA os três pilares como modelo mental, defendendo o evento de alta cardinalidade como unidade. Leia sabendo que os autores fundaram uma empresa que vende exatamente isso — o argumento é bom e o conflito de interesse é real.",
+          "why_en": "This is the book that argues AGAINST the three pillars as a mental model, defending the high-cardinality event as the unit instead. Read it knowing the authors founded a company selling exactly that — the argument is good and the conflict of interest is real.",
+          "isbn": "978-1-4920-7644-5"
+        },
+        {
+          "kind": "docs",
+          "title": "SRE Workbook — Alertando sobre SLOs",
+          "author": "Betsy Beyer e outros (org.)",
+          "where": "sre.google",
+          "year": 2018,
+          "lang": "en",
+          "url": "https://sre.google/workbook/alerting-on-slos/",
+          "free": true,
+          "accessed": "2026-09-20",
+          "why_pt": "O capítulo específico, gratuito e curto, com a tabela de burn rate que o `slo.yml` desta stack implementa linha por linha. Se for ler uma coisa só sobre alerta de SLO na vida, é esta — e dá para ler numa sessão.",
+          "why_en": "The specific chapter, free and short, with the burn-rate table this stack's `slo.yml` implements line by line. If you read one thing about SLO alerting in your life, this is it — and it fits in one sitting."
         }
       ]
     }

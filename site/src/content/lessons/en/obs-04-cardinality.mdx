@@ -1,0 +1,181 @@
+---
+key: cardinality
+lang: en
+track: observabilidade
+order: 4
+title: Cardinality, the easiest way to take monitoring down
+summary: "cAdvisor publishes 1,227 samples per scrape and 47 survive. The filter that cuts 96% is not disk economy — it is what stops Prometheus from becoming the incident."
+minutes: 14
+tags: [observability, prometheus, cardinality, relabel, tsdb, cost]
+sources:
+  - label: "Prometheus — metric and label naming"
+    url: "https://prometheus.io/docs/practices/naming/"
+    kind: docs
+    accessed: "2026-09-20"
+  - label: "Prometheus — relabeling configuration"
+    url: "https://prometheus.io/docs/prometheus/latest/configuration/configuration/#metric_relabel_configs"
+    kind: docs
+    accessed: "2026-09-20"
+  - label: "Prometheus — storage and the TSDB"
+    url: "https://prometheus.io/docs/prometheus/latest/storage/"
+    kind: docs
+    accessed: "2026-09-20"
+---
+
+import CardinalityExplosion from "../../../components/diagrams/CardinalityExplosion.astro";
+
+Prometheus stores **one series per distinct combination of labels**. That
+sentence looks harmless and is the cause of most monitoring systems that fall
+over.
+
+<CardinalityExplosion />
+
+## What the stack actually pays
+
+The numbers above come from `obs-measured.json`, rewritten by `make verify`.
+Their order is worth reading carefully, because it contradicts intuition:
+
+- **node-exporter** is the biggest contributor, and nobody blames it;
+- **cAdvisor** would publish more than it does if it were not filtered;
+- the **api**, the reason the stack exists at all, is the smallest slice.
+
+<Callout type="why" label="Why cAdvisor explodes">
+It emits metrics per **container × device × interface × filesystem**. A host
+with twenty containers, three disks and two interfaces generates series in the
+product of those dimensions — and none of them is interesting to someone asking
+whether the application is well.
+
+The `metric_relabel_configs` in `prometheus.yml` keeps a short list and discards
+the rest **before it becomes a series**:
+
+```yaml
+metric_relabel_configs:
+  - source_labels: [__name__]
+    regex: "container_(cpu_usage_seconds_total|memory_working_set_bytes|…)"
+    action: keep
+```
+
+`keep` inverts the logic: keep what matches, drop everything else. It is safer
+than `drop` — a new exporter cannot smuggle itself in.
+</Callout>
+
+<Term word="time series" alt="time series" open>
+Prometheus' unit of storage: a metric name plus one specific set of labels, with
+its values over time.
+
+`api_http_requests_total{method="GET", route="/{code}", status="302"}` is **one**
+series. Changing `status` to `"404"` is **another**, with its own memory block
+and its own file on disk.
+
+That is why cardinality is the dominant cost: a thousand requests per second on
+one series costs almost nothing; a thousand series with one request each costs a
+thousand times more.
+</Term>
+
+## The label that looks useful and is a bomb
+
+```go
+// NEVER do this
+httpRequests.WithLabelValues(method, r.URL.Path, status).Inc()
+```
+
+It looks reasonable: why not the exact URL instead of the route pattern? Because
+`/r/abc123` and `/r/xyz789` become **different series**, and the series count
+starts growing with the number of shortened links in existence.
+
+This stack's api uses `route="/{code}"` — the **pattern**, not the value. It is
+the difference between six series and unbounded ones.
+
+<Callout type="danger" label="The list of what never becomes a label">
+- **user, session or request ids** — grows with usage;
+- **URL paths with parameters** — grows with your data;
+- **client IP addresses** — grows with the internet;
+- **error messages** — grows with the creativity of exceptions;
+- **timestamps in any form** — grows by definition.
+
+The rule is a single question: **does this label have a known, finite set of
+values?** If the answer depends on how many users you have, it is not a label —
+it is a log field, and that is lesson 5's subject.
+</Callout>
+
+## Measuring before it hurts
+
+<RunIt>
+```bash
+make obs
+# How many series exist, and which metrics contribute most
+curl -s --get http://127.0.0.1:9090/api/v1/query \
+  --data-urlencode 'query=prometheus_tsdb_head_series'
+curl -s http://127.0.0.1:9090/api/v1/status/tsdb \
+  | python3 -m json.tool | head -30
+```
+</RunIt>
+
+The `/api/v1/status/tsdb` endpoint answers the question that matters during an
+incident: **which metrics and which labels hold the most series**. It is the
+first place to look when Prometheus starts eating memory.
+
+<Tradeoff
+  a="Cut at the source (the exporter publishes less)"
+  b="Cut at collection (metric_relabel_configs)"
+  whenA="When you control the exporter and the metric interests nobody. It is cheaper: the data is not generated, not transferred and not processed — cAdvisor has <code>--docker_only</code> and <code>--store_container_labels=false</code> for exactly this."
+  whenB="When the exporter is third-party and cannot be configured, or when different services want different slices of the same exporter."
+  chose="none"
+  verdict="both, and that is what compose.obs.yaml does: cAdvisor's flags reduce at the source, and the Prometheus relabel is the second barrier. Measured: even with the flags, 1,227 samples per scrape remain for the filter to cut."
+  adr="0003-socket-do-docker-na-observabilidade"
+/>
+
+<LabExercise check="o relabel do cAdvisor descarta" file="stack/services/observability/prometheus.yml">
+
+The gate requires cAdvisor's relabel to drop more than 100 samples per scrape.
+Run the command below and see this machine's number.
+
+Question: why does the gate check the **drop**, rather than simply the total
+series count?
+
+<Fragment slot="hint">
+Think about what would happen if somebody deleted the `metric_relabel_configs`
+block.
+</Fragment>
+
+<Fragment slot="answer">
+
+Because the total series count is a number that moves for many reasons —
+starting a service, changing the container count, upgrading an exporter — and a
+threshold on it would produce constant false alarms until somebody switched the
+check off.
+
+The **drop** measures one thing only: the filter is still there and still
+cutting. If somebody deletes the block, the number goes to zero and the gate
+fails immediately, with the cause in the check's name.
+
+```bash
+curl -s --get http://127.0.0.1:9090/api/v1/query --data-urlencode \
+  'query=scrape_samples_scraped{job="cadvisor"} - scrape_samples_post_metric_relabeling{job="cadvisor"}'
+```
+
+And there is a detail that makes the check possible at all: both metrics are
+written **by Prometheus itself** about its own collection work. It is not the
+stack declaring itself healthy — it is the collector reporting what it did.
+
+The general lesson is the same as `verify.sh` with the scanner: **a check should
+measure the cause, not the symptom.** "Fewer than N series" is a symptom; "the
+filter is cutting" is the cause.
+
+</Fragment>
+</LabExercise>
+
+## What sticks
+
+- A series is **name + label combination**. Cost grows with combinations, not
+  with traffic.
+- This stack's biggest contributor is node-exporter; the api is the smallest.
+- `metric_relabel_configs` with `action: keep` drops **before it becomes a
+  series**.
+- A label with an unbounded value set is a bomb: ids, parameterised URLs, IPs,
+  error messages.
+- `/api/v1/status/tsdb` answers who is spending — it is the first place to look.
+- Cutting at the source is cheaper; cutting at collection is more flexible. Do
+  both.
+
+<Quiz set="cardinality" />

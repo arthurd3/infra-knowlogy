@@ -3,8 +3,8 @@
 > **A production stack that actually runs — and the lessons that explain every
 > decision in it.** Module 1 is Docker; module 2 ports the same stack to
 > Kubernetes; module 3 builds it in a self-hosted Jenkins; module 4 declares it
-> in HCL and provisions it with OpenTofu. The [roadmap](docs/ROADMAP.md) carries
-> the rest.
+> in HCL and provisions it with OpenTofu; module 6 measures it, with SLO rules
+> Prometheus actually loads. The [roadmap](docs/ROADMAP.md) carries the rest.
 
 The same application comes up on three ports at once — `:8080` under Compose,
 `:8081` in a kind cluster, `:8082` from OpenTofu — and the **same**
@@ -91,6 +91,9 @@ make k8s-verify # its own gate — 33 checks, from scratch, cluster destroyed af
 
 make iac-up     # module 4: the SAME stack again, declared in HCL, at 127.0.0.1:8082
 make iac-verify # its own gate — 28 checks, including idempotence and drift
+
+make obs        # Prometheus, Grafana, Loki, Alloy and four exporters
+                # with SLO rules that load and a burn-rate alert the gate makes fire
 ```
 
 Requirements: Docker 25+ with BuildKit, Docker Compose v2+, Node 22+ (site only),

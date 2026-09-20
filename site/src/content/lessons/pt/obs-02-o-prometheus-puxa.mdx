@@ -1,0 +1,176 @@
+---
+key: pull-not-push
+lang: pt
+track: observabilidade
+order: 2
+title: O Prometheus puxa, e isso muda o desenho
+summary: "Nenhum serviço desta stack sabe que o Prometheus existe. Isso não é detalhe de configuração: é o que torna o silêncio de um alvo um dado, e não uma ausência."
+minutes: 14
+tags: [observabilidade, prometheus, pull, push, scrape, service-discovery]
+sources:
+  - label: "Prometheus — \"Pull não escala — ou escala?\""
+    url: "https://prometheus.io/blog/2016/07/23/pull-does-not-scale-or-does-it/"
+    kind: blog
+    accessed: "2026-09-20"
+  - label: "Prometheus — convenções de nome de métrica"
+    url: "https://prometheus.io/docs/practices/naming/"
+    kind: docs
+    accessed: "2026-09-20"
+  - label: "Prometheus — modo agente"
+    url: "https://prometheus.io/blog/2021/11/16/agent/"
+    kind: blog
+    accessed: "2026-09-20"
+---
+
+import PullVsPush from "../../../components/diagrams/PullVsPush.astro";
+
+Procure por "prometheus" nas aplicações desta stack e você acha a biblioteca de
+instrumentação — e **nenhum endereço de servidor de métricas**. Isso é
+deliberado.
+
+<PullVsPush />
+
+## O que a aplicação faz, e o que ela não faz
+
+```go
+httpRequests = promauto.NewCounterVec(prometheus.CounterOpts{
+    Name: "api_http_requests_total",
+    Help: "Total de requisições HTTP por método, rota e status.",
+}, []string{"method", "route", "status"})
+```
+
+A api incrementa contador e expõe `/metrics`. Ponto. Ela não abre conexão, não
+conhece host de coletor, não tem credencial de monitoramento, não tem fila de
+envio e não falha se o Prometheus cair.
+
+<Term word="raspagem" alt="scrape" open>
+Uma requisição HTTP que o Prometheus faz ao endpoint `/metrics` de um alvo, num
+intervalo fixo — 15 segundos, nesta stack.
+
+O que volta é texto simples: uma linha por série, com nome, rótulos e valor. Dá
+para ver com `curl`, o que é mais útil do que parece — quando uma métrica não
+aparece no painel, a primeira pergunta é se ela existe na origem, e a resposta
+custa um comando.
+</Term>
+
+<RunIt>
+```bash
+# O que o Prometheus vê, você vê igual
+docker compose -f stack/compose.yaml -f stack/compose.prod.yaml \
+  exec -T api wget -qO- http://127.0.0.1:8080/metrics | grep api_http_requests_total | head -5
+```
+</RunIt>
+
+## O efeito colateral que vale a decisão inteira
+
+<Callout type="why" label="Silêncio vira dado">
+Cada raspagem produz uma série sintética chamada `up`: **1** se o alvo
+respondeu, **0** se não respondeu. Ela não vem da aplicação — o Prometheus a
+escreve sozinho.
+
+No modelo push, um alvo que parou de mandar é indistinguível de um alvo saudável
+e sem eventos. Você descobre a diferença quando alguém pergunta "faz quanto
+tempo que este gráfico não recebe ponto?".
+
+```promql
+up == 0
+```
+
+Uma expressão, e você tem a lista de tudo que deveria estar respondendo e não
+está.
+</Callout>
+
+## Quando o pull é o modelo errado
+
+A honestidade aqui importa mais que a defesa do modelo.
+
+<Tradeoff
+  a="Pull (Prometheus)"
+  b="Push (StatsD, OTLP para um coletor)"
+  whenA="Alvos de vida longa e endereçáveis: um serviço num container, um exporter, um nó. O coletor descobre quem existe e o silêncio de um alvo já é um sinal."
+  whenB="Trabalho <b>efêmero</b> — um job de cron que dura 8 segundos, uma função serverless, um build de CI. Ele pode terminar antes de qualquer raspagem, e nenhuma descoberta de serviço chega a tempo."
+  chose="a"
+  verdict="pull, porque todo alvo desta stack é um container de vida longa. Para o caso efêmero existe o Pushgateway, e a própria documentação do Prometheus recomenda NÃO usá-lo como atalho para push geral."
+  adr="0003-socket-do-docker-na-observabilidade"
+/>
+
+E há um segundo limite: o alvo precisa ser **alcançável pelo coletor**. Nesta
+stack isso deu trabalho e está visível no `compose.obs.yaml` — o Prometheus está
+em **duas** redes, `obs` para publicar a porta e `data` para conseguir alcançar
+a api, o worker e os exporters, que vivem lá dentro.
+
+<Callout type="trap" label="Descobrir alvo exige perguntar ao Docker, e aí mora o ADR 0003">
+Nesta stack os alvos são estáticos no `prometheus.yml`, o que funciona porque a
+lista é conhecida. Em ambiente dinâmico, o coletor precisa **descobrir**
+containers — e descobrir container significa falar com o socket do Docker, que
+é root no host.
+
+É por isso que o Alloy não vê o socket: ele fala com o `docker-socket-proxy`,
+que só permite ler `/containers` e `/networks` e recusa todo o resto. A tensão
+está registrada no ADR 0003, e ela não tem solução perfeita — tem um custo
+escolhido de propósito.
+</Callout>
+
+## A convenção de nome, que não é gosto
+
+`api_http_requests_total` não é um nome bonito por acaso. A convenção do
+Prometheus é `<namespace>_<nome>_<unidade>`, com sufixo `_total` para contador —
+e ela existe porque **ferramenta lê esse nome**: o `rate()` só faz sentido sobre
+contador, e quem escreve painel precisa saber, pelo nome, se pode aplicá-lo.
+
+Métrica em segundos, nunca em milissegundos. Bytes, nunca kilobytes. A unidade
+base evita a conversão errada que ninguém revisa.
+
+<LabExercise check="o SLI de disponibilidade tem valor" file="stack/services/observability/prometheus.yml">
+
+O `prometheus.yml` tem `scrape_interval: 15s`. Alguém propõe baixar para `1s`
+"para ter mais resolução".
+
+Pergunta: o que isso custa, exatamente?
+
+<Fragment slot="hint">
+Olhe o que a medição diz sobre amostras por segundo e séries ativas.
+</Fragment>
+
+<Fragment slot="answer">
+
+Multiplica por **15** o volume de ingestão — e não melhora quase nada do que
+importa.
+
+Nesta máquina, com 15s, o `obs-measured.json` registra cerca de 275 amostras por
+segundo e ~100 MB residentes no Prometheus. A 1s seriam ~4.100 amostras por
+segundo, com o disco e a memória acompanhando.
+
+O que não melhora: a maioria das métricas não muda em 1 segundo. Um contador de
+requisições raspado a cada segundo dá o mesmo `rate()` de cinco minutos que a
+cada quinze — você pagou 15× por ruído.
+
+E há um limite duro do outro lado: o `rate()` precisa de pelo menos **duas**
+amostras dentro da janela. Com `scrape_interval` de 15s, uma janela `[30s]` é o
+mínimo honesto; janela menor que duas raspagens devolve vazio, e um alerta sobre
+vazio nunca dispara — que é a armadilha da lição 7.
+
+```bash
+curl -s --get http://127.0.0.1:9090/api/v1/query \
+  --data-urlencode 'query=rate(prometheus_tsdb_head_samples_appended_total[5m])'
+```
+
+A pergunta certa não é "quanta resolução eu consigo", é "qual é o menor evento
+que eu preciso enxergar" — e aí `scrape_interval` sai de gosto e vira decisão.
+
+</Fragment>
+</LabExercise>
+
+## O que fica
+
+- A aplicação publica `/metrics` e **não sabe** que o Prometheus existe.
+- Pull faz do silêncio um dado: a série `up` é escrita pelo coletor, não pelo
+  alvo.
+- Push ganha no trabalho **efêmero**, que pode morrer antes de qualquer
+  raspagem.
+- O alvo precisa ser alcançável: por isso o Prometheus está em duas redes aqui.
+- Descoberta dinâmica custa acesso ao socket do Docker — ADR 0003.
+- Nome de métrica é contrato com ferramenta: `_total` para contador, unidade
+  base sempre.
+
+<Quiz set="pull-not-push" />

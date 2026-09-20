@@ -1,0 +1,199 @@
+---
+key: logs-without-indexing
+lang: pt
+track: observabilidade
+order: 5
+title: "Loki: índice de rótulo, não de conteúdo"
+summary: "Ele recusa indexar texto, e o custo migra da ingestão para a consulta. E o rótulo `level` desta stack tinha seis grafias da mesma coisa — achado escrevendo esta lição."
+minutes: 15
+tags: [observabilidade, loki, alloy, logs, rotulos, cardinalidade]
+sources:
+  - label: "Loki — visão geral da arquitetura"
+    url: "https://grafana.com/docs/loki/latest/get-started/overview/"
+    kind: docs
+    accessed: "2026-09-20"
+  - label: "Loki — rótulos e boas práticas"
+    url: "https://grafana.com/docs/loki/latest/get-started/labels/"
+    kind: docs
+    accessed: "2026-09-20"
+  - label: "Prometheus — convenções de nome e rótulo"
+    url: "https://prometheus.io/docs/practices/naming/"
+    kind: docs
+    accessed: "2026-09-20"
+---
+
+import LokiIndex from "../../../components/diagrams/LokiIndex.astro";
+
+A decisão de projeto do Loki cabe numa frase: **ele não indexa o conteúdo da
+linha.**
+
+<LokiIndex />
+
+## O que ele indexa, então
+
+Só os rótulos do fluxo. Nesta stack, o `config.alloy` produz quatro:
+
+```alloy
+rule {
+  source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+  target_label  = "service"
+}
+```
+
+`service`, `stack`, `container` e `level` — mais `platform`, fixo. São poucos e
+de baixa cardinalidade **de propósito**: cada combinação distinta cria um fluxo
+novo, e a lição 4 já mostrou onde isso termina.
+
+<Term word="fluxo" alt="stream" open>
+No Loki, um fluxo é o conjunto de linhas que compartilham exatamente o mesmo
+conjunto de rótulos.
+
+`{service="api", container="infra-knowlogy-api-1", level="info"}` é **um**
+fluxo. Trocar `level` para `error` é **outro**, com seu próprio índice e seus
+próprios blocos comprimidos.
+
+É a mesma matemática da série temporal do Prometheus, com um agravante: aqui
+cada fluxo carrega linhas inteiras, não números. Um rótulo com id de requisição
+não só multiplica o índice — ele fragmenta o armazenamento em milhares de
+blocos minúsculos, e cada um deles é uma leitura separada na consulta.
+</Term>
+
+## Consultar é escolher o fluxo e varrer
+
+```logql
+{service="api"} |= "connection refused"
+```
+
+A primeira parte — `{service="api"}` — usa o índice e é barata. A segunda —
+`|= "connection refused"` — **varre** o conteúdo dos blocos daquele fluxo no
+período pedido. É por isso que toda consulta no Loki começa por rótulo, e uma
+consulta sem seletor de rótulo é recusada.
+
+<Callout type="why" label="O que esse desenho compra, e o que ele vende">
+**Compra:** o índice fica minúsculo. Num sistema de texto completo, o índice
+costuma passar o tamanho dos próprios logs, porque cada palavra vira entrada.
+Aqui o índice tem cinco rótulos.
+
+**Vende:** a consulta fica mais cara, e proporcional ao período. Procurar uma
+string em sete dias de log lê sete dias de bloco. O Loki compensa paralelizando
+a varredura, mas a conta não desaparece — ela muda de lugar, da ingestão para o
+momento em que você está com pressa.
+</Callout>
+
+## O achado: seis grafias do mesmo nível
+
+Escrevendo esta lição, medimos os valores do rótulo `level` nesta stack:
+
+```
+6 valores: ERROR  INFO  error  info  warn  warning
+```
+
+A api em Go escreve `info`, o worker em Python escreve `INFO`, o Caddy escreve
+outra coisa. O `stage.labels` do Alloy guarda o que vier.
+
+<Callout type="danger" label="O efeito não é estético">
+`{level="error"}` **não casa** `ERROR`. Quem escrever essa consulta durante um
+incidente vai receber metade dos erros e nenhum aviso de que faltou o resto.
+
+E cada grafia extra é um fluxo a mais: quinze serviços × seis níveis dá até
+noventa fluxos onde quinze × três bastariam.
+
+A correção é uma etapa no `config.alloy`, antes de o valor virar rótulo:
+
+```alloy
+stage.template {
+  source   = "level"
+  template = "{{ ToLower .Value }}"
+}
+```
+
+Medido depois: nos últimos 120 segundos, o único valor presente é `info`.
+</Callout>
+
+<Callout type="trap" label="E a correção pareceu não funcionar">
+Logo após aplicá-la, o endpoint de valores de rótulo continuava respondendo
+`ERROR INFO error info warn` — mesmo pedindo uma janela de 90 segundos.
+
+A causa: o `/loki/api/v1/label/<nome>/values` responde pela granularidade do
+**índice**, que aqui é de 24 horas (`period: 24h` no `schema_config`). Um rótulo
+que você parou de emitir agora continua listado pelo resto do dia.
+
+Quem responde de verdade é consultar as **linhas** e olhar os rótulos delas.
+Foi assim que a correção se provou — e é a diferença entre "o que existe no
+índice" e "o que está sendo escrito agora".
+</Callout>
+
+## O que a correção NÃO resolve
+
+`warn` e `warning` continuam sendo duas palavras diferentes. Normalizar isso
+exigiria um mapa de sinônimos dentro do coletor, e a decisão aqui foi **deixar
+declarado em vez de esconder num regex** — porque o dia em que um serviço novo
+escrever `WARNING`, o mapa estará desatualizado e ninguém vai saber.
+
+<RunIt>
+```bash
+make obs
+# Os rótulos que o Loki conhece, e a cardinalidade de cada um
+docker exec infra-knowlogy-grafana-1 \
+  wget -qO- 'http://loki:3100/loki/api/v1/label/level/values'
+```
+</RunIt>
+
+<LabExercise check="stack de observabilidade saudável" file="stack/services/observability/config.alloy">
+
+O `config.alloy` tem uma regra de `keep` que só coleta containers cujo projeto
+Compose seja `infra-knowlogy`.
+
+Pergunta: o que aconteceria sem ela, numa máquina de desenvolvimento?
+
+<Fragment slot="hint">
+Pense em quantos containers de outros projetos existem numa máquina de trabalho.
+</Fragment>
+
+<Fragment slot="answer">
+
+O Alloy coletaria **todo container do host** — inclusive os de outros projetos,
+que não têm nada a ver com esta stack.
+
+Três consequências, em ordem de gravidade:
+
+1. **Vazamento entre projetos.** Log de outro sistema entra no seu Loki. Se
+   aquele sistema logar algo sensível, ele agora está aqui.
+2. **Fluxos que não param de crescer.** Cada container efêmero — um `docker run`
+   de teste, um build — cria um fluxo com um `container` novo. Container morre,
+   o fluxo fica.
+3. **Consulta poluída.** `{level="error"}` passa a devolver erro de coisas que
+   você não opera.
+
+```alloy
+rule {
+  source_labels = ["__meta_docker_container_label_com_docker_compose_project"]
+  regex         = "infra-knowlogy"
+  action        = "keep"
+}
+```
+
+É o mesmo `action: keep` do `metric_relabel_configs` da lição 4, pela mesma
+razão: **allowlist em vez de blocklist.** Um projeto novo na sua máquina não
+entra de contrabando.
+
+O paralelo com a armadilha 32 deste repositório é direto: o portão de segurança
+também aprendeu a atribuir o que vê antes de acusar, porque container alheio na
+mesma máquina é a regra, não a exceção.
+
+</Fragment>
+</LabExercise>
+
+## O que fica
+
+- O Loki indexa **rótulo**, nunca conteúdo. O índice fica pequeno; a varredura
+  fica com a conta.
+- Toda consulta começa por seletor de rótulo — e sem ele o Loki recusa.
+- Fluxo é nome + combinação de rótulos, igual à série do Prometheus, e com
+  linhas inteiras em vez de números.
+- `level` tinha seis grafias da mesma coisa; `{level="error"}` perdia metade.
+- O endpoint de valores de rótulo responde pelo **período do índice**, não pela
+  janela — o que faz uma correção parecer não ter funcionado.
+- `action: keep` no coletor é allowlist: container de outro projeto não entra.
+
+<Quiz set="logs-without-indexing" />

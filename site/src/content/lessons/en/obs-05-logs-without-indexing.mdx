@@ -1,0 +1,200 @@
+---
+key: logs-without-indexing
+lang: en
+track: observabilidade
+order: 5
+title: "Loki: a label index, not a content index"
+summary: "It refuses to index text, and the cost moves from ingestion to query time. And this stack's `level` label had six spellings of the same thing — found while writing this lesson."
+minutes: 15
+tags: [observability, loki, alloy, logs, labels, cardinality]
+sources:
+  - label: "Loki — architecture overview"
+    url: "https://grafana.com/docs/loki/latest/get-started/overview/"
+    kind: docs
+    accessed: "2026-09-20"
+  - label: "Loki — labels and best practices"
+    url: "https://grafana.com/docs/loki/latest/get-started/labels/"
+    kind: docs
+    accessed: "2026-09-20"
+  - label: "Prometheus — metric and label naming"
+    url: "https://prometheus.io/docs/practices/naming/"
+    kind: docs
+    accessed: "2026-09-20"
+---
+
+import LokiIndex from "../../../components/diagrams/LokiIndex.astro";
+
+Loki's design decision fits in one sentence: **it does not index the line's
+content.**
+
+<LokiIndex />
+
+## So what does it index
+
+Only the stream's labels. In this stack, `config.alloy` produces four:
+
+```alloy
+rule {
+  source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+  target_label  = "service"
+}
+```
+
+`service`, `stack`, `container` and `level` — plus `platform`, which is fixed.
+They are few and low-cardinality **on purpose**: every distinct combination
+creates a new stream, and lesson 4 already showed where that ends.
+
+<Term word="stream" alt="stream" open>
+In Loki, a stream is the set of lines sharing exactly the same set of labels.
+
+`{service="api", container="infra-knowlogy-api-1", level="info"}` is **one**
+stream. Changing `level` to `error` is **another**, with its own index and its
+own compressed chunks.
+
+It is the same arithmetic as a Prometheus time series, with one aggravating
+factor: here every stream carries whole lines, not numbers. A label holding a
+request id does not only multiply the index — it fragments storage into
+thousands of tiny chunks, and each one is a separate read at query time.
+</Term>
+
+## Querying means picking the stream and scanning
+
+```logql
+{service="api"} |= "connection refused"
+```
+
+The first part — `{service="api"}` — uses the index and is cheap. The second —
+`|= "connection refused"` — **scans** that stream's chunks over the requested
+range. That is why every Loki query starts with a label, and a query with no
+label selector is rejected.
+
+<Callout type="why" label="What that design buys, and what it sells">
+**Buys:** the index stays tiny. In a full-text system the index often exceeds
+the size of the logs themselves, because every word becomes an entry. Here the
+index holds five labels.
+
+**Sells:** queries get more expensive, in proportion to the range. Searching a
+string across seven days of logs reads seven days of chunks. Loki compensates by
+parallelising the scan, but the bill does not vanish — it moves, from ingestion
+to the moment you are in a hurry.
+</Callout>
+
+## The finding: six spellings of the same level
+
+While writing this lesson, we measured the `level` label's values in this stack:
+
+```
+6 values: ERROR  INFO  error  info  warn  warning
+```
+
+The Go api writes `info`, the Python worker writes `INFO`, Caddy writes
+something else. Alloy's `stage.labels` keeps whatever arrives.
+
+<Callout type="danger" label="The effect is not cosmetic">
+`{level="error"}` **does not match** `ERROR`. Whoever writes that query during
+an incident gets half the errors and no warning that the rest is missing.
+
+And every extra spelling is another stream: fifteen services × six levels gives
+up to ninety streams where fifteen × three would do.
+
+The fix is one stage in `config.alloy`, before the value becomes a label:
+
+```alloy
+stage.template {
+  source   = "level"
+  template = "{{ ToLower .Value }}"
+}
+```
+
+Measured afterwards: over the last 120 seconds, the only value present is
+`info`.
+</Callout>
+
+<Callout type="trap" label="And the fix appeared not to work">
+Right after applying it, the label-values endpoint kept answering
+`ERROR INFO error info warn` — even when asked for a 90-second window.
+
+The cause: `/loki/api/v1/label/<name>/values` answers at the granularity of the
+**index**, which here is 24 hours (`period: 24h` in `schema_config`). A label
+you stopped emitting stays listed for the rest of the day.
+
+What actually answers is querying the **lines** and looking at their labels.
+That is how the fix proved itself — and it is the difference between "what is in
+the index" and "what is being written now".
+</Callout>
+
+## What the fix does NOT solve
+
+`warn` and `warning` are still two different words. Normalising that would need
+a synonym map inside the collector, and the decision here was to **declare it
+rather than hide it in a regex** — because the day a new service writes
+`WARNING`, the map will be out of date and nobody will know.
+
+<RunIt>
+```bash
+make obs
+# The labels Loki knows, and each one's cardinality
+docker exec infra-knowlogy-grafana-1 \
+  wget -qO- 'http://loki:3100/loki/api/v1/label/level/values'
+```
+</RunIt>
+
+<LabExercise check="stack de observabilidade saudável" file="stack/services/observability/config.alloy">
+
+`config.alloy` has a `keep` rule that only collects containers whose Compose
+project is `infra-knowlogy`.
+
+Question: what would happen without it, on a development machine?
+
+<Fragment slot="hint">
+Think about how many other projects' containers live on a working machine.
+</Fragment>
+
+<Fragment slot="answer">
+
+Alloy would collect **every container on the host** — including those from other
+projects, which have nothing to do with this stack.
+
+Three consequences, in order of severity:
+
+1. **Cross-project leakage.** Another system's logs enter your Loki. If that
+   system logs anything sensitive, it is now here.
+2. **Streams that never stop growing.** Every ephemeral container — a test
+   `docker run`, a build — creates a stream with a new `container` label. The
+   container dies, the stream stays.
+3. **Polluted queries.** `{level="error"}` starts returning errors from things
+   you do not operate.
+
+```alloy
+rule {
+  source_labels = ["__meta_docker_container_label_com_docker_compose_project"]
+  regex         = "infra-knowlogy"
+  action        = "keep"
+}
+```
+
+It is the same `action: keep` as lesson 4's `metric_relabel_configs`, for the
+same reason: **allowlist instead of blocklist.** A new project on your machine
+cannot smuggle itself in.
+
+The parallel with this repository's trap 32 is direct: the security gate also
+learned to attribute what it sees before accusing, because somebody else's
+container on the same machine is the rule, not the exception.
+
+</Fragment>
+</LabExercise>
+
+## What sticks
+
+- Loki indexes **labels**, never content. The index stays small; the scan picks
+  up the bill.
+- Every query starts with a label selector — without one, Loki refuses.
+- A stream is name + label combination, like a Prometheus series, carrying whole
+  lines instead of numbers.
+- `level` had six spellings of the same thing; `{level="error"}` missed half.
+- The label-values endpoint answers for the **index period**, not the window —
+  which makes a fix look like it did not work.
+- `action: keep` in the collector is an allowlist: another project's containers
+  stay out.
+
+<Quiz set="logs-without-indexing" />

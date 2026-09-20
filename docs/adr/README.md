@@ -28,3 +28,4 @@ não material didático.
 | [0015](0015-opentofu-e-o-provider-docker.md) | OpenTofu, e provisionar a própria stack em vez de nuvem | aceita |
 | [0016](0016-como-o-tofu-alcanca-o-daemon.md) | Como o `tofu` alcança o daemon, e o que isso custa | aceita |
 | [0017](0017-a-trilha-de-estudo-e-as-fontes.md) | A trilha de estudo, e por que ela não é o `sources:` | aceita |
+| [0018](0018-slo-como-regra-que-roda.md) | SLO como regra que roda, e não como capítulo | aceita |

@@ -1,0 +1,202 @@
+---
+key: burn-rate-alerting
+lang: en
+track: observabilidade
+order: 7
+title: Alert on the budget, not on the symptom
+summary: "The gate stops Postgres on purpose and the 14.4× alert fires — measured. And it does not clear the instant you fix it, because the window still carries the errors."
+minutes: 16
+tags: [observability, slo, burn-rate, alerting, prometheus, sre]
+sources:
+  - label: "Google SRE Workbook — Alerting on SLOs"
+    url: "https://sre.google/workbook/alerting-on-slos/"
+    kind: book
+    accessed: "2026-09-20"
+  - label: "Prometheus — alerting rules"
+    url: "https://prometheus.io/docs/prometheus/latest/configuration/alerting_rules/"
+    kind: docs
+    accessed: "2026-09-20"
+  - label: "Google SRE Workbook — Implementing SLOs"
+    url: "https://sre.google/workbook/implementing-slos/"
+    kind: book
+    accessed: "2026-09-20"
+---
+
+import BurnRateWindows from "../../../components/diagrams/BurnRateWindows.astro";
+
+The previous lesson defined the budget. This one turns it into a page.
+
+<BurnRateWindows />
+
+## Burn rate is speed, not quantity
+
+<Term word="burn rate" alt="burn rate" open>
+The speed at which the error budget is being spent, in multiples of the pace
+that would exhaust it exactly at the end of the window.
+
+With a 99.5% SLO over 30 days, **burn rate 1** means spending 0.5% of requests
+across the whole 30 days — exactly the agreed limit. **Burn rate 14.4** means
+spending at the speed that empties the budget in a little over two days.
+
+The number 14.4 is not arbitrary: it is `(30 days / 1 hour) × 2%`. It is the
+rate that consumes 2% of the budget in one hour, and it is the SRE Workbook's
+recipe.
+</Term>
+
+The change of perspective is this: the alert does not ask "is the error rate
+high?", it asks "**at this speed, when does the budget run out?**". A 0.6% rate
+is catastrophic for a 99.9% SLO and irrelevant for a 95% one — and only burn
+rate captures that.
+
+## The AND between windows
+
+```yaml
+expr: >
+  api:sli_erro:ratio1h > (14.4 * 0.005)
+  and
+  api:sli_erro:ratio5m > (14.4 * 0.005)
+for: 2m
+```
+
+<Callout type="why" label="Why two windows, and never one">
+**Long window only (1h):** a five-minute spike keeps the one-hour average above
+the threshold for *a full hour*. The alert fires correctly and then stays stuck,
+long after the problem is gone. Whoever is on call learns to ignore it.
+
+**Short window only (5m):** any hiccup becomes a page. Three days of that and
+nobody reads alerts any more.
+
+**Both with `and`:** the long one says the problem is *sustained*, the short one
+says it is *still happening*. Fires fast and clears fast.
+</Callout>
+
+## Measured: the gate stops the database and the alert fires
+
+This is not a documentation example. While this track was being written,
+Postgres was deliberately stopped and user traffic kept flowing:
+
+```
+   t     ratio5m   ratio1h   14.4x threshold   alerts
+     0s   1.0000    1.0000   0.0720        OrcamentoDeErroQueimandoRapido=firing,
+                                           OrcamentoDeErroQueimandoMedio=pending,
+                                           OrcamentoDeErroEmRitmoDeTicket=pending
+```
+
+The SLI went to 1.0 — **100% errors** — and the three alerts reacted at
+different speeds, which is exactly the design: the 14.4× one already `firing`,
+the slower ones still accumulating.
+
+<Callout type="trap" label="And it does not clear when you fix it">
+With the database back and traffic answering 201, the alert **kept firing**.
+
+That is not a defect. The five-minute window still contains the errors; it has
+to drain. The alert clears when the short window empties, not when you fix
+things — and that is precisely why the short window exists: without it, the wait
+would be the one-hour window.
+
+Worth knowing before the incident. An alert that stays red after the fix makes
+half the room believe the problem came back.
+</Callout>
+
+## The alert that wakes nobody
+
+```yaml
+- alert: OrcamentoDeErroEmRitmoDeTicket
+  labels:
+    severity: ticket
+```
+
+The third alert in `slo.yml` has severity `ticket`, not `page`. It exists
+because **most of the budget is spent exactly like that**: slowly, with no
+incident at all, over weeks — and no paging alert ever fires.
+
+<Tradeoff
+  a="Alerting on symptoms (CPU, disk, raw latency)"
+  b="Alerting on the budget's burn rate"
+  whenA="For conditions that are causes rather than consequences, and where the action is obvious: disk at 95%, a certificate expiring in 7 days. Nobody needs an SLO to know what to do about those."
+  whenB="For anything the user feels. A symptom does not imply impact — CPU at 100% with fast responses is not an incident, and CPU at 30% with timeouts is."
+  chose="b"
+  verdict="burn rate for what the user feels, symptoms for direct causes with an obvious action. The common mistake is using symptoms for everything, and then the pager becomes noise."
+  adr="0003-socket-do-docker-na-observabilidade"
+/>
+
+<Callout type="danger" label="What this module does NOT have">
+There is no **Alertmanager** here. Prometheus evaluates the rules and marks the
+alert as `firing` — and stops there. Nobody is notified.
+
+What is missing is precisely the part that turns an alert into operations:
+routing by severity, grouping so one incident does not send forty messages,
+silencing during maintenance, and escalation when nobody answers.
+
+It is declared in the roadmap. A track that taught SLOs while pretending
+`firing` is the end of the story would be teaching the easy half.
+</Callout>
+
+<RunIt>
+```bash
+make obs
+# The state of the three alerts right now
+curl -s http://127.0.0.1:9090/api/v1/alerts \
+  | python3 -c 'import sys,json; [print(a["labels"]["alertname"], a["state"]) for a in json.load(sys.stdin)["data"]["alerts"]]'
+```
+</RunIt>
+
+<LabExercise check="toda regra de SLO avalia sem erro" file="stack/services/observability/rules/slo.yml">
+
+The three alerts in `slo.yml` have different `for:` values: `2m`, `15m` and
+`1h`.
+
+Question: why does the fastest one have the shortest `for:`, and what would
+happen if all of them had `for: 0s`?
+
+<Fragment slot="hint">
+`for:` is how long the condition must stay true BEFORE the alert becomes
+`firing`.
+</Fragment>
+
+<Fragment slot="answer">
+
+Because `for:` is a third anti-noise layer, on top of the two windows — and it
+has to be proportional to the urgency.
+
+The 14.4× alert already has a five-minute short window in the `and`; demanding
+two more minutes of confirmation is cheap and still reacts in ~7 minutes. The
+ticket-pace one looks at 6 hours: waiting another hour changes nothing, and it
+avoids opening a ticket over a fluctuation.
+
+With `for: 0s` on all of them, the alert fires on the first evaluation cycle
+where the condition holds — including a window where the denominator dropped to
+nearly zero and two errors became 100%. At night, with little traffic, that
+happens.
+
+```promql
+# two requests, both failing, and the SLI goes to 1.0
+api:sli_erro:ratio5m
+```
+
+Lesson 6's `or vector(0)` protects against **zero** traffic. It does not protect
+against **low** traffic — and that is where `for:` comes in.
+
+The rule that follows: the three layers do different things. The long window
+filters what is not sustained, the short one filters what has already passed,
+and `for:` filters what was a sampling artifact. Removing any one has a cost,
+and removing all three is the alert nobody can live with.
+
+</Fragment>
+</LabExercise>
+
+## What sticks
+
+- Burn rate is **speed** of spending, not error rate — and it is what makes the
+  threshold comparable across services with different SLOs.
+- 14.4× comes from `(30d / 1h) × 2%`. The recipe's numbers are derived, not
+  magic.
+- Two windows with `and`: the long one says it is sustained, the short one says
+  it is still happening.
+- Measured: database stopped → SLI at 1.0 → alert `firing`. And it **does not
+  clear on the fix**, it clears when the window drains.
+- Not every alert wakes somebody: the slow-pace one becomes a ticket, and that
+  is how most of the budget disappears.
+- Alertmanager is missing. `firing` is not a notification — that is declared.
+
+<Quiz set="burn-rate-alerting" />

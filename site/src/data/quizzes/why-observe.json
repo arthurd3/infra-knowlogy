@@ -1,0 +1,140 @@
+{
+  "note_pt": "Monitorar × observar, o custo de cada sinal, e o que esta stack não tem.",
+  "note_en": "Monitoring vs observing, each signal's cost, and what this stack lacks.",
+  "pt": [
+    {
+      "q": "Por que métrica é barata e log é caro?",
+      "options": [
+        {
+          "text": "Métrica custa por cardinalidade — mil requisições viram um incremento; log custa por evento, e mil requisições viram mil linhas.",
+          "correct": true,
+          "why": "É a diferença que decide o desenho inteiro. O custo da métrica não cresce com tráfego, cresce com combinações de rótulo. O do log cresce linearmente com o tráfego, e é por isso que todo mundo acaba amostrando log e ninguém amostra métrica."
+        },
+        {
+          "text": "Métrica é número e log é texto, e texto ocupa mais espaço.",
+          "why": "Verdade parcial e não é a causa. Uma métrica com um rótulo de alta cardinalidade custa muito mais que um log de baixo volume — o que manda é quantas séries, não o tipo do dado."
+        },
+        {
+          "text": "Log precisa de índice de texto completo e métrica não.",
+          "why": "Depende do sistema: o Loki justamente NÃO indexa texto, e continua mais caro por evento que uma métrica. O índice é uma escolha, o custo por evento é estrutural."
+        },
+        {
+          "text": "Métrica é amostrada e log é completo.",
+          "why": "Invertido na prática. Métrica é agregada, não amostrada — ela conta tudo. É o log que costuma ser amostrado quando o volume aperta."
+        }
+      ]
+    },
+    {
+      "q": "Qual pergunta os três sinais NÃO respondem, nem juntos?",
+      "options": [
+        {
+          "text": "Se aquilo é ruim o bastante para acordar alguém.",
+          "correct": true,
+          "why": "Não é pergunta técnica: depende de um acordo sobre quanto de falha é aceitável. É para isso que existem SLI, SLO e orçamento de erro — sem eles sobra alguém olhando painel e decidindo no susto."
+        },
+        {
+          "text": "Onde o tempo de uma requisição foi gasto.",
+          "why": "Essa é exatamente a pergunta do trace. Esta stack não tem trace, mas a pergunta tem dono."
+        },
+        {
+          "text": "Quantas vezes um erro aconteceu.",
+          "why": "Métrica responde isso bem — é literalmente o que um contador faz."
+        },
+        {
+          "text": "O que aconteceu numa requisição específica.",
+          "why": "Log responde isso, e é a razão de ele ser caro: ele guarda o caso individual."
+        }
+      ]
+    },
+    {
+      "q": "Por que o Prometheus raspa a si mesmo?",
+      "options": [
+        {
+          "text": "Porque ele também pode estar mal, e sem se medir o único sinal seria a ausência de sinal — que ninguém nota.",
+          "correct": true,
+          "why": "Ele publica séries sobre o próprio trabalho: séries na memória, amostras por segundo, scrapes que falharam. São elas que tornam mensurável a lição de cardinalidade. O limite honesto: se ele cair inteiro, não reporta a própria queda — para isso é preciso um segundo Prometheus."
+        },
+        {
+          "text": "Para validar que o formato de exposição está correto.",
+          "why": "Efeito colateral, não a razão. O formato é validado a cada scrape de qualquer alvo."
+        },
+        {
+          "text": "Porque a configuração exige ao menos um alvo local.",
+          "why": "Não exige. Um Prometheus sem nenhum scrape_config sobe normalmente e não faz nada."
+        },
+        {
+          "text": "Para medir a latência da rede interna.",
+          "why": "Ele raspa `localhost`, então não atravessa rede nenhuma."
+        }
+      ]
+    }
+  ],
+  "en": [
+    {
+      "q": "Why is a metric cheap and a log expensive?",
+      "options": [
+        {
+          "text": "A metric costs by cardinality — a thousand requests become one increment; a log costs per event, and a thousand requests become a thousand lines.",
+          "correct": true,
+          "why": "It is the difference that drives the whole design. A metric's cost does not grow with traffic, it grows with label combinations. A log's grows linearly with traffic, which is why everybody ends up sampling logs and nobody samples metrics."
+        },
+        {
+          "text": "A metric is a number and a log is text, and text takes more space.",
+          "why": "Partly true and not the cause. A metric with one high-cardinality label costs far more than a low-volume log — what rules is how many series, not the data type."
+        },
+        {
+          "text": "Logs need a full-text index and metrics do not.",
+          "why": "It depends on the system: Loki specifically does NOT index text, and is still more expensive per event than a metric. The index is a choice, the per-event cost is structural."
+        },
+        {
+          "text": "Metrics are sampled and logs are complete.",
+          "why": "Inverted in practice. A metric is aggregated, not sampled — it counts everything. It is the log that gets sampled when volume bites."
+        }
+      ]
+    },
+    {
+      "q": "Which question do the three signals NOT answer, even together?",
+      "options": [
+        {
+          "text": "Whether it is bad enough to wake somebody up.",
+          "correct": true,
+          "why": "It is not a technical question: it depends on an agreement about how much failure is acceptable. That is what SLIs, SLOs and error budgets are for — without them you get somebody staring at a dashboard and deciding under pressure."
+        },
+        {
+          "text": "Where a request's time went.",
+          "why": "That is precisely the trace's question. This stack has no traces, but the question has an owner."
+        },
+        {
+          "text": "How many times an error happened.",
+          "why": "A metric answers that well — it is literally what a counter does."
+        },
+        {
+          "text": "What happened in one specific request.",
+          "why": "A log answers that, and it is why it is expensive: it keeps the individual case."
+        }
+      ]
+    },
+    {
+      "q": "Why does Prometheus scrape itself?",
+      "options": [
+        {
+          "text": "Because it can be unwell too, and without measuring itself the only sign would be the absence of signal — which nobody notices.",
+          "correct": true,
+          "why": "It publishes series about its own work: series in memory, samples per second, failed scrapes. Those are what make the cardinality lesson measurable. The honest limit: if it goes down entirely it will not report its own outage — that needs a second Prometheus."
+        },
+        {
+          "text": "To validate that the exposition format is correct.",
+          "why": "A side effect, not the reason. The format is validated on every scrape of any target."
+        },
+        {
+          "text": "Because the configuration requires at least one local target.",
+          "why": "It does not. A Prometheus with no scrape_config at all starts normally and does nothing."
+        },
+        {
+          "text": "To measure internal network latency.",
+          "why": "It scrapes `localhost`, so it crosses no network at all."
+        }
+      ]
+    }
+  ]
+}

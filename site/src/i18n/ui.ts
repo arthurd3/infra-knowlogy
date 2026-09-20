@@ -54,6 +54,7 @@ export const ui = {
     "track.kubernetes": "Kubernetes",
     "track.cicd": "CI/CD",
     "track.iac": "IaC",
+    "track.observabilidade": "Observabilidade",
     "track.fundamentos.desc":
       "O que um container realmente é, como uma imagem é montada e por que o cache de build se comporta assim.",
     "track.producao.desc":
@@ -66,6 +67,8 @@ export const ui = {
       "O mesmo pipeline em dois mundos: o GitHub Actions que já existe e um Jenkins self-hosted construído do zero — comparados por medição, não por preferência.",
     "track.iac.desc":
       "A mesma stack declarada em HCL e provisionada por OpenTofu: estado, grafo de dependências, idempotência e drift — medidos aqui, sem conta em nuvem nenhuma.",
+    "track.observabilidade.desc":
+      "O que a stack já expõe e quase ninguém lê: pull em vez de push, o histograma que engana, cardinalidade que derruba o monitoramento — e o SLO com alerta de burn rate disparando de verdade.",
     "lesson.minutes": "min de leitura",
     "lesson.sources": "Fontes",
     "deeper.title": "Para ir mais fundo",
@@ -168,6 +171,7 @@ export const ui = {
     "track.kubernetes": "Kubernetes",
     "track.cicd": "CI/CD",
     "track.iac": "IaC",
+    "track.observabilidade": "Observability",
     "track.fundamentos.desc":
       "What a container actually is, how an image is assembled, and why the build cache behaves the way it does.",
     "track.producao.desc":
@@ -180,6 +184,8 @@ export const ui = {
       "The same pipeline in two worlds: the GitHub Actions one that already exists, and a self-hosted Jenkins built from scratch — compared by measurement, not by preference.",
     "track.iac.desc":
       "The same stack declared in HCL and provisioned by OpenTofu: state, dependency graph, idempotence and drift — all measured here, with no cloud account at all.",
+    "track.observabilidade.desc":
+      "What the stack already exposes and almost nobody reads: pull instead of push, the histogram that misleads, cardinality that takes monitoring down — and an SLO with burn-rate alerting that actually fires.",
     "lesson.minutes": "min read",
     "lesson.sources": "Sources",
     "deeper.title": "Going deeper",
@@ -268,7 +274,7 @@ export function otherLang(lang: Lang): Lang {
  * mapa de badge da página da lição e os testes todos derivam daqui. Antes,
  * cada um repetia a lista à mão e acrescentar uma trilha era caçar literais.
  */
-export const TRACKS = ["fundamentos", "producao", "seguranca", "kubernetes", "cicd", "iac"] as const;
+export const TRACKS = ["fundamentos", "producao", "seguranca", "kubernetes", "cicd", "iac", "observabilidade"] as const;
 export type Track = (typeof TRACKS)[number];
 
 /** Rótulo localizado de uma trilha. */
@@ -289,5 +295,6 @@ export function trackBadge(track: Track): string {
     kubernetes: "badge--k8s",
     cicd: "badge--cicd",
     iac: "badge--iac",
+    observabilidade: "badge--obs",
   }[track];
 }

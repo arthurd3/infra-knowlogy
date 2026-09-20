@@ -1,0 +1,176 @@
+---
+key: cardinality
+lang: pt
+track: observabilidade
+order: 4
+title: Cardinalidade, o jeito mais fácil de derrubar o monitoramento
+summary: "O cAdvisor publica 1.227 amostras por raspagem e sobram 47. O filtro que corta 96% não é economia de disco — é o que impede o Prometheus de virar o incidente."
+minutes: 14
+tags: [observabilidade, prometheus, cardinalidade, relabel, tsdb, custo]
+sources:
+  - label: "Prometheus — convenções de nome e rótulo"
+    url: "https://prometheus.io/docs/practices/naming/"
+    kind: docs
+    accessed: "2026-09-20"
+  - label: "Prometheus — configuração de relabeling"
+    url: "https://prometheus.io/docs/prometheus/latest/configuration/configuration/#metric_relabel_configs"
+    kind: docs
+    accessed: "2026-09-20"
+  - label: "Prometheus — armazenamento e TSDB"
+    url: "https://prometheus.io/docs/prometheus/latest/storage/"
+    kind: docs
+    accessed: "2026-09-20"
+---
+
+import CardinalityExplosion from "../../../components/diagrams/CardinalityExplosion.astro";
+
+O Prometheus guarda **uma série por combinação distinta de rótulos**. Essa
+frase parece inócua e é a causa da maioria dos monitoramentos que caem.
+
+<CardinalityExplosion />
+
+## O que a stack de fato paga
+
+Os números acima vêm do `obs-measured.json`, regravado pelo `make verify`. Vale
+ler a ordem deles com atenção, porque ela contraria a intuição:
+
+- o **node-exporter** é o maior contribuinte, e ninguém o culpa;
+- o **cAdvisor** publicaria mais que ele se não fosse filtrado;
+- a **api**, que é a razão de a stack existir, é a menor fatia.
+
+<Callout type="why" label="Por que o cAdvisor explode">
+Ele emite métrica por **container × dispositivo × interface × sistema de
+arquivos**. Um host com vinte containers, três discos e duas interfaces gera
+séries no produto dessas dimensões — e nenhuma delas é interessante para quem
+quer saber se a aplicação está bem.
+
+O `metric_relabel_configs` do `prometheus.yml` guarda uma lista curta e descarta
+o resto **antes de virar série**:
+
+```yaml
+metric_relabel_configs:
+  - source_labels: [__name__]
+    regex: "container_(cpu_usage_seconds_total|memory_working_set_bytes|…)"
+    action: keep
+```
+
+`keep` inverte a lógica: guarda o que casa, descarta todo o resto. É mais seguro
+que `drop` — um exporter novo não entra de contrabando.
+</Callout>
+
+<Term word="série temporal" alt="time series" open>
+A unidade de armazenamento do Prometheus: um nome de métrica mais um conjunto
+específico de rótulos, com os valores ao longo do tempo.
+
+`api_http_requests_total{method="GET", route="/{code}", status="302"}` é **uma**
+série. Trocar `status` para `"404"` é **outra**, com seu próprio bloco de
+memória e seu próprio arquivo em disco.
+
+É por isso que cardinalidade é o custo dominante: mil requisições por segundo
+numa série custam quase nada; mil séries com uma requisição cada custam mil
+vezes mais.
+</Term>
+
+## O rótulo que parece útil e é uma bomba
+
+```go
+// NUNCA faça isto
+httpRequests.WithLabelValues(method, r.URL.Path, status).Inc()
+```
+
+Parece razoável: por que não a URL exata em vez do padrão de rota? Porque
+`/r/abc123` e `/r/xyz789` viram **séries diferentes**, e o número de séries passa
+a crescer com o número de links encurtados que existem.
+
+A api desta stack usa `route="/{code}"` — o **padrão**, não o valor. É a
+diferença entre seis séries e infinitas.
+
+<Callout type="danger" label="A lista do que nunca vira rótulo">
+- **id de usuário, de sessão, de requisição** — cresce com o uso;
+- **caminho de URL com parâmetro** — cresce com os dados;
+- **endereço IP de cliente** — cresce com a internet;
+- **mensagem de erro** — cresce com a criatividade das exceções;
+- **timestamp em qualquer forma** — cresce por definição.
+
+A regra é uma pergunta só: **este rótulo tem um conjunto de valores conhecido e
+finito?** Se a resposta depende de quantos usuários você tiver, não é rótulo —
+é campo de log, e o assunto da lição 5.
+</Callout>
+
+## Medindo antes de doer
+
+<RunIt>
+```bash
+make obs
+# Quantas séries existem, e quais métricas mais contribuem
+curl -s --get http://127.0.0.1:9090/api/v1/query \
+  --data-urlencode 'query=prometheus_tsdb_head_series'
+curl -s http://127.0.0.1:9090/api/v1/status/tsdb \
+  | python3 -m json.tool | head -30
+```
+</RunIt>
+
+O endpoint `/api/v1/status/tsdb` responde a pergunta que interessa num
+incidente: **quais métricas e quais rótulos têm mais séries**. É o primeiro lugar
+para olhar quando o Prometheus começa a comer memória.
+
+<Tradeoff
+  a="Cortar na origem (o exporter publica menos)"
+  b="Cortar na coleta (metric_relabel_configs)"
+  whenA="Quando você controla o exporter e a métrica não interessa a ninguém. É mais barato: o dado não é gerado, não trafega e não é processado — o cAdvisor tem <code>--docker_only</code> e <code>--store_container_labels=false</code> por isso."
+  whenB="Quando o exporter é de terceiro e não dá para configurar, ou quando serviços diferentes querem recortes diferentes do mesmo exporter."
+  chose="none"
+  verdict="os dois, e é o que o compose.obs.yaml faz: as flags do cAdvisor reduzem na fonte, e o relabel do Prometheus é a segunda barreira. Medido: mesmo com as flags, ainda sobram 1.227 amostras por raspagem para o filtro cortar."
+  adr="0003-socket-do-docker-na-observabilidade"
+/>
+
+<LabExercise check="o relabel do cAdvisor descarta" file="stack/services/observability/prometheus.yml">
+
+O portão exige que o relabel do cAdvisor descarte mais de 100 amostras por
+raspagem. Rode o comando abaixo e veja o número desta máquina.
+
+Pergunta: por que o portão checa o **descarte**, e não simplesmente o total de
+séries?
+
+<Fragment slot="hint">
+Pense no que aconteceria se alguém apagasse o bloco `metric_relabel_configs`.
+</Fragment>
+
+<Fragment slot="answer">
+
+Porque o total de séries é um número que muda por muitos motivos — subir um
+serviço, mudar o número de containers, atualizar um exporter — e um limiar sobre
+ele daria alarme falso constante até alguém desligar a checagem.
+
+O **descarte** mede uma coisa só: o filtro ainda está lá e ainda está cortando.
+Se alguém apagar o bloco, o número vai a zero e o portão reprova na hora, com a
+causa no nome da checagem.
+
+```bash
+curl -s --get http://127.0.0.1:9090/api/v1/query --data-urlencode \
+  'query=scrape_samples_scraped{job="cadvisor"} - scrape_samples_post_metric_relabeling{job="cadvisor"}'
+```
+
+E há um detalhe que faz a checagem existir: as duas métricas são escritas **pelo
+próprio Prometheus** sobre o trabalho de coleta dele. Não é a stack se
+auto-declarando saudável — é o coletor contando o que ele mesmo fez.
+
+A lição geral é a mesma do `verify.sh` com o scanner: **uma checagem deve medir
+a causa, não o sintoma.** "Menos de N séries" é sintoma; "o filtro está
+cortando" é a causa.
+
+</Fragment>
+</LabExercise>
+
+## O que fica
+
+- Uma série é **nome + combinação de rótulos**. O custo cresce com combinações,
+  não com tráfego.
+- O maior contribuinte desta stack é o node-exporter; a api é o menor.
+- `metric_relabel_configs` com `action: keep` descarta **antes de virar série**.
+- Rótulo com conjunto de valores ilimitado é bomba: id, URL com parâmetro, IP,
+  mensagem de erro.
+- `/api/v1/status/tsdb` responde quem está gastando — é o primeiro lugar a olhar.
+- Cortar na origem é mais barato; cortar na coleta é mais flexível. Faça os dois.
+
+<Quiz set="cardinality" />

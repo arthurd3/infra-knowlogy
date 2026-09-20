@@ -1,0 +1,116 @@
+{
+  "note_pt": "O denominador, o 4xx que não entra, e a expressão que pode não existir.",
+  "note_en": "The denominator, the 4xx that stays out, and the expression that can fail to exist.",
+  "pt": [
+    {
+      "q": "Por que o SLI desta stack exclui `/healthz`, `/readyz` e `/metrics`?",
+      "options": [
+        {
+          "text": "Porque são 24 requisições de infraestrutura para cada 1 de usuário — sem excluir, uma queda total apareceria como 96% de sucesso.",
+          "correct": true,
+          "why": "É o número medido nesta stack. O denominador diluído faz o alerta nunca disparar: o serviço precisaria falhar por horas para o SLI cruzar o limiar, e o painel fica verde durante o incidente inteiro."
+        },
+        {
+          "text": "Porque essas rotas sempre respondem 200 e não acrescentam informação.",
+          "why": "Elas não sempre respondem 200 — o `/readyz` falha de propósito quando o banco cai, e é isso que tira o container do balanceamento. O problema é o PESO delas no denominador, não o valor."
+        },
+        {
+          "text": "Porque o Prometheus não deve raspar rotas de saúde.",
+          "why": "Ele não as raspa: quem as chama é o Docker, pelo healthcheck. O Prometheus só raspa `/metrics`, e essa sim é dele."
+        }
+      ]
+    },
+    {
+      "q": "Um `404` deve gastar orçamento de erro?",
+      "options": [
+        {
+          "text": "Não por padrão — é o cliente pedindo o que não existe. Mas 4xx causado por algo que VOCÊ controla entra, e a decisão precisa estar escrita.",
+          "correct": true,
+          "why": "Um `429` por limite mal calibrado ou um `400` de contrato quebrado são falha sua. A pergunta certa não é o número, é: este erro foi causado por algo que eu controlo? E ela será questionada no primeiro incidente, então precisa estar decidida antes."
+        },
+        {
+          "text": "Sim, todo erro conta — o usuário não distingue 4xx de 5xx.",
+          "why": "Faz o erro de digitação do usuário gastar o orçamento da sua equipe. Um pico de 404 por um link antigo circulando na internet congelaria seus deploys."
+        },
+        {
+          "text": "Não, e nunca: 4xx é sempre culpa do cliente.",
+          "why": "Regra simples demais e por isso perigosa. O `429` e o `400` de contrato quebrado são seus, e ignorá-los esconde falha real atrás de uma categoria."
+        }
+      ]
+    },
+    {
+      "q": "Sem tráfego nenhum, `erros / total` devolve o quê — e por que `or vector(0)`?",
+      "options": [
+        {
+          "text": "Devolve NaN, e a série some. Num alerta, comparação com série ausente não é verdadeira nem falsa: o alerta deixa de existir, calado.",
+          "correct": true,
+          "why": "Num painel isso é uma lacuna no gráfico, feia e inofensiva. Num alerta é grave — e morde de madrugada, com pouco tráfego, que é exatamente quando ninguém está olhando o painel."
+        },
+        {
+          "text": "Devolve zero, e `or vector(0)` é redundante.",
+          "why": "`0/0` em PromQL é NaN, não zero. É justamente porque o resultado não é zero que a cláusula precisa existir."
+        },
+        {
+          "text": "Devolve erro de divisão, e o Prometheus registra no log.",
+          "why": "Não há erro nem log. A avaliação segue normalmente e o resultado simplesmente não tem a série — o silêncio é o problema."
+        }
+      ]
+    }
+  ],
+  "en": [
+    {
+      "q": "Why does this stack's SLI exclude `/healthz`, `/readyz` and `/metrics`?",
+      "options": [
+        {
+          "text": "Because there are 24 infrastructure requests for every 1 user request — without excluding them, a total outage would show as 96% success.",
+          "correct": true,
+          "why": "That is the measured number in this stack. A diluted denominator means the alert never fires: the service would have to fail for hours before the SLI crossed the threshold, and the dashboard stays green throughout the incident."
+        },
+        {
+          "text": "Because those routes always answer 200 and add no information.",
+          "why": "They do not always answer 200 — `/readyz` fails on purpose when the database is down, and that is what removes the container from balancing. The problem is their WEIGHT in the denominator, not their value."
+        },
+        {
+          "text": "Because Prometheus should not scrape health routes.",
+          "why": "It does not scrape them: Docker calls them, via the healthcheck. Prometheus only scrapes `/metrics`, and that one is its own."
+        }
+      ]
+    },
+    {
+      "q": "Should a `404` spend error budget?",
+      "options": [
+        {
+          "text": "Not by default — it is the client asking for something that does not exist. But a 4xx caused by something YOU control does count, and the decision has to be written down.",
+          "correct": true,
+          "why": "A `429` from a badly calibrated limit or a `400` from a broken contract are your failure. The right question is not the number but: was this error caused by something I control? And it will be challenged during the first incident, so it must be decided beforehand."
+        },
+        {
+          "text": "Yes, every error counts — the user does not distinguish 4xx from 5xx.",
+          "why": "That makes the user's typo spend your team's budget. A spike of 404s from an old link circulating online would freeze your deploys."
+        },
+        {
+          "text": "No, never: 4xx is always the client's fault.",
+          "why": "Too simple a rule, and dangerous for it. A `429` and a broken-contract `400` are yours, and ignoring them hides real failure behind a category."
+        }
+      ]
+    },
+    {
+      "q": "With no traffic at all, `errors / total` returns what — and why `or vector(0)`?",
+      "options": [
+        {
+          "text": "It returns NaN, and the series disappears. In an alert, comparing against an absent series is neither true nor false: the alert stops existing, silently.",
+          "correct": true,
+          "why": "On a dashboard that is a gap in the graph, ugly and harmless. In an alert it is serious — and it bites at night, with little traffic, which is exactly when nobody is watching the dashboard."
+        },
+        {
+          "text": "It returns zero, and `or vector(0)` is redundant.",
+          "why": "`0/0` in PromQL is NaN, not zero. It is precisely because the result is not zero that the clause has to exist."
+        },
+        {
+          "text": "It returns a division error, and Prometheus logs it.",
+          "why": "There is no error and no log. Evaluation proceeds normally and the result simply lacks the series — the silence is the problem."
+        }
+      ]
+    }
+  ]
+}

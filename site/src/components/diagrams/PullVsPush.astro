@@ -1,0 +1,85 @@
+---
+/** obs-02 — quem começa a conversa, e o que isso muda. */
+import Figure from "../Figure.astro";
+import type { Lang } from "../../i18n/ui";
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+const C = {
+  pt: {
+    pull: "PULL — o Prometheus vai até o alvo",
+    push: "PUSH — a aplicação manda para o coletor",
+    app: "aplicação", coletor: "coletor",
+    pullNotes: [
+      "a aplicação não sabe que o Prometheus existe",
+      "alvo que não responde já é um sinal (up = 0)",
+      "dá para raspar à mão: curl no /metrics",
+    ],
+    pushNotes: [
+      "a aplicação precisa saber o endereço do coletor",
+      "alvo calado é indistinguível de alvo saudável",
+      "job efêmero que morre antes de mandar some",
+    ],
+    verdict: "nesta stack: 7 alvos, todos raspados. Nenhum serviço tem configuração de monitoramento.",
+    caption:
+      "A diferença não é técnica, é de <b>acoplamento</b>. No pull, a aplicação só publica um endpoint e não sabe quem lê — trocar, duplicar ou remover o monitoramento não toca uma linha dela. E há um efeito de graça: um alvo que <b>não responde</b> vira a série <code>up = 0</code>, ou seja, o silêncio também é dado. No push, silêncio é ambíguo: pode ser saúde, pode ser um processo morto.",
+    alt: "Comparação entre o modelo pull e o modelo push de coleta de métricas.",
+  },
+  en: {
+    pull: "PULL — Prometheus goes to the target",
+    push: "PUSH — the application sends to a collector",
+    app: "application", coletor: "collector",
+    pullNotes: [
+      "the application does not know Prometheus exists",
+      "a target that does not answer is already a signal (up = 0)",
+      "you can scrape by hand: curl the /metrics",
+    ],
+    pushNotes: [
+      "the application must know the collector's address",
+      "a silent target is indistinguishable from a healthy one",
+      "a short-lived job that dies before sending disappears",
+    ],
+    verdict: "in this stack: 7 targets, all scraped. No service carries monitoring configuration.",
+    caption:
+      "The difference is not technical, it is about <b>coupling</b>. With pull, the application only publishes an endpoint and does not know who reads it — swapping, duplicating or removing monitoring touches not one line of it. And there is a free effect: a target that <b>does not answer</b> becomes the series <code>up = 0</code>, so silence is data too. With push, silence is ambiguous: it may be health, it may be a dead process.",
+    alt: "Comparison between the pull and push models of metric collection.",
+  },
+}[lang];
+---
+<Figure caption={C.caption} alt={C.alt}>
+  <svg viewBox="0 0 700 262" xmlns="http://www.w3.org/2000/svg" font-size="11">
+    <defs>
+      <marker id="pv-a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M0 0 L10 5 L0 10 z" class="dg-fill-accent" />
+      </marker>
+      <marker id="pv-w" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M0 0 L10 5 L0 10 z" class="dg-fill-warn" />
+      </marker>
+    </defs>
+
+    <text x="14" y="18" class="dg-title" font-size="11">{C.pull}</text>
+    <rect x="14" y="28" width="118" height="40" rx="7" class="dg-box dg-box--accent" />
+    <text x="73" y="53" text-anchor="middle" class="dg-title" font-size="11">Prometheus</text>
+    <rect x="196" y="28" width="118" height="40" rx="7" class="dg-box dg-box--raised" />
+    <text x="255" y="48" text-anchor="middle" class="dg-title" font-size="11">{C.app}</text>
+    <text x="255" y="62" text-anchor="middle" class="dg-mono dg-faint" font-size="8">/metrics</text>
+    <path d="M132 48 L190 48" class="dg-line dg-line--accent" fill="none" marker-end="url(#pv-a)" />
+    {C.pullNotes.map((n, i) => (
+      <text x="336" y={40 + i * 14} class="dg-faint" font-size="8.5">· {n}</text>
+    ))}
+
+    <path d="M14 92 L686 92" class="dg-line dg-line--dashed" fill="none" />
+
+    <text x="14" y="116" class="dg-title" font-size="11">{C.push}</text>
+    <rect x="14" y="126" width="118" height="40" rx="7" class="dg-box dg-box--warn" />
+    <text x="73" y="151" text-anchor="middle" class="dg-title" font-size="11">{C.coletor}</text>
+    <rect x="196" y="126" width="118" height="40" rx="7" class="dg-box dg-box--raised" />
+    <text x="255" y="146" text-anchor="middle" class="dg-title" font-size="11">{C.app}</text>
+    <text x="255" y="160" text-anchor="middle" class="dg-mono dg-faint" font-size="8">envia</text>
+    <path d="M190 146 L136 146" class="dg-line dg-line--warn" fill="none" marker-end="url(#pv-w)" />
+    {C.pushNotes.map((n, i) => (
+      <text x="336" y={138 + i * 14} class="dg-faint" font-size="8.5">· {n}</text>
+    ))}
+
+    <text x="14" y="222" class="dg-muted" font-size="9.5" font-weight="620">{C.verdict}</text>
+  </svg>
+</Figure>

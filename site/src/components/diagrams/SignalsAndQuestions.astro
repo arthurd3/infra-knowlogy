@@ -1,0 +1,59 @@
+---
+/** obs-01 — os sinais, e a pergunta que cada um responde (e a que nenhum responde). */
+import Figure from "../Figure.astro";
+import type { Lang } from "../../i18n/ui";
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+const C = {
+  pt: {
+    rows: [
+      { s: "métrica", q: "algo está ruim?", ex: "taxa de erro subiu para 3%", w: "não diz QUAL requisição", cls: "dg-box--accent" },
+      { s: "log", q: "o que aconteceu naquele caso?", ex: "connection refused em db:5432", w: "não diz quantas vezes", cls: "dg-box--raised" },
+      { s: "trace", q: "onde o tempo foi gasto?", ex: "worker esperou 1,8 s no Postgres", w: "esta stack NÃO tem", cls: "dg-box--dashed" },
+    ],
+    head: ["sinal", "pergunta que responde", "exemplo nesta stack", "o que ele não faz"],
+    none: "e a pergunta que nenhum dos três responde sozinho: “isto é ruim o bastante para acordar alguém?”",
+    answer: "essa é a pergunta do SLO — lições 6 e 7",
+    caption:
+      "Os três sinais não são três formas de ver a mesma coisa: são <b>três perguntas diferentes</b>. Métrica é barata e agregada — ela diz que algo piorou, nunca qual requisição. Log é caro e específico — ele diz o que houve num caso, nunca quantos. Trace liga as pontas, e esta stack não tem nenhum. E existe uma quarta pergunta que os três juntos ainda não respondem: <b>quando isso vira incidente</b>. É para ela que existe o SLO.",
+    alt: "Tabela dos três sinais — métrica, log e trace — com a pergunta que cada um responde e o que não faz.",
+  },
+  en: {
+    rows: [
+      { s: "metric", q: "is something wrong?", ex: "error rate rose to 3%", w: "does not say WHICH request", cls: "dg-box--accent" },
+      { s: "log", q: "what happened in that one case?", ex: "connection refused on db:5432", w: "does not say how many times", cls: "dg-box--raised" },
+      { s: "trace", q: "where did the time go?", ex: "worker waited 1.8 s on Postgres", w: "this stack does NOT have it", cls: "dg-box--dashed" },
+    ],
+    head: ["signal", "question it answers", "example in this stack", "what it does not do"],
+    none: "and the question none of the three answers on its own: “is this bad enough to wake somebody up?”",
+    answer: "that is the SLO's question — lessons 6 and 7",
+    caption:
+      "The three signals are not three views of the same thing: they are <b>three different questions</b>. A metric is cheap and aggregated — it says something got worse, never which request. A log is expensive and specific — it says what happened in one case, never how many. A trace connects the ends, and this stack has none. And there is a fourth question the three together still do not answer: <b>when does this become an incident</b>. That is what an SLO is for.",
+    alt: "Table of the three signals — metric, log and trace — with the question each answers and what it does not do.",
+  },
+}[lang];
+---
+<Figure caption={C.caption} alt={C.alt}>
+  <svg viewBox="0 0 700 250" xmlns="http://www.w3.org/2000/svg" font-size="11">
+    {C.head.map((h, i) => (
+      <text x={[20, 150, 350, 545][i]} y="20" class="dg-faint" font-size="8.5">{h}</text>
+    ))}
+
+    {C.rows.map((r, i) => {
+      const y = 30 + i * 52;
+      return (
+        <g>
+          <rect x="14" y={y} width="120" height="42" rx="7" class={`dg-box ${r.cls}`} />
+          <text x="74" y={y + 26} text-anchor="middle" class="dg-title" font-size="12">{r.s}</text>
+          <text x="150" y={y + 20} class="dg-title" font-size="10">{r.q}</text>
+          <text x="150" y={y + 35} class="dg-faint" font-size="8.5">{r.ex}</text>
+          <text x="545" y={y + 26} class="dg-muted" font-size="9" font-weight="620">{r.w}</text>
+        </g>
+      );
+    })}
+
+    <path d="M14 196 L686 196" class="dg-line dg-line--dashed" fill="none" />
+    <text x="14" y="216" class="dg-title" font-size="10">{C.none}</text>
+    <text x="14" y="234" class="dg-muted" font-size="9.5" font-weight="620">{C.answer}</text>
+  </svg>
+</Figure>

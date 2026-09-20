@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-20T14:02:52Z",
+  "generatedAt": "2026-09-20T19:20:53Z",
   "dockerVersion": "29.7.2",
   "platform": "linux/amd64",
   "images": [
@@ -8,6 +8,6 @@
     {"service": "api-go", "language": "Go", "target": "debug", "base": "alpine", "bytes": 9312204, "layers": 3, "note_pt": "Tem shell e apk: dá para investigar, e dá para ser investigado.", "note_en": "Has a shell and apk: you can debug it, and so can an intruder."},
     {"service": "worker-py", "language": "Python", "target": "dist", "base": "python slim", "bytes": 52759032, "layers": 8, "note_pt": "Runtime + venv. O uv e o cache de wheels ficaram para trás.", "note_en": "Runtime + venv. uv and the wheel cache were left behind."},
     {"service": "worker-py", "language": "Python", "target": "fat", "base": "uv bookworm-slim", "bytes": 74735052, "layers": 8, "note_pt": "Antipadrão: uma stage só, o toolchain inteiro vai junto.", "note_en": "Anti-pattern: a single stage, so the whole toolchain ships too."},
-    {"service": "web", "language": "Node", "target": "dist", "base": "caddy alpine", "bytes": 28434239, "layers": 8, "note_pt": "HTML estático servido pelo Caddy. Zero Node na imagem final.", "note_en": "Static HTML served by Caddy. Zero Node in the final image."}
+    {"service": "web", "language": "Node", "target": "dist", "base": "caddy alpine", "bytes": 28681687, "layers": 8, "note_pt": "HTML estático servido pelo Caddy. Zero Node na imagem final.", "note_en": "Static HTML served by Caddy. Zero Node in the final image."}
   ]
 }

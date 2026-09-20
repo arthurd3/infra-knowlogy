@@ -1,0 +1,140 @@
+{
+  "note_pt": "Quem começa a conversa, o que o silêncio significa, e quando pull é o modelo errado.",
+  "note_en": "Who starts the conversation, what silence means, and when pull is the wrong model.",
+  "pt": [
+    {
+      "q": "O que a série `up` tem de especial?",
+      "options": [
+        {
+          "text": "Ela é escrita pelo coletor, não pela aplicação — então um alvo que não responde vira o dado `up = 0`.",
+          "correct": true,
+          "why": "É o efeito de graça do modelo pull. No push, um alvo calado é indistinguível de um alvo saudável sem eventos; aqui o silêncio é uma série. `up == 0` lista tudo que deveria responder e não está."
+        },
+        {
+          "text": "Ela é a única métrica que a aplicação precisa expor obrigatoriamente.",
+          "why": "A aplicação não a expõe. Ela nem sabe que a série existe."
+        },
+        {
+          "text": "Ela mede o tempo desde o último restart do alvo.",
+          "why": "Isso é `process_start_time_seconds`, que é outra coisa e vem da aplicação."
+        },
+        {
+          "text": "Ela só existe quando o alvo está saudável.",
+          "why": "O contrário do que importa: ela existe principalmente quando o alvo NÃO está — é aí que vale 0 e o alerta dispara."
+        }
+      ]
+    },
+    {
+      "q": "Em que caso o modelo push é claramente melhor?",
+      "options": [
+        {
+          "text": "Trabalho efêmero — um job de cron de 8 segundos, uma função serverless — que pode terminar antes de qualquer raspagem.",
+          "correct": true,
+          "why": "Nenhuma descoberta de serviço chega a tempo, e o alvo some antes de ser raspado. Para isso existe o Pushgateway, e a documentação do Prometheus é explícita em recomendar NÃO usá-lo como atalho para push geral."
+        },
+        {
+          "text": "Quando há muitos alvos, porque push escala melhor.",
+          "why": "O post \"Pull não escala — ou escala?\" da própria equipe do Prometheus trata disso: o Borgmon do Google monitorava datacenters inteiros com pull. Escala não é o eixo da decisão."
+        },
+        {
+          "text": "Quando a aplicação está atrás de NAT e o coletor não a alcança.",
+          "why": "É um argumento real de rede e não de modelo — e a resposta usual é um agente do lado de lá, não trocar o modelo inteiro."
+        },
+        {
+          "text": "Quando você quer intervalo de coleta menor que um segundo.",
+          "why": "Intervalo é configuração, não modelo. E a lição mostra que baixar o intervalo costuma comprar ruído, não resolução."
+        }
+      ]
+    },
+    {
+      "q": "Por que o Prometheus desta stack está em DUAS redes?",
+      "options": [
+        {
+          "text": "Porque a rede `obs` deixa ele publicar a porta e a rede `data` é onde vivem a api, o worker e os exporters — sem ela, não teria como raspá-los.",
+          "correct": true,
+          "why": "É a consequência prática do pull: o coletor precisa ALCANÇAR o alvo. Num modelo push, a aplicação é que precisaria alcançar o coletor, e a segmentação de rede mudaria de lugar."
+        },
+        {
+          "text": "Para separar tráfego de métrica do tráfego da aplicação.",
+          "why": "Não é o motivo, e nem acontece: o scrape da api viaja pela mesma rede `data` que a aplicação usa."
+        },
+        {
+          "text": "Porque o Grafana só o alcança pela rede `obs`.",
+          "why": "Verdade, e não é a razão de existirem duas: se fosse só isso, uma rede bastaria para ambos."
+        },
+        {
+          "text": "Por redundância, caso uma rede caia.",
+          "why": "Rede bridge do Docker não cai independentemente assim. As duas redes têm papéis diferentes, não são cópias."
+        }
+      ]
+    }
+  ],
+  "en": [
+    {
+      "q": "What is special about the `up` series?",
+      "options": [
+        {
+          "text": "It is written by the collector, not the application — so a target that does not answer becomes the datum `up = 0`.",
+          "correct": true,
+          "why": "It is the free effect of the pull model. With push, a silent target is indistinguishable from a healthy one with no events; here silence is a series. `up == 0` lists everything that should be answering and is not."
+        },
+        {
+          "text": "It is the one metric the application is required to expose.",
+          "why": "The application does not expose it. It does not even know the series exists."
+        },
+        {
+          "text": "It measures time since the target's last restart.",
+          "why": "That is `process_start_time_seconds`, a different thing that comes from the application."
+        },
+        {
+          "text": "It only exists when the target is healthy.",
+          "why": "The opposite of what matters: it exists mainly when the target is NOT — that is when it reads 0 and the alert fires."
+        }
+      ]
+    },
+    {
+      "q": "In which case is the push model clearly better?",
+      "options": [
+        {
+          "text": "Ephemeral work — an 8-second cron job, a serverless function — that may finish before any scrape.",
+          "correct": true,
+          "why": "No service discovery arrives in time, and the target disappears before being scraped. That is what the Pushgateway is for, and Prometheus' documentation explicitly recommends NOT using it as a shortcut to general push."
+        },
+        {
+          "text": "When there are many targets, because push scales better.",
+          "why": "The Prometheus team's own post \"Pull doesn't scale — or does it?\" addresses this: Google's Borgmon monitored entire datacenters with pull. Scale is not the axis of the decision."
+        },
+        {
+          "text": "When the application is behind NAT and the collector cannot reach it.",
+          "why": "That is a real networking argument, not a model one — and the usual answer is an agent on that side, not swapping the whole model."
+        },
+        {
+          "text": "When you want a collection interval under one second.",
+          "why": "The interval is configuration, not model. And the lesson shows that lowering it usually buys noise, not resolution."
+        }
+      ]
+    },
+    {
+      "q": "Why is this stack's Prometheus on TWO networks?",
+      "options": [
+        {
+          "text": "Because the `obs` network lets it publish its port and the `data` network is where the api, the worker and the exporters live — without it, it could not scrape them.",
+          "correct": true,
+          "why": "It is the practical consequence of pull: the collector must REACH the target. Under push, the application would need to reach the collector, and the network segmentation would move."
+        },
+        {
+          "text": "To separate metric traffic from application traffic.",
+          "why": "Not the reason, and not what happens: the api's scrape travels over the same `data` network the application uses."
+        },
+        {
+          "text": "Because Grafana can only reach it over the `obs` network.",
+          "why": "True, and not why there are two: if that were all, one network would serve both."
+        },
+        {
+          "text": "For redundancy, in case one network goes down.",
+          "why": "Docker bridge networks do not fail independently like that. The two networks have different roles, they are not copies."
+        }
+      ]
+    }
+  ]
+}

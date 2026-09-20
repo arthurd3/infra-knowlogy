@@ -1,0 +1,70 @@
+---
+/** obs-03 — como o histograma guarda, e por que média de percentil não existe. */
+import Figure from "../Figure.astro";
+import type { Lang } from "../../i18n/ui";
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+const C = {
+  pt: {
+    title: "o que a aplicação envia: contadores acumulados por balde",
+    le: "le =",
+    note: "cada balde conta as requisições com duração MENOR OU IGUAL ao rótulo — por isso os números só crescem da esquerda para a direita",
+    calc: "histogram_quantile interpola DENTRO do balde onde o percentil cai",
+    warn: "é por isso que somar baldes de dois servidores funciona…",
+    warn2: "…e tirar a média de dois p99 não significa nada",
+    caption:
+      "Um histograma não guarda as durações: guarda <b>contadores acumulados</b>, um por balde. O p99 não é um valor medido — é uma <b>interpolação</b> dentro do balde onde o 99º percentil cai, e a precisão dele é a largura daquele balde. Duas consequências práticas: somar os baldes de dez servidores e calcular o percentil no fim está certo, e tirar a média dos dez p99 está errado — o segundo número não corresponde a requisição nenhuma.",
+    alt: "Baldes acumulados de um histograma e o ponto onde o percentil é interpolado.",
+  },
+  en: {
+    title: "what the application sends: cumulative counters, one per bucket",
+    le: "le =",
+    note: "each bucket counts requests with duration LESS THAN OR EQUAL to its label — which is why the numbers only grow left to right",
+    calc: "histogram_quantile interpolates INSIDE the bucket where the percentile falls",
+    warn: "this is why summing buckets from two servers works…",
+    warn2: "…and averaging two p99 values means nothing",
+    caption:
+      "A histogram does not store durations: it stores <b>cumulative counters</b>, one per bucket. The p99 is not a measured value — it is an <b>interpolation</b> inside the bucket where the 99th percentile falls, and its precision is that bucket's width. Two practical consequences: summing ten servers' buckets and computing the percentile at the end is correct, and averaging the ten p99 values is wrong — the second number corresponds to no request at all.",
+    alt: "Cumulative histogram buckets and the point where the percentile is interpolated.",
+  },
+}[lang];
+
+// Baldes ilustrativos no padrão DefBuckets do client_golang.
+const baldes = [
+  { le: "0.005", n: 780 }, { le: "0.01", n: 910 }, { le: "0.025", n: 960 },
+  { le: "0.05", n: 978 }, { le: "0.1", n: 988 }, { le: "0.25", n: 994 },
+  { le: "0.5", n: 997 }, { le: "1", n: 999 }, { le: "+Inf", n: 1000 },
+];
+const max = 1000;
+---
+<Figure caption={C.caption} alt={C.alt}>
+  <svg viewBox="0 0 700 260" xmlns="http://www.w3.org/2000/svg" font-size="11">
+    <text x="14" y="18" class="dg-faint" font-size="9">{C.title}</text>
+
+    {baldes.map((b, i) => {
+      const x = 16 + i * 74;
+      const h = Math.round((b.n / max) * 92);
+      const alvo = b.le === "0.05";
+      return (
+        <g>
+          <rect x={x} y={130 - h} width={58} height={h} rx={3}
+                class={alvo ? "dg-fill-warn" : "dg-fill-accent"} />
+          <text x={x + 29} y={126 - h} text-anchor="middle" class="dg-mono dg-faint" font-size="8.5">{b.n}</text>
+          <text x={x + 29} y={146} text-anchor="middle" class="dg-mono dg-faint" font-size="8">{C.le}</text>
+          <text x={x + 29} y={157} text-anchor="middle" class="dg-mono dg-title" font-size="9">{b.le}</text>
+        </g>
+      );
+    })}
+
+    <path d="M234 34 L234 130" class="dg-line dg-line--warn dg-line--dashed" fill="none" />
+    <text x="240" y="44" class="dg-muted" font-size="9" font-weight="620">p99</text>
+    <text x="240" y="58" class="dg-faint" font-size="8.5">{C.calc}</text>
+
+    <text x="14" y="188" class="dg-faint" font-size="8.5">{C.note}</text>
+
+    <rect x="14" y="204" width="330" height="40" rx="7" class="dg-box dg-box--accent" />
+    <text x="30" y="228" class="dg-on-accent" font-size="9.5">{C.warn}</text>
+    <rect x="356" y="204" width="330" height="40" rx="7" class="dg-box dg-box--danger" />
+    <text x="372" y="228" class="dg-title" font-size="9.5">{C.warn2}</text>
+  </svg>
+</Figure>

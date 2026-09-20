@@ -1,0 +1,116 @@
+{
+  "note_pt": "O que o Loki indexa, o fluxo, e o rótulo com seis grafias.",
+  "note_en": "What Loki indexes, the stream, and the label with six spellings.",
+  "pt": [
+    {
+      "q": "Por que `{service=\"api\"} |= \"connection refused\"` é barata na primeira metade e cara na segunda?",
+      "options": [
+        {
+          "text": "A primeira usa o índice de rótulo; a segunda VARRE o conteúdo dos blocos daquele fluxo no período pedido.",
+          "correct": true,
+          "why": "É o trade do desenho do Loki: índice minúsculo, varredura paralela. Procurar uma string em sete dias lê sete dias de bloco — a conta não some, ela muda da ingestão para o momento em que você está com pressa."
+        },
+        {
+          "text": "A primeira é local e a segunda vai ao armazenamento de objetos.",
+          "why": "Nesta stack o armazenamento é `filesystem`, então as duas leem do mesmo disco. A diferença é índice contra varredura, não local contra remoto."
+        },
+        {
+          "text": "A segunda precisa descomprimir e a primeira não.",
+          "why": "Chega perto do mecanismo e erra a causa: descomprimir é consequência de precisar LER o conteúdo. Se houvesse índice de texto, não seria preciso ler bloco nenhum."
+        }
+      ]
+    },
+    {
+      "q": "O rótulo `level` desta stack tinha seis valores: ERROR, INFO, error, info, warn, warning. Qual é o pior efeito?",
+      "options": [
+        {
+          "text": "`{level=\"error\"}` não casa `ERROR` — quem consulta durante um incidente recebe metade dos erros e nenhum aviso.",
+          "correct": true,
+          "why": "O silêncio é o que torna isso grave: a consulta funciona, devolve resultado, e o resultado está incompleto. Multiplicar fluxos é ruim; enganar quem está investigando é pior."
+        },
+        {
+          "text": "O Loki recusa rótulos com caixa mista.",
+          "why": "Não recusa nada — ele guarda o que o coletor mandar. É justamente por não reclamar que o problema passa despercebido."
+        },
+        {
+          "text": "Consome mais disco, porque cada grafia duplica as linhas.",
+          "why": "As linhas não duplicam; elas se dividem entre mais fluxos. Há custo de fragmentação, e ele é bem menor que o de uma consulta que mente."
+        }
+      ]
+    },
+    {
+      "q": "Depois de corrigir a caixa, o endpoint de valores de rótulo continuou mostrando `ERROR`. Por quê?",
+      "options": [
+        {
+          "text": "Ele responde pela granularidade do ÍNDICE — 24h nesta stack — e não pela janela pedida.",
+          "correct": true,
+          "why": "Um rótulo que você parou de emitir continua listado pelo resto do dia. Quem responde de verdade é consultar as LINHAS e olhar os rótulos delas — foi assim que a correção se provou."
+        },
+        {
+          "text": "O Alloy precisa ser reiniciado para aplicar o `stage.template`.",
+          "why": "Ele foi reiniciado, e a correção já estava valendo — as linhas novas saíam minúsculas. O que enganou foi o endpoint consultado, não o coletor."
+        },
+        {
+          "text": "`ToLower` não funciona em rótulo, só em conteúdo de linha.",
+          "why": "Funciona: o `stage.template` age sobre o valor extraído ANTES de o `stage.labels` promovê-lo a rótulo. A ordem das etapas é o que faz isso possível."
+        }
+      ]
+    }
+  ],
+  "en": [
+    {
+      "q": "Why is `{service=\"api\"} |= \"connection refused\"` cheap in its first half and expensive in its second?",
+      "options": [
+        {
+          "text": "The first uses the label index; the second SCANS the content of that stream's chunks over the requested range.",
+          "correct": true,
+          "why": "It is Loki's design trade: a tiny index, a parallel scan. Searching a string across seven days reads seven days of chunks — the bill does not vanish, it moves from ingestion to the moment you are in a hurry."
+        },
+        {
+          "text": "The first is local and the second goes to object storage.",
+          "why": "In this stack storage is `filesystem`, so both read from the same disk. The difference is index versus scan, not local versus remote."
+        },
+        {
+          "text": "The second has to decompress and the first does not.",
+          "why": "Close to the mechanism, wrong about the cause: decompressing follows from needing to READ the content. With a text index, no chunk would need reading at all."
+        }
+      ]
+    },
+    {
+      "q": "This stack's `level` label had six values: ERROR, INFO, error, info, warn, warning. What is the worst effect?",
+      "options": [
+        {
+          "text": "`{level=\"error\"}` does not match `ERROR` — whoever queries during an incident gets half the errors and no warning.",
+          "correct": true,
+          "why": "The silence is what makes it serious: the query works, returns results, and the results are incomplete. Multiplying streams is bad; misleading the person investigating is worse."
+        },
+        {
+          "text": "Loki rejects labels with mixed case.",
+          "why": "It rejects nothing — it stores whatever the collector sends. Precisely because it does not complain, the problem goes unnoticed."
+        },
+        {
+          "text": "It uses more disk, because each spelling duplicates the lines.",
+          "why": "Lines are not duplicated; they are split across more streams. There is a fragmentation cost, and it is far smaller than a query that lies."
+        }
+      ]
+    },
+    {
+      "q": "After fixing the case, the label-values endpoint kept showing `ERROR`. Why?",
+      "options": [
+        {
+          "text": "It answers at the INDEX's granularity — 24h in this stack — not for the window requested.",
+          "correct": true,
+          "why": "A label you stopped emitting stays listed for the rest of the day. What actually answers is querying the LINES and looking at their labels — that is how the fix proved itself."
+        },
+        {
+          "text": "Alloy has to be restarted for `stage.template` to apply.",
+          "why": "It was restarted, and the fix was already in effect — new lines came out lowercase. What misled was the endpoint being queried, not the collector."
+        },
+        {
+          "text": "`ToLower` does not work on labels, only on line content.",
+          "why": "It works: `stage.template` acts on the extracted value BEFORE `stage.labels` promotes it to a label. The stage ordering is what makes it possible."
+        }
+      ]
+    }
+  ]
+}

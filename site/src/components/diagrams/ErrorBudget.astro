@@ -1,0 +1,83 @@
+---
+/** obs-06 — o orçamento de erro como quantidade que se gasta. */
+import Figure from "../Figure.astro";
+import type { Lang } from "../../i18n/ui";
+import m from "../../data/obs-measured.json";
+
+// A razão depende da carga: com a stack ociosa ela passa de vinte para um, sob
+// tráfego real ela cai. O diagrama mostra a ÚLTIMA medição e diz isso — cravar
+// um número fixo aqui seria a mesma armadilha que o `measured.json` existe para
+// evitar. Sem tráfego de usuário a razão é nula, e aí o texto some em vez de
+// publicar a palavra "null".
+const razao = m.apiTraffic.infraPerUserRequest;
+
+// O número que NÃO oscila: healthcheck a cada 10s em duas rotas (12/min) mais
+// o scrape a cada 15s (4/min). Dezesseis requisições por minuto que existem com
+// zero usuários — e qualquer serviço abaixo disso tem o denominador do SLI
+// dominado pelo próprio monitoramento.
+const piso = m.apiTraffic.infrastructurePerMinute;
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+const C = {
+  pt: {
+    slo: "SLO: 99,5% das requisições de usuário em 30 dias",
+    budget: "orçamento de erro = 0,5%",
+    scale: ["100% — nenhum erro", "99,5% — o alvo", "abaixo: orçamento estourado"],
+    spent: "gasto", left: "restante",
+    rule: "a regra que torna o número uma decisão",
+    rules: [
+      "orçamento sobrando → pode arriscar: deploy, migração, experimento",
+      "orçamento no fim → congela mudança até recuperar",
+    ],
+    why: "sem essa consequência escrita, o SLO é um número num painel",
+    denom: `e o denominador é só tráfego de USUÁRIO: healthcheck e scrape produzem ${piso ?? 16} requisições por minuto nesta stack, com zero usuários`,
+    caption:
+      "O orçamento de erro é o que transforma uma porcentagem numa <b>decisão</b>. 99,5% em 30 dias significa que 0,5% das requisições podem falhar — e esse 0,5% é uma quantidade que se gasta. Enquanto sobra, arriscar é permitido; quando acaba, a organização combinou de congelar mudanças. É isso que faz o SLO não ser mais um número num painel. E o denominador importa tanto quanto o alvo: o healthcheck e o scrape desta stack produzem um <b>piso constante</b> de requisições que existe com zero usuários — e qualquer serviço abaixo desse volume tem o denominador dominado pelo próprio monitoramento, então um SLI sobre 'todas as requisições' esconderia uma queda total atrás de 96% de sucesso.",
+    alt: "Barra do orçamento de erro, com a parte gasta e a restante, e a regra de decisão.",
+  },
+  en: {
+    slo: "SLO: 99.5% of user requests over 30 days",
+    budget: "error budget = 0.5%",
+    scale: ["100% — no errors", "99.5% — the target", "below: budget blown"],
+    spent: "spent", left: "remaining",
+    rule: "the rule that turns the number into a decision",
+    rules: [
+      "budget remaining → risk is allowed: deploys, migrations, experiments",
+      "budget exhausted → freeze changes until it recovers",
+    ],
+    why: "without that consequence written down, an SLO is a number on a dashboard",
+    denom: `and the denominator is USER traffic only: healthchecks and scrapes produce ${piso ?? 16} requests per minute in this stack, with zero users`,
+    caption:
+      "The error budget is what turns a percentage into a <b>decision</b>. 99.5% over 30 days means 0.5% of requests may fail — and that 0.5% is a quantity you spend. While it lasts, risk is allowed; when it runs out, the organisation has agreed to freeze changes. That is what stops an SLO from being one more number on a dashboard. And the denominator matters as much as the target: this stack's healthchecks and scrapes produce a <b>constant floor</b> of requests that exists with zero users — and any service below that volume has its denominator dominated by its own monitoring, so an SLI over 'all requests' would hide a total outage behind 96% success.",
+    alt: "Error budget bar, with the spent and remaining parts, and the decision rule.",
+  },
+}[lang];
+
+const gasto = 38; // ilustrativo: 38% do orçamento consumido
+---
+<Figure caption={C.caption} alt={C.alt}>
+  <svg viewBox="0 0 700 250" xmlns="http://www.w3.org/2000/svg" font-size="11">
+    <text x="14" y="20" class="dg-title" font-size="11.5">{C.slo}</text>
+    <text x="14" y="36" class="dg-faint" font-size="9.5">{C.budget}</text>
+
+    <rect x="14" y="50" width="672" height="34" rx="6" class="dg-box dg-box--dashed" />
+    <rect x="16" y="52" width={Math.round(668 * gasto / 100)} height="30" rx="5" class="dg-fill-danger" />
+    <text x={16 + Math.round(668 * gasto / 100) / 2} y="72" text-anchor="middle" class="dg-title" font-size="10">
+      {C.spent} — {gasto}%
+    </text>
+    <text x={16 + Math.round(668 * gasto / 100) + (668 - Math.round(668 * gasto / 100)) / 2} y="72"
+          text-anchor="middle" class="dg-faint" font-size="10">{C.left} — {100 - gasto}%</text>
+
+    <text x="14" y="112" class="dg-muted" font-size="10" font-weight="620">{C.rule}</text>
+    {C.rules.map((r, i) => (
+      <g>
+        <rect x="14" y={124 + i * 40} width="672" height="32" rx="6"
+              class={`dg-box ${i === 0 ? "dg-box--accent" : "dg-box--danger"}`} />
+        <text x="30" y={144 + i * 40} class="dg-title" font-size="10">{r}</text>
+      </g>
+    ))}
+
+    <text x="14" y="222" class="dg-faint" font-size="9">{C.why}</text>
+    <text x="14" y="238" class="dg-faint" font-size="9">{C.denom}</text>
+  </svg>
+</Figure>

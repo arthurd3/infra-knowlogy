@@ -1,0 +1,64 @@
+---
+/** obs-05 — por que o Loki indexa rótulo e não conteúdo. */
+import Figure from "../Figure.astro";
+import type { Lang } from "../../i18n/ui";
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+const C = {
+  pt: {
+    esTitle: "busca de texto completo (o modelo Elasticsearch)",
+    esNotes: ["indexa toda PALAVRA de toda linha", "consulta por qualquer termo é rápida", "o índice costuma ficar maior que os logs"],
+    lokiTitle: "índice de rótulo (o modelo Loki)",
+    lokiNotes: ["indexa só os RÓTULOS do fluxo", "consulta = escolher o fluxo e varrer o trecho", "o índice é minúsculo; a varredura é paralela"],
+    stream: "fluxo",
+    labels: "{service=\"api\", container=\"infra-knowlogy-api-1\"}",
+    line: "2026-09-20T14:02 level=error msg=\"connection refused\"",
+    trade: "o preço: sem rótulo bom, você varre tudo — e rótulo com valor ilimitado recria a explosão de cardinalidade da lição anterior",
+    caption:
+      "A decisão de projeto do Loki é recusar o índice de texto completo. Ele indexa apenas os <b>rótulos do fluxo</b> — serviço, container, nível — e guarda as linhas comprimidas em blocos. Consultar é escolher os fluxos pelos rótulos e então <b>varrer</b> o trecho de tempo pedido, em paralelo. O índice fica pequeno e barato; o custo migra da ingestão para a consulta. E o mesmo perigo da lição 4 reaparece aqui: rótulo com valor ilimitado — um id de requisição, por exemplo — multiplica fluxos até o Loki parar.",
+    alt: "Comparação entre índice de texto completo e índice de rótulo para logs.",
+  },
+  en: {
+    esTitle: "full-text search (the Elasticsearch model)",
+    esNotes: ["indexes every WORD of every line", "querying any term is fast", "the index often grows larger than the logs"],
+    lokiTitle: "label index (the Loki model)",
+    lokiNotes: ["indexes only the stream's LABELS", "query = pick the stream and scan the range", "the index is tiny; the scan is parallel"],
+    stream: "stream",
+    labels: "{service=\"api\", container=\"infra-knowlogy-api-1\"}",
+    line: "2026-09-20T14:02 level=error msg=\"connection refused\"",
+    trade: "the price: without good labels you scan everything — and a label with unbounded values recreates the previous lesson's cardinality explosion",
+    caption:
+      "Loki's design decision is to refuse the full-text index. It indexes only the <b>stream's labels</b> — service, container, level — and stores the lines compressed in chunks. Querying means picking streams by label and then <b>scanning</b> the requested time range, in parallel. The index stays small and cheap; the cost moves from ingestion to query time. And lesson 4's danger reappears here: a label with unbounded values — a request id, say — multiplies streams until Loki stops.",
+    alt: "Comparison between a full-text index and a label index for logs.",
+  },
+}[lang];
+---
+<Figure caption={C.caption} alt={C.alt}>
+  <svg viewBox="0 0 700 264" xmlns="http://www.w3.org/2000/svg" font-size="11">
+    <text x="14" y="18" class="dg-title" font-size="10.5">{C.esTitle}</text>
+    <rect x="14" y="28" width="320" height="40" rx="7" class="dg-box dg-box--warn" />
+    {["connection", "refused", "level", "error", "api", "2026", "…"].map((w, i) => (
+      <g>
+        <rect x={26 + i * 44} y={38} width={38} height={20} rx={3} class="dg-box dg-box--dashed" />
+        <text x={45 + i * 44} y={52} text-anchor="middle" class="dg-mono dg-faint" font-size="7.5">{w}</text>
+      </g>
+    ))}
+    {C.esNotes.map((n, i) => (
+      <text x="352" y={36 + i * 14} class="dg-faint" font-size="8.5">· {n}</text>
+    ))}
+
+    <path d="M14 88 L686 88" class="dg-line dg-line--dashed" fill="none" />
+
+    <text x="14" y="112" class="dg-title" font-size="10.5">{C.lokiTitle}</text>
+    <rect x="14" y="122" width="320" height="56" rx="7" class="dg-box dg-box--accent" />
+    <text x="28" y="140" class="dg-faint" font-size="8">{C.stream}</text>
+    <text x="28" y="153" class="dg-mono dg-on-accent" font-size="8">{C.labels}</text>
+    <rect x="28" y="158" width="292" height="14" rx="2" class="dg-box dg-box--dashed" />
+    <text x="34" y="169" class="dg-mono dg-faint" font-size="7.5">{C.line}</text>
+    {C.lokiNotes.map((n, i) => (
+      <text x="352" y={134 + i * 14} class="dg-faint" font-size="8.5">· {n}</text>
+    ))}
+
+    <text x="14" y="216" class="dg-muted" font-size="9" font-weight="620">{C.trade}</text>
+  </svg>
+</Figure>

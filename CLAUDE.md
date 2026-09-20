@@ -234,12 +234,47 @@ justamente por isso.
     renderização. Ao criar componente didático novo, pergunte o que acontece se
     a prop obrigatória faltar.
 
+42. **O denominador de um SLI tem um piso constante, e é aí que ele nasce
+    errado.** A razão infraestrutura/usuário oscila com a carga e por isso é
+    ruim como afirmação; o piso não oscila e é derivável: healthcheck a cada 10s
+    em duas rotas (12/min) mais scrape a cada 15s (4/min) = **16 requisições por
+    minuto com zero usuários**, medido. Serviço abaixo desse volume tem o SLI
+    dominado pelo próprio monitoramento — uma queda TOTAL apareceria como 96% de
+    sucesso. Daí o `route!~` no `slo.yml`. Ao citar número medido numa lição,
+    prefira a grandeza ESTÁVEL: a que oscila envelhece a cada execução do portão.
+43. **Alerta de burn rate não some quando você conserta.** Ele some quando a
+    janela escoa. Com o banco de volta e a api respondendo 201, o alerta ficou
+    `firing` até a janela de 5 min esvaziar. É correto, e é a informação que
+    ninguém tem antes do primeiro incidente — alerta vermelho depois do conserto
+    faz metade da sala achar que o problema voltou.
+44. **`0/0` em PromQL é NaN, e série com NaN SOME.** Num painel é uma lacuna no
+    gráfico; num alerta, a comparação com série ausente não é verdadeira nem
+    falsa — o alerta deixa de existir, calado. Daí o `or vector(0)` em toda razão
+    do `slo.yml`. Morde de madrugada, com pouco tráfego, que é exatamente quando
+    ninguém está olhando o painel.
+45. **O endpoint de valores de rótulo do Loki responde pelo período do ÍNDICE**
+    (24h aqui), não pela janela que você pediu. Um rótulo que você parou de
+    emitir continua listado pelo resto do dia — o que fez uma correção de
+    normalização parecer não ter funcionado. Quem prova é consultar as LINHAS e
+    olhar os rótulos delas.
+46. **Rótulo de nível de log vira três grafias sem ninguém notar.** Medido:
+    `ERROR INFO error info warn warning`, porque Go, Python e Caddy escrevem
+    cada um do seu jeito e o `stage.labels` guarda o que vier. `{level="error"}`
+    não casa `ERROR` — a consulta funciona, devolve resultado e o resultado está
+    incompleto. Corrigido com `stage.template` + `ToLower`; `warn` × `warning`
+    continua declarado como limite.
+
 ## Ao mexer na stack
 
 - Rode `make verify` antes de considerar qualquer coisa pronta. Para iterar
   rápido: `SKIP_SCAN=1 SKIP_OBS=1 make verify`. O estado bom conhecido é
-  **32 passaram · 0 falharam** (25 + as 4 checagens do site + scan + obs; com
-  os dois SKIP, **27 passaram**).
+  **37 passaram · 0 falharam** (o passo 9 saiu de 4 para 9 checagens com as
+  regras de SLO — ADR 0018; com os dois SKIP, **27 passaram**).
+- O profile `obs` deixou de ser só infraestrutura: `rules/slo.yml` tem 7 regras
+  de gravação e 3 de alerta que o Prometheus carrega de verdade, e o portão
+  prova que elas avaliam, que o SLI tem valor e que o relabel do cAdvisor ainda
+  corta. `python3 tools/scripts/obs-measure.py` regrava
+  `site/src/data/obs-measured.json`, que as lições e os diagramas citam.
 - O módulo CI/CD também: `make cicd-verify` (estado bom: **35 passaram ·
   0 falharam**). Para iterar sem reconstruir tudo:
   `KEEP_JENKINS=1 SKIP_BUILD=1 SKIP_NEGATIVE=1 make cicd-verify`. Antes de

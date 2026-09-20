@@ -1,0 +1,203 @@
+---
+key: burn-rate-alerting
+lang: pt
+track: observabilidade
+order: 7
+title: Alertar sobre o orçamento, não sobre o sintoma
+summary: "O portão para o Postgres de propósito e o alerta de 14,4× dispara — medido. E ele não some no instante do conserto, porque a janela ainda carrega os erros."
+minutes: 16
+tags: [observabilidade, slo, burn-rate, alerta, prometheus, sre]
+sources:
+  - label: "Google SRE Workbook — Alertando sobre SLOs"
+    url: "https://sre.google/workbook/alerting-on-slos/"
+    kind: book
+    accessed: "2026-09-20"
+  - label: "Prometheus — regras de alerta"
+    url: "https://prometheus.io/docs/prometheus/latest/configuration/alerting_rules/"
+    kind: docs
+    accessed: "2026-09-20"
+  - label: "Google SRE Workbook — Implementando SLOs"
+    url: "https://sre.google/workbook/implementing-slos/"
+    kind: book
+    accessed: "2026-09-20"
+---
+
+import BurnRateWindows from "../../../components/diagrams/BurnRateWindows.astro";
+
+A lição anterior definiu o orçamento. Esta transforma ele em página.
+
+<BurnRateWindows />
+
+## Burn rate é velocidade, não quantidade
+
+<Term word="burn rate" alt="burn rate" open>
+A velocidade com que o orçamento de erro está sendo gasto, em múltiplos do
+ritmo que o esgotaria exatamente no fim da janela.
+
+Com SLO de 99,5% em 30 dias, **burn rate 1** significa gastar 0,5% das
+requisições ao longo dos 30 dias inteiros — o limite exato do combinado.
+**Burn rate 14,4** significa gastar na velocidade que esvazia o orçamento em
+pouco mais de dois dias.
+
+O número 14,4 não é arbitrário: é `(30 dias / 1 hora) × 2%`. Ele é a taxa que
+consome 2% do orçamento em uma hora, e é a receita do SRE Workbook.
+</Term>
+
+A mudança de perspectiva é essa: o alerta não pergunta "a taxa de erro está
+alta?", pergunta "**nesta velocidade, quando o orçamento acaba?**". Uma taxa de
+0,6% é catastrófica para um SLO de 99,9% e irrelevante para um de 95% — e só o
+burn rate captura isso.
+
+## O E entre as janelas
+
+```yaml
+expr: >
+  api:sli_erro:ratio1h > (14.4 * 0.005)
+  and
+  api:sli_erro:ratio5m > (14.4 * 0.005)
+for: 2m
+```
+
+<Callout type="why" label="Por que duas janelas, e nunca uma">
+**Só a janela longa (1h):** um pico de cinco minutos mantém a média de uma hora
+acima do limiar por *uma hora inteira*. O alerta dispara certo e depois fica
+preso, muito depois de o problema ter passado. Quem está de plantão aprende a
+ignorar.
+
+**Só a janela curta (5m):** qualquer soluço vira página. Três dias disso e
+ninguém lê mais os alertas.
+
+**As duas com `and`:** a longa diz que o problema é *sustentado*, a curta diz
+que ele *ainda está acontecendo*. Dispara rápido e some rápido.
+</Callout>
+
+## Medido: o portão derruba o banco e o alerta dispara
+
+Isto não é exemplo de documentação. Durante a escrita desta trilha, o Postgres
+foi parado de propósito e o tráfego de usuário continuou:
+
+```
+   t     ratio5m   ratio1h   14,4x limiar   alertas
+     0s   1.0000    1.0000   0.0720        OrcamentoDeErroQueimandoRapido=firing,
+                                           OrcamentoDeErroQueimandoMedio=pending,
+                                           OrcamentoDeErroEmRitmoDeTicket=pending
+```
+
+O SLI foi a 1,0 — **100% de erro** — e os três alertas reagiram em velocidades
+diferentes, que é exatamente o desenho: o de 14,4× já `firing`, os mais lentos
+ainda acumulando.
+
+<Callout type="trap" label="E ele não some quando você conserta">
+Com o banco de volta e o tráfego respondendo 201, o alerta **continuou
+disparando**.
+
+Não é defeito. A janela de 5 minutos ainda contém os erros; ela precisa escoar.
+O alerta some quando a janela curta esvazia, não quando você conserta — e é
+justamente por isso que a janela curta existe: sem ela, a espera seria a janela
+de uma hora.
+
+Vale saber disso antes do incidente. Um alerta que continua vermelho depois do
+conserto faz metade da sala achar que o problema voltou.
+</Callout>
+
+## O alerta que não acorda ninguém
+
+```yaml
+- alert: OrcamentoDeErroEmRitmoDeTicket
+  labels:
+    severity: ticket
+```
+
+O terceiro alerta do `slo.yml` tem severidade `ticket` e não `page`. Ele existe
+porque **a maior parte do orçamento é gasta assim**: devagar, sem nenhum
+incidente, por semanas — e nenhum alerta de página jamais dispara.
+
+<Tradeoff
+  a="Alertar sobre sintoma (CPU, disco, latência crua)"
+  b="Alertar sobre burn rate do orçamento"
+  whenA="Para condições que são causa e não consequência, e onde a ação é óbvia: disco em 95%, certificado vencendo em 7 dias. Ninguém precisa de SLO para saber o que fazer com isso."
+  whenB="Para tudo que o usuário sente. Sintoma não implica impacto — CPU a 100% com resposta rápida não é incidente, e CPU a 30% com timeout é."
+  chose="b"
+  verdict="burn rate para o que o usuário sente, sintoma para o que é causa direta com ação óbvia. O erro comum é usar sintoma para tudo, e aí a página vira ruído."
+  adr="0003-socket-do-docker-na-observabilidade"
+/>
+
+<Callout type="danger" label="O que este módulo NÃO tem">
+Não há **Alertmanager** aqui. O Prometheus avalia as regras e marca o alerta
+como `firing` — e para por aí. Ninguém é notificado.
+
+O que falta é justamente a parte que transforma alerta em operação: roteamento
+por severidade, agrupamento para não mandar quarenta mensagens do mesmo
+incidente, silenciamento durante manutenção, e escalonamento quando ninguém
+responde.
+
+Está declarado no roadmap. Uma trilha que ensinasse SLO e fingisse que `firing`
+é o fim da história estaria ensinando a metade fácil.
+</Callout>
+
+<RunIt>
+```bash
+make obs
+# O estado dos três alertas agora
+curl -s http://127.0.0.1:9090/api/v1/alerts \
+  | python3 -c 'import sys,json; [print(a["labels"]["alertname"], a["state"]) for a in json.load(sys.stdin)["data"]["alerts"]]'
+```
+</RunIt>
+
+<LabExercise check="toda regra de SLO avalia sem erro" file="stack/services/observability/rules/slo.yml">
+
+Os três alertas do `slo.yml` têm `for:` diferentes: `2m`, `15m` e `1h`.
+
+Pergunta: por que o mais rápido tem o `for:` mais curto, e o que aconteceria se
+todos tivessem `for: 0s`?
+
+<Fragment slot="hint">
+`for:` é quanto tempo a condição precisa ficar verdadeira ANTES de o alerta
+virar `firing`.
+</Fragment>
+
+<Fragment slot="answer">
+
+Porque `for:` é uma terceira camada de anti-ruído, além das duas janelas — e ela
+precisa ser proporcional à urgência.
+
+O alerta de 14,4× já tem uma janela curta de 5 minutos no `and`; exigir mais 2
+minutos de confirmação é barato e ainda dá uma reação em ~7 minutos. O de ritmo
+de ticket olha 6 horas: esperar mais 1 hora não muda nada, e evita abrir ticket
+por uma flutuação.
+
+Com `for: 0s` em todos, o alerta dispara no primeiro ciclo de avaliação em que a
+condição for verdadeira — inclusive numa janela onde o denominador caiu a quase
+zero e dois erros viraram 100%. De madrugada, com pouco tráfego, isso acontece.
+
+```promql
+# duas requisições, as duas com erro, e o SLI vai a 1,0
+api:sli_erro:ratio5m
+```
+
+O `or vector(0)` da lição 6 protege contra o caso de tráfego **zero**. Ele não
+protege contra tráfego **baixo** — e é aí que o `for:` entra.
+
+A regra que sai disso: as três camadas fazem coisas diferentes. A janela longa
+filtra o que não é sustentado, a curta filtra o que já passou, e o `for:` filtra
+o que foi um artefato de amostragem. Tirar qualquer uma tem custo, e tirar as
+três é o alerta que ninguém aguenta.
+
+</Fragment>
+</LabExercise>
+
+## O que fica
+
+- Burn rate é **velocidade** de gasto, não taxa de erro — e é o que torna o
+  limiar comparável entre serviços com SLOs diferentes.
+- 14,4× vem de `(30d / 1h) × 2%`. Os números da receita são derivados, não
+  mágicos.
+- Duas janelas com `and`: a longa diz que é sustentado, a curta diz que ainda
+  está acontecendo.
+- Medido: banco parado → SLI a 1,0 → alerta `firing`. E ele **não some no
+  conserto**, some quando a janela escoa.
+- Nem todo alerta acorda alguém: o de ritmo lento vira ticket, e é assim que a
+  maior parte do orçamento vai embora.
+- Falta o Alertmanager. `firing` não é notificação — está declarado.
+
+<Quiz set="burn-rate-alerting" />

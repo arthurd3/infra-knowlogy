@@ -1,0 +1,194 @@
+---
+key: sli-slo-error-budget
+lang: pt
+track: observabilidade
+order: 6
+title: "SLI, SLO e orçamento de erro"
+summary: "Healthcheck e scrape produzem 16 requisições por minuto com zero usuários. Um SLI sobre todas elas esconde uma queda total atrás de 96% de sucesso. Um SLI sobre todas elas esconderia uma queda total atrás de 96% de sucesso."
+minutes: 16
+tags: [observabilidade, slo, sli, error-budget, sre, prometheus]
+sources:
+  - label: "Google SRE Book — Objetivos de nível de serviço"
+    url: "https://sre.google/sre-book/service-level-objectives/"
+    kind: book
+    accessed: "2026-09-20"
+  - label: "Google SRE Workbook — Implementando SLOs"
+    url: "https://sre.google/workbook/implementing-slos/"
+    kind: book
+    accessed: "2026-09-20"
+  - label: "Prometheus — regras de gravação"
+    url: "https://prometheus.io/docs/prometheus/latest/configuration/recording_rules/"
+    kind: docs
+    accessed: "2026-09-20"
+---
+
+import ErrorBudget from "../../../components/diagrams/ErrorBudget.astro";
+
+Três siglas, e a confusão entre elas custa caro.
+
+| sigla | o que é | exemplo nesta stack |
+|---|---|---|
+| **SLI** | a **medida** | razão de requisições de usuário sem 5xx |
+| **SLO** | o **alvo** para essa medida | 99,5% em 30 dias |
+| **orçamento de erro** | o que sobra do alvo | 0,5% das requisições podem falhar |
+
+<ErrorBudget />
+
+## O denominador é onde quase todo SLI nasce errado
+
+Esta é a parte medida, e ela foi uma surpresa. Com a stack parada e só o
+monitoramento rodando, as requisições que a api atende se distribuem assim:
+
+```
+/healthz    1714
+/readyz     1708
+/metrics    1142
+tráfego de usuário de verdade     132
+```
+
+**Mais de vinte requisições de infraestrutura para cada uma de usuário** — e essa
+razão oscila com a carga. O número que **não** oscila é o piso: healthcheck a
+cada 10 s em duas rotas dá 12 por minuto, e o scrape a cada 15 s dá mais 4.
+**Dezesseis requisições por minuto, com zero usuários, para sempre.**
+
+Qualquer serviço que receba menos de dezesseis requisições por minuto tem o
+denominador do SLI dominado pelo próprio monitoramento. Um
+SLI calculado sobre *todas* as requisições teria um denominador vinte e cinco
+vezes maior que o numerador que interessa — e uma queda **total** do serviço
+apareceria como 96% de sucesso.
+
+<Callout type="danger" label="O alerta que nunca dispara">
+Com SLO de 99,5% e um denominador diluído assim, o serviço precisaria estar
+falhando por horas para o SLI cruzar o limiar. Na prática: o painel fica verde
+durante o incidente inteiro.
+
+É por isso que o `slo.yml` desta stack começa com uma exclusão, e não com uma
+métrica:
+
+```promql
+sum(rate(api_http_requests_total{route!~"/healthz|/readyz|/metrics"}[5m]))
+```
+
+Não é detalhe de implementação. É a diferença entre medir o usuário e medir a si
+mesmo.
+</Callout>
+
+## E 4xx não entra no orçamento
+
+```promql
+sum(rate(api_http_requests_total{route!~"…", status=~"5.."}[5m]))
+```
+
+Só `5xx` conta como erro. Um `404` é o cliente pedindo o que não existe — pôr
+4xx no orçamento faz o erro de digitação do usuário gastar o orçamento da sua
+equipe.
+
+<Callout type="trap" label="A exceção que confirma a regra">
+Há 4xx que **é** falha sua: um `429` por limite mal calibrado, um `400` causado
+por um contrato de API que você quebrou.
+
+A regra prática não é o número, é a pergunta: **este erro foi causado por algo
+que eu controlo?** Se sim, entra. Se é o cliente pedindo errado, não entra — e
+a decisão precisa estar escrita, porque ela vai ser questionada no primeiro
+incidente.
+</Callout>
+
+<Term word="regra de gravação" alt="recording rule" open>
+Uma expressão PromQL que o Prometheus avalia periodicamente e **grava como uma
+série nova**, com nome próprio.
+
+Existem por duas razões. A primeira é desempenho: a expressão do SLI cruza duas
+agregações sobre uma janela, e recalculá-la em cada painel e em cada alerta é
+desperdício. A segunda é mais importante — ela dá **nome** ao conceito.
+
+`api:sli_erro:ratio5m` é legível num alerta, num painel e numa conversa; a
+expressão crua, não. A convenção `nível:métrica:operação` vem da documentação do
+Prometheus e existe para que o nome diga que aquilo é derivado, não raspado.
+</Term>
+
+## O orçamento como decisão, não como número
+
+Um SLO sem consequência escrita é mais um número num painel. O que o torna útil
+é a **política de orçamento de erro** — um acordo combinado antes do incidente:
+
+- **sobra orçamento** → arriscar é permitido: deploy, migração, experimento;
+- **orçamento no fim** → congela mudança até recuperar.
+
+<Callout type="why" label="Por que isso resolve uma briga, e não cria outra">
+A tensão entre quem quer entregar e quem quer estabilidade é permanente, e
+normalmente se resolve por quem grita mais alto ou por quem tem mais senioridade
+na sala.
+
+O orçamento de erro troca isso por um número que as duas partes concordaram
+**antes**. Não elimina o conflito — ele o move para um momento em que ninguém
+está sob pressão, que é quando decisão boa acontece.
+
+E ele corta nos dois sentidos: orçamento sobrando é um argumento **a favor** de
+arriscar mais. Um SLO de 100% não é ambição, é a recusa de entregar qualquer
+coisa.
+</Callout>
+
+<RunIt>
+```bash
+make obs
+# O SLI que o slo.yml grava, já com o denominador certo
+curl -s --get http://127.0.0.1:9090/api/v1/query \
+  --data-urlencode 'query=api:sli_disponibilidade:ratio5m'
+```
+</RunIt>
+
+<LabExercise check="o SLI de disponibilidade tem valor" file="stack/services/observability/rules/slo.yml">
+
+O `slo.yml` termina cada razão com `or vector(0)`. Sem isso, a expressão seria
+apenas a divisão.
+
+Pergunta: o que `or vector(0)` está consertando, e por que isso importa mais num
+alerta do que num painel?
+
+<Fragment slot="hint">
+Pense no que a divisão devolve quando não há tráfego nenhum.
+</Fragment>
+
+<Fragment slot="answer">
+
+Sem tráfego, numerador e denominador são zero. `0/0` em PromQL não é erro: é
+**NaN**, e uma série com NaN some da resposta.
+
+Num painel, isso aparece como uma lacuna no gráfico — feio e inofensivo.
+
+Num alerta, é grave: a expressão do alerta compara o SLI com um limiar, e uma
+comparação com série **ausente** não é verdadeira nem falsa — ela simplesmente
+não produz resultado. O alerta não dispara e também não se recusa. Ele deixa de
+existir, silenciosamente.
+
+```promql
+(api:erros_usuario:rate5m / api:trafego_usuario:rate5m) or vector(0)
+```
+
+`or vector(0)` garante que sempre exista um valor: zero erro quando não há
+tráfego, que é a leitura correta.
+
+O detalhe cruel é quando isso morde: de madrugada, com pouco tráfego, o
+denominador cai a zero em algumas janelas. É exatamente o horário em que ninguém
+está olhando o painel e o alerta é a única defesa.
+
+A lição geral vale para todo alerta: **uma expressão que pode devolver vazio é
+um alerta que pode não existir.** Teste com a série ausente, não só com a série
+errada.
+
+</Fragment>
+</LabExercise>
+
+## O que fica
+
+- SLI é a medida, SLO é o alvo, orçamento é o que sobra do alvo.
+- O **denominador** decide tudo, e o piso de infraestrutura é constante: 16
+  requisições por minuto com zero usuários, medido e derivável dos intervalos.
+- 4xx não entra no orçamento — salvo quando a causa é sua, e isso precisa estar
+  escrito.
+- Regra de gravação dá **nome** ao conceito, além de economizar cálculo.
+- Sem política de consequência, o SLO é mais um número num painel.
+- `or vector(0)`: expressão que pode devolver vazio é alerta que pode não
+  existir.
+
+<Quiz set="sli-slo-error-budget" />

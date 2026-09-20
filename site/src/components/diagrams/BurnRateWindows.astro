@@ -1,0 +1,75 @@
+---
+/** obs-07 — a porta E entre janela longa e janela curta. */
+import Figure from "../Figure.astro";
+import type { Lang } from "../../i18n/ui";
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+const C = {
+  pt: {
+    head: ["velocidade", "janela longa", "janela curta", "gasta do orçamento", "o que faz"],
+    rows: [
+      { taxa: "14,4×", longa: "1 h", curta: "5 min", gasto: "2% em 1 hora", acao: "acorda alguém", cls: "dg-box--danger" },
+      { taxa: "6×", longa: "6 h", curta: "30 min", gasto: "5% em 6 horas", acao: "acorda alguém", cls: "dg-box--warn" },
+      { taxa: "1×", longa: "3 d", curta: "6 h", gasto: "10% em 3 dias", acao: "abre um ticket", cls: "dg-box--raised" },
+    ],
+    andTitle: "as duas janelas ligadas por E, nunca por OU",
+    longOnly: "só a janela longa: o alerta fica preso por 1 hora depois de o problema passar",
+    shortOnly: "só a janela curta: qualquer pico de 5 min acorda alguém",
+    both: "as duas: dispara rápido e some rápido",
+    measured: "medido aqui: banco parado → SLI foi a 1,0 e o alerta de 14,4× disparou; com o banco de volta ele SÓ some quando a janela de 5 min escoa",
+    caption:
+      "O alerta não é sobre a taxa de erro: é sobre a <b>velocidade com que o orçamento está sendo gasto</b>. Três velocidades, três consequências — e só as duas primeiras acordam alguém. O detalhe que faz a receita funcionar é o <b>E</b> entre as janelas: a longa diz que o problema é sustentado, a curta diz que ele ainda está acontecendo. Com só a longa, o alerta fica preso uma hora depois do conserto; com só a curta, qualquer pico vira página.",
+    alt: "Tabela das três velocidades de queima do orçamento e o papel da janela curta.",
+  },
+  en: {
+    head: ["burn rate", "long window", "short window", "spends of the budget", "what it does"],
+    rows: [
+      { taxa: "14.4×", longa: "1 h", curta: "5 min", gasto: "2% in 1 hour", acao: "pages someone", cls: "dg-box--danger" },
+      { taxa: "6×", longa: "6 h", curta: "30 min", gasto: "5% in 6 hours", acao: "pages someone", cls: "dg-box--warn" },
+      { taxa: "1×", longa: "3 d", curta: "6 h", gasto: "10% in 3 days", acao: "opens a ticket", cls: "dg-box--raised" },
+    ],
+    andTitle: "the two windows joined by AND, never by OR",
+    longOnly: "long window only: the alert stays stuck for 1 hour after the problem is gone",
+    shortOnly: "short window only: any 5-minute spike pages someone",
+    both: "both: fires fast and clears fast",
+    measured: "measured here: database stopped → the SLI went to 1.0 and the 14.4× alert fired; with the database back it only clears once the 5-minute window drains",
+    caption:
+      "The alert is not about the error rate: it is about <b>how fast the budget is being spent</b>. Three speeds, three consequences — and only the first two wake anybody. The detail that makes the recipe work is the <b>AND</b> between windows: the long one says the problem is sustained, the short one says it is still happening. With only the long window, the alert stays stuck for an hour after the fix; with only the short one, every spike becomes a page.",
+    alt: "Table of the three burn-rate speeds and the role of the short window.",
+  },
+}[lang];
+
+const cols = [20, 120, 230, 340, 500];
+---
+<Figure caption={C.caption} alt={C.alt}>
+  <svg viewBox="0 0 700 262" xmlns="http://www.w3.org/2000/svg" font-size="11">
+    {C.head.map((h, i) => (
+      <text x={cols[i]} y="18" class="dg-faint" font-size="8.5">{h}</text>
+    ))}
+
+    {C.rows.map((r, i) => {
+      const y = 26 + i * 44;
+      return (
+        <g>
+          <rect x="14" y={y} width="672" height="36" rx="6" class={`dg-box ${r.cls}`} />
+          <text x={cols[0]} y={y + 23} class="dg-mono dg-title" font-size="13">{r.taxa}</text>
+          <text x={cols[1]} y={y + 23} class="dg-title" font-size="10">{r.longa}</text>
+          <text x={cols[2]} y={y + 23} class="dg-title" font-size="10">{r.curta}</text>
+          <text x={cols[3]} y={y + 23} class="dg-faint" font-size="9.5">{r.gasto}</text>
+          <text x={cols[4]} y={y + 23} class="dg-muted" font-size="9.5" font-weight="620">{r.acao}</text>
+        </g>
+      );
+    })}
+
+    <text x="14" y="178" class="dg-title" font-size="10.5">{C.andTitle}</text>
+    {[C.longOnly, C.shortOnly, C.both].map((t, i) => (
+      <g>
+        <rect x="14" y={188 + i * 20} width="9" height="9" rx="2"
+              class={i === 2 ? "dg-fill-accent" : "dg-fill-danger"} />
+        <text x="30" y={196 + i * 20} class="dg-faint" font-size="9">{t}</text>
+      </g>
+    ))}
+
+    <text x="14" y="254" class="dg-muted" font-size="9" font-weight="620">{C.measured}</text>
+  </svg>
+</Figure>

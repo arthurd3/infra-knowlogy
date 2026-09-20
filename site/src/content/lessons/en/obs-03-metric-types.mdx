@@ -1,0 +1,174 @@
+---
+key: metric-types
+lang: en
+track: observabilidade
+order: 3
+title: The four types, and the histogram that misleads
+summary: "Counter, gauge, histogram and summary. The p99 is not a measured value — it is interpolation inside a bucket, and averaging p99 values means nothing."
+minutes: 15
+tags: [observability, prometheus, promql, histogram, percentile, rate]
+sources:
+  - label: "Prometheus — metric types"
+    url: "https://prometheus.io/docs/concepts/metric_types/"
+    kind: docs
+    accessed: "2026-09-20"
+  - label: "Prometheus — histograms and summaries"
+    url: "https://prometheus.io/docs/practices/histograms/"
+    kind: docs
+    accessed: "2026-09-20"
+  - label: "Prometheus — naming conventions"
+    url: "https://prometheus.io/docs/practices/naming/"
+    kind: docs
+    accessed: "2026-09-20"
+---
+
+import HistogramBuckets from "../../../components/diagrams/HistogramBuckets.astro";
+
+There are four types, and the confusion concentrates in one of them.
+
+| type | what it is | example in this stack |
+|---|---|---|
+| **counter** | a number that only grows (or resets on restart) | `api_http_requests_total` |
+| **gauge** | a number that goes up and down | `container_memory_working_set_bytes` |
+| **histogram** | cumulative counters per bucket | `api_http_request_duration_seconds` |
+| **summary** | quantiles computed **on the client** | — |
+
+## A counter is not read, it is derived
+
+A counter on its own almost never answers anything.
+`api_http_requests_total` reads 4,688 — is that a lot? It depends on how long it
+has been counting, and it resets every time the process restarts.
+
+```promql
+rate(api_http_requests_total[5m])
+```
+
+<Callout type="why" label="What `rate()` does besides dividing">
+It computes the per-second slope inside the window **and handles resets**: when
+the value drops — because the process restarted — `rate()` understands there was
+a restart instead of recording a giant negative rate.
+
+That is why the naming convention matters. Applying `rate()` to a gauge produces
+a number, and the number is garbage: a gauge that falls did not restart, it just
+went down.
+</Callout>
+
+<Term word="range window" alt="range vector" open>
+The `[5m]` is not a filter: it changes the **type** of what the expression
+returns.
+
+Without brackets, the expression returns one value per series — the most recent
+one. With brackets, it returns the **series of samples** in that window, and
+that is what functions like `rate()` and `increase()` require in order to exist.
+
+The practical rule that avoids the most common mistake: the window must contain
+at least **two** scrapes. With `scrape_interval: 15s`, `[30s]` is the honest
+minimum — `[10s]` returns empty, and empty fires no alert.
+</Term>
+
+## The histogram, and what it actually stores
+
+<HistogramBuckets />
+
+The application does **not** send durations. It sends a handful of counters:
+`..._bucket{le="0.005"}`, `le="0.01"`, and so on, each counting how many
+requests fell below that bound.
+
+```promql
+histogram_quantile(0.99, sum by (le) (rate(api_http_request_duration_seconds_bucket[10m])))
+```
+
+<Callout type="danger" label="There is no such thing as an average percentile">
+If you have ten servers, each with its own p99, the average of the ten **is
+not** the p99 of the whole. It is not a poor approximation: it is a number that
+corresponds to no request at all.
+
+The correct way is to sum the ten servers' **buckets** and compute the
+percentile at the end — which is exactly what the `sum by (le)` in the
+expression above does, and the reason it is there.
+
+It is also the practical difference between `histogram` and `summary`: a summary
+computes the quantile inside the process, and a client-side quantile **cannot be
+aggregated afterwards**. That is why this stack uses histograms.
+</Callout>
+
+## The precision is the bucket's width
+
+The p99 is interpolated inside the bucket where the 99th percentile falls. If
+the buckets go from `0.05` straight to `0.1`, every p99 in that range is a
+linear guess between 50 ms and 100 ms.
+
+The Go client's `DefBuckets` are a generic default, designed for web requests in
+the tens-to-hundreds of milliseconds. Measured in this stack under normal
+operation: **p50 of 2.8 ms**, well under the first bucket — meaning almost every
+request lands in the `le="0.005"` bucket, where resolution is coarse.
+
+<Callout type="trap" label="A histogram carries the incident for the whole window">
+While this track was being written, the gate deliberately stopped Postgres to
+prove the burn-rate alert. In the measurements taken right after, the p99 rose
+to **4.7 seconds** — and stayed there for thirty minutes, because the `[30m]`
+window still contained the outage's requests.
+
+It is not a measurement error: it is what the window means. Anyone reading
+percentiles during an incident needs to know how much history they are looking
+at, or they will believe the problem persists after it is fixed.
+</Callout>
+
+<RunIt>
+```bash
+make obs
+curl -s --get http://127.0.0.1:9090/api/v1/query \
+  --data-urlencode 'query=histogram_quantile(0.99, sum by (le) (rate(api_http_request_duration_seconds_bucket[10m])))'
+```
+</RunIt>
+
+<LabExercise check="regras de SLO carregadas" file="stack/services/api-go/metrics.go">
+
+`metrics.go` declares `api_cache_hits_total` and `api_cache_misses_total` as two
+separate counters.
+
+Question: why not a single one, with a `result="hit"|"miss"` label?
+
+<Fragment slot="hint">
+Think about how you would write the cache hit ratio in PromQL under each design.
+</Fragment>
+
+<Fragment slot="answer">
+
+Both designs work, and the single-label one is **better** — it is the convention
+Prometheus itself recommends.
+
+With a label, the hit ratio comes out directly:
+
+```promql
+rate(api_cache_requests_total{result="hit"}[5m])
+  / ignoring(result) sum without (result) (rate(api_cache_requests_total[5m]))
+```
+
+With two names, you have to write both names in every expression, and there is
+no way to sum "all cache lookups" without listing them by hand. Adding a third
+outcome — `error`, say — means touching every dashboard.
+
+The general rule: **what varies becomes a label, what is a different thing
+becomes a name.** `hit` and `miss` are the same event with different outcomes;
+`requests` and `duration` are different things.
+
+The limit of that rule is lesson 4: labels are cheap until they are not. Two
+fixed values, no problem; a `user_id`, and you take Prometheus down.
+
+</Fragment>
+</LabExercise>
+
+## What sticks
+
+- A counter is not read, it is derived — and `rate()` handles process resets.
+- `[5m]` changes the **type** of the result, and must contain at least two
+  scrapes.
+- A histogram stores **cumulative counters per bucket**, not durations.
+- `histogram_quantile` interpolates: the precision is the bucket's width.
+- **Averaging p99 values means nothing.** Sum the buckets, take the quantile at
+  the end.
+- A summary computes quantiles on the client, and therefore cannot be aggregated
+  across instances.
+
+<Quiz set="metric-types" />
