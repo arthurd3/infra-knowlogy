@@ -128,6 +128,10 @@ k8s-down: ## Deleta o cluster kind (e tudo dentro dele)
 k8s-lint: ## Valida os manifests (kustomize + kubeconform), sem cluster
 	@kubectl kustomize k8s/base | docker run --rm -i $(KUBECONFORM) -strict -summary -
 
+.PHONY: k8s-diff-tools
+k8s-diff-tools: ## Compara o chart Helm com o overlay Kustomize, campo a campo
+	@python3 tools/scripts/k8s-helm-vs-kustomize.py
+
 .PHONY: k8s-gateway
 k8s-gateway: ## Instala a Gateway API (Envoy Gateway) e publica a stack em 8083
 	@bash tools/scripts/k8s-gateway-install.sh

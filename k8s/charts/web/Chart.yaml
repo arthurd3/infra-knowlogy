@@ -1,0 +1,15 @@
+# O MESMO serviço `web` de k8s/base/web/, agora como chart Helm.
+#
+# Não existe para ser usado — o cluster continua subindo pelo kustomize. Existe
+# para que a comparação entre as duas ferramentas seja feita sobre o mesmo
+# objeto, e não sobre um exemplo de "hello world" que não se parece com nada.
+#
+# O portão renderiza os dois (`helm template` e `kubectl kustomize`) e exige que
+# produzam o MESMO Deployment. É a única forma honesta de dizer "as duas
+# ferramentas resolvem o mesmo problema": mostrando o mesmo resultado.
+apiVersion: v2
+name: web
+description: O site de lições da stack infra-knowlogy
+type: application
+version: 0.1.0
+appVersion: "dev"

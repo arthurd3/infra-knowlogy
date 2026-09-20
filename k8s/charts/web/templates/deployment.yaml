@@ -1,0 +1,61 @@
+{{- /*
+  O mesmo Deployment de k8s/base/web/deployment.yaml, com quatro campos
+  parametrizados. O resto é idêntico DE PROPÓSITO: o portão compara os dois
+  renderizados e qualquer divergência não intencional reprova.
+*/ -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  # A ÚNICA diferença que o comparador encontrou entre as duas ferramentas, e
+  # ela é instrutiva: o `namespace:` do kustomization.yaml é assado no
+  # manifesto renderizado, enquanto o Helm o difere para a instalação
+  # (`helm install -n`). `.Release.Namespace` é como o chart diz "o namespace
+  # é do instalador, não meu" — e é a razão de um chart poder ser publicado
+  # para terceiros e um overlay de kustomize não.
+  namespace: {{ .Release.Namespace }}
+  labels: {app: web}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels: {app: web}
+  template:
+    metadata:
+      labels: {app: web}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: web
+          image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - {name: http, containerPort: 8080}
+          readinessProbe:
+            httpGet: {path: /, port: http}
+            periodSeconds: 15
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            httpGet: {path: /, port: http}
+            periodSeconds: 15
+            failureThreshold: 4
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: {{ toJson .Values.capabilities.drop }}
+              add: {{ toJson .Values.capabilities.add }}
+          resources: {{ toJson .Values.resources }}
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+            - {name: caddy-data, mountPath: /data}
+            - {name: caddy-config, mountPath: /config}
+      volumes:
+        - name: tmp
+          emptyDir: {medium: Memory, sizeLimit: 32Mi}
+        - name: caddy-data
+          emptyDir: {sizeLimit: 32Mi}
+        - name: caddy-config
+          emptyDir: {sizeLimit: 8Mi}

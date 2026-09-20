@@ -1,0 +1,32 @@
+# O que o Helm tem e o Kustomize não: PARÂMETROS COM NOME.
+#
+# Um chart declara sua superfície de configuração aqui, e quem instala mexe
+# nela sem conhecer a estrutura do manifesto por dentro. É o que permite
+# distribuir software para terceiros: `helm install --set replicaCount=3` não
+# exige que o instalador saiba que o campo mora em `.spec.replicas` de um
+# Deployment.
+#
+# O Kustomize, por decisão de projeto, NÃO tem isto. Um overlay patcheia o
+# manifesto pelo caminho do campo, o que exige conhecer a estrutura — e é
+# exatamente por isso que ele nunca vira um formato de distribuição, e nunca
+# executa lógica no meio do YAML.
+replicaCount: 1
+
+image:
+  repository: infra-knowlogy/web
+  tag: dev
+  pullPolicy: Never
+
+service:
+  port: 8080
+
+resources:
+  limits: {cpu: "500m", memory: 128Mi}
+  requests: {memory: 32Mi}
+
+# O Caddy da imagem tem `cap_net_bind_service=+ep` gravado no binário, e o
+# kernel recusa o exec() se a capability não estiver no bounding set — com um
+# erro que não menciona capabilities (armadilha 6).
+capabilities:
+  drop: [ALL]
+  add: [NET_BIND_SERVICE, CHOWN, DAC_OVERRIDE, SETGID, SETUID]

@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+  # A ÚNICA diferença que o comparador encontrou entre as duas ferramentas, e
+  # ela é instrutiva: o `namespace:` do kustomization.yaml é assado no
+  # manifesto renderizado, enquanto o Helm o difere para a instalação
+  # (`helm install -n`). `.Release.Namespace` é como o chart diz "o namespace
+  # é do instalador, não meu" — e é a razão de um chart poder ser publicado
+  # para terceiros e um overlay de kustomize não.
+  namespace: {{ .Release.Namespace }}
+  labels: {app: web}
+spec:
+  selector: {app: web}
+  ports:
+    - {name: http, port: {{ .Values.service.port }}, targetPort: http}
