@@ -1296,6 +1296,341 @@
           "why_en": "The course shows in practice what factors III, XI and IX ask for — config by environment, logs to stdout and container lifecycle — in Portuguese and for free. The honest limit: it does NOT discuss the twelve factors by name; for the methodology itself read the site, which is also translated."
         }
       ]
+    },
+    {
+      "id": "k8s-reconciliation",
+      "lessons": [
+        "why-an-orchestrator",
+        "from-compose-to-deployment"
+      ],
+      "pt": {
+        "label": "Reconciliação e controladores",
+        "what": "O laço perpétuo que compara o DESEJADO (os objetos que você aplicou) com o REAL (o que existe no cluster) e age para aproximá-los. É o que faz o Kubernetes não ter um 'deploy terminou': há convergência contínua, e apagar um pod à mão é apenas uma divergência que o controlador desfaz."
+      },
+      "en": {
+        "label": "Reconciliation and controllers",
+        "what": "The perpetual loop comparing the DESIRED state (the objects you applied) with the ACTUAL state (what exists in the cluster) and acting to close the gap. It is why Kubernetes has no 'the deploy finished': there is continuous convergence, and deleting a pod by hand is merely a divergence the controller undoes."
+      },
+      "refs": [
+        {
+          "kind": "docs",
+          "title": "Kubernetes Documentation — Controllers",
+          "author": "Kubernetes authors",
+          "where": "kubernetes.io",
+          "year": 2026,
+          "lang": "en",
+          "url": "https://kubernetes.io/docs/concepts/architecture/controller/",
+          "free": true,
+          "accessed": "2026-09-20",
+          "why_pt": "Duas páginas que explicam o modelo com a analogia do termostato e deixam claro o ponto que mais confunde: um controlador não precisa terminar, ele precisa continuar. Leia antes de qualquer tutorial de kubectl — é o que faz o resto parecer óbvio em vez de arbitrário.",
+          "why_en": "Two pages that explain the model with the thermostat analogy and make the most confusing point clear: a controller does not need to finish, it needs to continue. Read it before any kubectl tutorial — it is what makes the rest feel obvious rather than arbitrary."
+        },
+        {
+          "kind": "video",
+          "title": "TGI Kubernetes (série completa)",
+          "author": "Joe Beda",
+          "where": "YouTube — VMware Tanzu / Heptio",
+          "year": 2017,
+          "lang": "en",
+          "url": "https://www.youtube.com/playlist?list=PL7bmigfV0EqQzxcNpmcdTJ9eFRPBe-iZa",
+          "free": true,
+          "accessed": "2026-09-20",
+          "why_pt": "Um dos criadores do Kubernetes explorando o sistema ao vivo, sem slides e sem roteiro — inclusive quando algo quebra. É a forma mais honesta de ver o modelo de reconciliação funcionando, porque você vê o diagnóstico acontecendo em tempo real e não o resultado já arrumado.",
+          "why_en": "One of Kubernetes's creators exploring the system live, without slides and without a script — including when something breaks. It is the most honest way to watch the reconciliation model work, because you see the diagnosis happening in real time rather than a tidied-up result."
+        },
+        {
+          "kind": "book",
+          "title": "Kubernetes: Up and Running (3rd edition)",
+          "author": "Brendan Burns, Joe Beda, Kelsey Hightower, Lachlan Evenson",
+          "where": "O'Reilly Media",
+          "year": 2022,
+          "lang": "en",
+          "isbn": "9781098110208",
+          "url": "https://www.oreilly.com/library/view/kubernetes-up-and/9781098110192/",
+          "free": false,
+          "accessed": "2026-09-20",
+          "why_pt": "O capítulo sobre Deployments e ReplicaSets mostra a reconciliação pelo lado prático: o que acontece entre `kubectl apply` e o pod existir, e por quê cada objeto intermediário é necessário. É o livro que os próprios criadores escreveram, o que torna as escolhas de projeto explicáveis.",
+          "why_en": "The Deployments and ReplicaSets chapters show reconciliation from the practical side: what happens between `kubectl apply` and the pod existing, and why each intermediate object is necessary. It is the book the creators themselves wrote, which makes the design choices explainable."
+        }
+      ]
+    },
+    {
+      "id": "gateway-api",
+      "lessons": [
+        "gateway-api"
+      ],
+      "pt": {
+        "label": "Gateway API",
+        "what": "A sucessora do Ingress, GA desde outubro de 2023. Não é o Ingress renomeado: parte o roteamento em três objetos com três donos — GatewayClass (quem fornece a infraestrutura), Gateway (quem opera o cluster) e HTTPRoute (quem desenvolve a aplicação) — resolvendo um problema organizacional, não técnico."
+      },
+      "en": {
+        "label": "Gateway API",
+        "what": "Ingress's successor, GA since October 2023. Not Ingress renamed: it splits routing into three objects with three owners — GatewayClass (who provides the infrastructure), Gateway (who operates the cluster) and HTTPRoute (who develops the application) — solving an organisational problem, not a technical one."
+      },
+      "refs": [
+        {
+          "kind": "spec",
+          "title": "Gateway API — Introduction and API concepts",
+          "author": "Kubernetes SIG Network",
+          "where": "gateway-api.sigs.k8s.io",
+          "year": 2026,
+          "lang": "en",
+          "url": "https://gateway-api.sigs.k8s.io/concepts/api-overview/",
+          "free": true,
+          "accessed": "2026-09-20",
+          "why_pt": "A especificação lida pela parte que mais importa na prática: a graduação Core / Extended / Implementation-specific. É ela que responde 'este controlador suporta reescrita de caminho?' sem depender de ler a documentação de cada fornecedor e torcer.",
+          "why_en": "The specification read at the part that matters most in practice: the Core / Extended / Implementation-specific grading. It is what answers 'does this controller support path rewriting?' without reading each vendor's documentation and hoping."
+        },
+        {
+          "kind": "talk",
+          "title": "Gateway API: The Most Collaborative API in Kubernetes History Is GA",
+          "author": "Rob Scott, Nick Young",
+          "where": "YouTube — CNCF, KubeCon + CloudNativeCon NA",
+          "year": 2023,
+          "lang": "en",
+          "url": "https://www.youtube.com/watch?v=V3Vu_FWb4l4",
+          "free": true,
+          "accessed": "2026-09-20",
+          "why_pt": "Os mantenedores contando por que a API demorou quatro anos e precisou de um grupo multi-fornecedor: as anotações do Ingress só somem quando a alternativa é padronizada, e nenhum fornecedor conseguiria fazer isso sozinho. É a história que explica o formato.",
+          "why_en": "The maintainers explaining why the API took four years and needed a multi-vendor group: Ingress annotations only disappear once the alternative is standardised, and no single vendor could pull that off alone. It is the history that explains the shape."
+        }
+      ]
+    },
+    {
+      "id": "k8s-authorization",
+      "lessons": [
+        "rbac-and-the-negative-proof"
+      ],
+      "pt": {
+        "label": "Autorização no Kubernetes (RBAC)",
+        "what": "O controle de acesso sobre a API do cluster, decidido por uma tripla: verbo, recurso e escopo. A propriedade que muda como se escreve política é a ausência: NÃO existe regra de negação — o padrão já é negar, toda Role só acrescenta, e excesso de permissão só se corrige removendo."
+      },
+      "en": {
+        "label": "Kubernetes authorisation (RBAC)",
+        "what": "Access control over the cluster API, decided by a triple: verb, resource and scope. The property that changes how you write policy is an absence: there is NO deny rule — the default is already deny, every Role only adds, and over-permission is only fixed by removing."
+      },
+      "refs": [
+        {
+          "kind": "docs",
+          "title": "Kubernetes Documentation — Using RBAC Authorization",
+          "author": "Kubernetes authors",
+          "where": "kubernetes.io",
+          "year": 2026,
+          "lang": "en",
+          "url": "https://kubernetes.io/docs/reference/access-authn-authz/rbac/",
+          "free": true,
+          "accessed": "2026-09-20",
+          "why_pt": "A referência completa dos quatro objetos, com a tabela de verbos e a seção sobre escalonamento de privilégio que quase ninguém lê — e que explica por que conceder `escalate` ou `bind` é mais perigoso do que conceder qualquer verbo sobre pods.",
+          "why_en": "The complete reference for the four objects, with the verb table and the privilege-escalation section almost nobody reads — the one explaining why granting `escalate` or `bind` is more dangerous than granting any verb over pods."
+        },
+        {
+          "kind": "docs",
+          "title": "Kubernetes Hardening Guidance (v1.2)",
+          "author": "NSA, CISA",
+          "where": "media.defense.gov",
+          "year": 2022,
+          "lang": "en",
+          "url": "https://media.defense.gov/2022/Aug/29/2003066362/-1/-1/0/CTR_KUBERNETES_HARDENING_GUIDANCE_1.2_20220829.PDF",
+          "free": true,
+          "accessed": "2026-09-20",
+          "why_pt": "Um documento de agência de segurança, e não de fornecedor, o que muda o tom: ele lista o que vem ligado por padrão e deveria ser desligado. A recomendação de `automountServiceAccountToken: false` para cargas que não falam com o API server está entre elas.",
+          "why_en": "A security-agency document rather than a vendor one, which changes the tone: it lists what ships enabled and ought to be turned off. The recommendation of `automountServiceAccountToken: false` for workloads that do not talk to the API server is among them."
+        },
+        {
+          "kind": "talk",
+          "title": "Evolution of Kubernetes Security",
+          "author": "KubeCon + CloudNativeCon Europe",
+          "where": "YouTube — CNCF",
+          "year": 2023,
+          "lang": "en",
+          "url": "https://www.youtube.com/watch?v=9aqnSqDmbMk",
+          "free": true,
+          "accessed": "2026-09-20",
+          "why_pt": "Põe o RBAC no lugar dele dentro de um quadro maior: ele governa o API server e mais nada, e confundi-lo com firewall ou com política de admissão é o engano que produz clusters que parecem seguros. Útil justamente por não ser uma palestra só sobre RBAC.",
+          "why_en": "It puts RBAC in its place within a larger picture: it governs the API server and nothing else, and confusing it with a firewall or with admission policy is the mistake that produces clusters that merely look secure. Useful precisely because it is not a talk only about RBAC."
+        }
+      ]
+    },
+    {
+      "id": "k8s-autoscaling",
+      "lessons": [
+        "autoscaling-and-its-blind-window"
+      ],
+      "pt": {
+        "label": "Autoscaling horizontal",
+        "what": "O HPA ajusta o número de réplicas comparando uma métrica com um alvo — e o alvo é percentual do `requests`, nunca do `limits`. O número que decide se ele serve ao seu caso não é 'ele escala', é quanto tempo leva para PERCEBER: dois laços de 15 s mais o fato de uso de CPU ser uma taxa."
+      },
+      "en": {
+        "label": "Horizontal autoscaling",
+        "what": "The HPA adjusts replica count by comparing a metric against a target — and the target is a percentage of `requests`, never of `limits`. The number that decides whether it fits your case is not 'it scales', it is how long it takes to NOTICE: two 15 s loops plus the fact that CPU usage is a rate."
+      },
+      "refs": [
+        {
+          "kind": "docs",
+          "title": "Kubernetes Documentation — Horizontal Pod Autoscaling: algorithm details",
+          "author": "Kubernetes authors",
+          "where": "kubernetes.io",
+          "year": 2026,
+          "lang": "en",
+          "url": "https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/#algorithm-details",
+          "free": true,
+          "accessed": "2026-09-20",
+          "why_pt": "A fórmula exata que o controlador aplica, incluindo a tolerância de 10% e o tratamento de pods sem métrica — que é o que explica por que um pod recém-criado deixa o HPA em `<unknown>` em vez de ele simplesmente ignorar aquele pod.",
+          "why_en": "The exact formula the controller applies, including the 10% tolerance and the handling of pods without metrics — which is what explains why a freshly created pod leaves the HPA at `<unknown>` instead of it simply ignoring that pod."
+        },
+        {
+          "kind": "talk",
+          "title": "Scaling with confidence — a deep dive into autoscaling in Kubernetes",
+          "author": "KubeCon + CloudNativeCon Europe, Paris",
+          "where": "YouTube — CNCF",
+          "year": 2024,
+          "lang": "en",
+          "url": "https://www.youtube.com/watch?v=g3OqblgRPng",
+          "free": true,
+          "accessed": "2026-09-20",
+          "why_pt": "Cobre as três escalas que as pessoas confundem — HPA (réplicas), VPA (tamanho) e Cluster Autoscaler (nós) — e por que a primeira não serve de nada sem a terceira: mais réplicas sem nó com espaço viram pods `Pending`, não capacidade.",
+          "why_en": "Covers the three scalings people confuse — HPA (replicas), VPA (size) and Cluster Autoscaler (nodes) — and why the first is useless without the third: more replicas with no node that has room become `Pending` pods, not capacity."
+        },
+        {
+          "kind": "book",
+          "title": "Kubernetes Patterns (2nd edition)",
+          "author": "Bilgin Ibryam, Roland Huß",
+          "where": "O'Reilly Media",
+          "year": 2023,
+          "lang": "en",
+          "isbn": "9781098131685",
+          "url": "https://www.oreilly.com/library/view/kubernetes-patterns-2nd/9781098131678/",
+          "free": false,
+          "accessed": "2026-09-20",
+          "why_pt": "O padrão 'Elastic Scale' põe o HPA ao lado do VPA e do autoscaling de cluster como três respostas a perguntas diferentes, com o critério de quando cada uma se aplica. É a organização por PADRÃO, e não por objeto, que falta na documentação oficial.",
+          "why_en": "The 'Elastic Scale' pattern places the HPA alongside VPA and cluster autoscaling as three answers to different questions, with the criterion for when each applies. It is the organisation by PATTERN rather than by object that the official documentation lacks."
+        }
+      ]
+    },
+    {
+      "id": "k8s-stateful",
+      "lessons": [
+        "statefulsets-in-depth",
+        "rollouts-and-disruption"
+      ],
+      "pt": {
+        "label": "Estado, identidade e disrupção planejada",
+        "what": "O que muda quando as réplicas deixam de ser intercambiáveis: nome ordinal, um volume por réplica, DNS individual e ordem de criação. E o outro lado da mesma moeda — o que acontece quando um pod com estado precisa SAIR do nó onde está, que é o assunto do PodDisruptionBudget."
+      },
+      "en": {
+        "label": "State, identity and planned disruption",
+        "what": "What changes once replicas stop being interchangeable: ordinal name, one volume per replica, individual DNS and creation order. And the other side of the same coin — what happens when a stateful pod has to LEAVE the node it is on, which is what the PodDisruptionBudget is about."
+      },
+      "refs": [
+        {
+          "kind": "docs",
+          "title": "Kubernetes Documentation — Disruptions",
+          "author": "Kubernetes authors",
+          "where": "kubernetes.io",
+          "year": 2026,
+          "lang": "en",
+          "url": "https://kubernetes.io/docs/concepts/workloads/pods/disruptions/",
+          "free": true,
+          "accessed": "2026-09-20",
+          "why_pt": "Separa disrupção voluntária de involuntária logo no começo, e é essa distinção que faz o PDB parar de parecer mágico: ele é uma regra de admissão sobre a API de eviction, e nó que morre não pede licença a ninguém.",
+          "why_en": "It separates voluntary from involuntary disruption right at the start, and that distinction is what stops the PDB from looking magical: it is an admission rule over the eviction API, and a dying node asks nobody's permission."
+        },
+        {
+          "kind": "talk",
+          "title": "Stateful Workloads in Kubernetes: A Deep Dive",
+          "author": "Kaslin Fields, Michelle Au (Google)",
+          "where": "YouTube — CNCF",
+          "year": 2023,
+          "lang": "en",
+          "url": "https://www.youtube.com/watch?v=688K9UlEbPk",
+          "free": true,
+          "accessed": "2026-09-20",
+          "why_pt": "Trata o assunto pela pergunta certa — o que o Kubernetes garante e o que ele explicitamente NÃO garante para carga com estado. O StatefulSet entrega identidade, ordem e volume; backup, promoção de primário e replicação continuam sendo da aplicação ou de um operator.",
+          "why_en": "It approaches the subject through the right question — what Kubernetes guarantees and what it explicitly does NOT guarantee for stateful workloads. The StatefulSet delivers identity, order and volume; backup, primary promotion and replication remain the application's or an operator's job."
+        },
+        {
+          "kind": "docs",
+          "title": "Kubernetes Documentation — Persistent Volumes: access modes",
+          "author": "Kubernetes authors",
+          "where": "kubernetes.io",
+          "year": 2026,
+          "lang": "en",
+          "url": "https://kubernetes.io/docs/concepts/storage/persistent-volumes/#access-modes",
+          "free": true,
+          "accessed": "2026-09-20",
+          "why_pt": "Vale ler a definição literal de `ReadWriteOnce`, porque ela diz NÓ e quase todo mundo lê POD. A existência de `ReadWriteOncePod`, acrescentado no 1.27, é a prova de que a confusão era generalizada o bastante para merecer um modo novo.",
+          "why_en": "Worth reading the literal definition of `ReadWriteOnce`, because it says NODE and almost everyone reads POD. The existence of `ReadWriteOncePod`, added in 1.27, is proof that the confusion was widespread enough to warrant a new mode."
+        }
+      ]
+    },
+    {
+      "id": "k8s-packaging",
+      "lessons": [
+        "helm-vs-kustomize"
+      ],
+      "pt": {
+        "label": "Empacotar e configurar manifests",
+        "what": "As duas formas de não repetir YAML, e a diferença de fundo entre elas: o Helm manipula TEXTO e parseia depois (por isso tem condicionais, laços e pode gerar YAML inválido); o Kustomize patcheia a árvore JÁ PARSEADA (por isso nunca gera lixo e não tem parâmetro com nome)."
+      },
+      "en": {
+        "label": "Packaging and configuring manifests",
+        "what": "The two ways of not repeating YAML, and the underlying difference between them: Helm manipulates TEXT and parses afterwards (hence conditionals, loops and the ability to emit invalid YAML); Kustomize patches the ALREADY-PARSED tree (hence it never emits garbage and has no named parameters)."
+      },
+      "refs": [
+        {
+          "kind": "docs",
+          "title": "Helm Documentation — Charts and the Chart Template Guide",
+          "author": "Helm authors",
+          "where": "helm.sh",
+          "year": 2026,
+          "lang": "en",
+          "url": "https://helm.sh/docs/chart_template_guide/",
+          "free": true,
+          "accessed": "2026-09-20",
+          "why_pt": "O guia de templates lido de ponta a ponta mostra o custo escondido do Helm melhor do que qualquer crítica: as funções de indentação existem porque o motor não sabe que está escrevendo YAML, e é daí que vem quase todo erro que só aparece no apply.",
+          "why_en": "The template guide read end to end shows Helm's hidden cost better than any critique: the indentation functions exist because the engine does not know it is writing YAML, and that is where nearly every error that only surfaces at apply comes from."
+        },
+        {
+          "kind": "docs",
+          "title": "Kustomize — Introduction and glossary",
+          "author": "Kubernetes SIG CLI",
+          "where": "kubectl.docs.kubernetes.io",
+          "year": 2026,
+          "lang": "en",
+          "url": "https://kubectl.docs.kubernetes.io/guides/introduction/kustomize/",
+          "free": true,
+          "accessed": "2026-09-20",
+          "why_pt": "Declara a ausência de templates como DECISÃO de projeto e explica o objetivo: arquivos-fonte sempre válidos, para que editor, validador e diff funcionem sem uma etapa de renderização. Ler isso muda a pergunta de 'qual é melhor' para 'qual problema você tem'.",
+          "why_en": "It states the absence of templates as a design DECISION and explains the goal: source files always valid, so that editor, validator and diff work without a rendering step. Reading it changes the question from 'which is better' to 'which problem do you have'."
+        },
+        {
+          "kind": "talk",
+          "title": "Helm vs Kustomize: the frenemies that soothe Kubernetes",
+          "author": "Ana Maria Mihalceanu",
+          "where": "YouTube — conferência gravada",
+          "year": 2022,
+          "lang": "en",
+          "url": "https://www.youtube.com/watch?v=sFfQ8mrSEZc",
+          "free": true,
+          "accessed": "2026-09-20",
+          "why_pt": "Uma comparação que não torce por nenhum dos dois e mostra os dois resolvendo o MESMO caso lado a lado — que é exatamente o método que a lição usa. Vale principalmente pela parte final, sobre combinar os dois: `helm template` cospe YAML, e `kustomize` come YAML.",
+          "why_en": "A comparison that roots for neither and shows both solving the SAME case side by side — which is exactly the method the lesson uses. It is worth it above all for the final part, on combining the two: `helm template` emits YAML, and `kustomize` consumes YAML."
+        },
+        {
+          "kind": "book",
+          "title": "Kubernetes Patterns (2nd edition)",
+          "author": "Bilgin Ibryam, Roland Huß",
+          "where": "O'Reilly Media",
+          "year": 2023,
+          "lang": "en",
+          "isbn": "9781098131685",
+          "url": "https://www.oreilly.com/library/view/kubernetes-patterns-2nd/9781098131678/",
+          "free": false,
+          "accessed": "2026-09-20",
+          "why_pt": "O capítulo de 'Configuration Template' e o de 'Immutable Configuration' cobrem as duas abordagens sem torcer por nenhuma, e ligam a escolha a uma pergunta operacional: quem vai instalar isto, e essa pessoa conhece a estrutura dos seus manifests?",
+          "why_en": "The 'Configuration Template' and 'Immutable Configuration' chapters cover both approaches without rooting for either, and tie the choice to an operational question: who will install this, and does that person know the structure of your manifests?"
+        }
+      ]
     }
   ]
 }
