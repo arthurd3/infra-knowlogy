@@ -12,7 +12,7 @@ lado a lado só é honesta porque a aplicação é a mesma.
 | # | Módulo | Diretório | Portão | Estado |
 |---|---|---|---|---|
 | 1 | **Docker** — imagens, Compose, hardening OWASP, observabilidade | `stack/` | `make verify` (37 checagens) | **feito** · trilhas Fundamentos (8) e Produção (6) escritas |
-| 2 | **Kubernetes** — a mesma stack portada para um cluster kind | `k8s/` | `make k8s-verify` (33 checagens) | **feito (v1)** · [ADR 0007](adr/0007-kind-e-o-porte-para-kubernetes.md) · pendências: lições 4+, Gateway API, HPA, RBAC, kind no CI |
+| 2 | **Kubernetes** — a mesma stack portada para um cluster kind, agora com Gateway API, RBAC, HPA e PDB | `k8s/` | `make k8s-verify` (58 checagens) | **feito** · [ADR 0007](adr/0007-kind-e-o-porte-para-kubernetes.md) e [0021](adr/0021-gateway-api-e-o-envoy-gateway.md) · **10 lições bilíngues** · pendências: multi-nó (topologySpread, Cluster Autoscaler), VPA, service mesh, job de kind no CI |
 | 3 | **CI/CD self-hosted (Jenkins)** — o mesmo pipeline do GitHub Actions rodando num Jenkins que é seu, sobre a mesma stack | `cicd/` | `make cicd-verify` (35 checagens) | **feito (v1)** · [ADR 0011](adr/0011-como-o-agente-de-build-constroi-imagens.md) e [0012](adr/0012-jenkins-conteinerizado.md) · 8 lições bilíngues · pendência: GitOps |
 | 4 | **IaC (OpenTofu)** — a mesma stack declarada em HCL e provisionada contra o daemon local | `iac/` | `make iac-verify` (28 checagens) | **feito (v1)** · [ADR 0015](adr/0015-opentofu-e-o-provider-docker.md) e [0016](adr/0016-como-o-tofu-alcanca-o-daemon.md) · 8 lições bilíngues na trilha `iac` |
 | 5 | **Configuração (Ansible)** — preparar um host Fedora real: Docker, SELinux, firewall, usuários — as coisas que o módulo 1 encontrou na marra | `config/` | a definir | reservado |
@@ -62,7 +62,7 @@ As maiores lacunas hoje, em ordem de demanda:
 | Demanda | % | Estado |
 |---|---|---|
 | Observabilidade | 80% | **coberta**: 7 lições, regras de SLO rodando, alerta de burn rate provado pelo portão. Falta Alertmanager e tracing |
-| Kubernetes | 88% | 3 lições de ~10; falta Gateway API, Helm, RBAC, HPA |
+| Kubernetes | 88% | **coberta**: 10 lições, Gateway API roteando, RBAC provado por token real, HPA medido em 3 rodadas, PDB pela API de eviction, Helm × Kustomize comparados por diff. Falta o que um nó só não dá |
 | CI/CD | 75% | forte, menos **GitOps**: ArgoCD e Flux não existem aqui |
 | Linux & troubleshooting | 70% | falta o troubleshooting real: /proc, strace, eBPF, PSI, OOM |
 | Bancos & redes | 55% | falta operação do Postgres e DNS a fundo |
@@ -71,22 +71,26 @@ As maiores lacunas hoje, em ordem de demanda:
 ## A dívida didática, medida
 
 Os primitivos de ensino foram inventados em ordem cronológica, e as trilhas
-escritas antes nunca voltaram para usá-los. O retrato, em setembro de 2026,
-depois de a trilha de Fundamentos ser retrabalhada (ADR 0017):
+escritas antes nunca voltaram para usá-los. O retrato, contado por `grep` nos arquivos de lição em
+setembro de 2026, depois de a trilha de Fundamentos ser retrabalhada
+(ADR 0017) e de a de Kubernetes ser escrita:
 
 | trilha | lições | `Term` | `Tradeoff` | `FieldNote` |
 |---|---|---|---|---|
+| kubernetes | 10 | 9 | 7 | 7 |
 | fundamentos | 8 | 15 | 1 | 1 |
-| producao | 6 | 6 | 6 | 2 |
-| observabilidade | 7 | 7 | 3 | 1 |
-| seguranca | 6 | 13 | 3 | 9 |
-| **kubernetes** | 3 | **0** | **0** | **0** |
 | **cicd** | 8 | **0** | 1 | 1 |
 | iac | 8 | 6 | 7 | 7 |
+| observabilidade | 7 | 7 | 3 | 1 |
+| producao | 6 | 6 | 6 | 2 |
+| seguranca | 6 | 13 | 3 | 9 |
 
-O Kubernetes é o pior caso e é também a trilha mais curta — as duas coisas pelo
-mesmo motivo. A `library.json` hoje cobre só os conceitos de Fundamentos;
-estendê-la para as outras trilhas é trabalho declarado, não esquecido.
+O Kubernetes era o pior caso e era também a trilha mais curta — as duas coisas
+pelo mesmo motivo, e as duas resolvidas na mesma passada: as sete lições novas
+nasceram com os primitivos, e as três antigas ainda precisam do retrofit. Hoje o
+pior caso é o **cicd**, com 8 lições e nenhum `Term`. A `library.json` cobre
+Fundamentos, Observabilidade e Produção; estendê-la para as outras trilhas é
+trabalho declarado, não esquecido.
 
 ## Itens dentro dos módulos já abertos
 
@@ -119,15 +123,21 @@ estendê-la para as outras trilhas é trabalho declarado, não esquecido.
   e o espelho do laboratório contra o cluster kind — as NetworkPolicies do
   módulo 2 dizem a mesma coisa que as redes do Compose e ninguém tentou
   atravessá-las ainda.
-- **Módulo 2:** depois das 3 lições iniciais — **Gateway API**, StatefulSets a
-  fundo, HPA/VPA, RBAC e um job de kind no CI (o nome fica reservado aqui até o
-  portão estabilizar localmente).
+- **Módulo 2:** as **10 lições** estão escritas e a infraestrutura que elas
+  ensinam existe: **Gateway API** (Envoy Gateway v1.9.1, [ADR 0021](adr/0021-gateway-api-e-o-envoy-gateway.md)),
+  **RBAC** com sonda de token real, **HPA** com metrics-server, **PDB** provado
+  pela API de eviction e um **chart Helm** comparado ao overlay Kustomize campo
+  a campo. O portão foi de 33 para **58 checagens**.
+
+  Ficou para depois, e quase tudo pela mesma razão — **este cluster tem um nó
+  só**: `topologySpreadConstraints`, Cluster Autoscaler, VPA, service mesh,
+  falha real de plano de controle e o job de kind no CI. O espelho do
+  laboratório de ataque contra o cluster também continua aberto.
 
   > **Correção de rota.** Até setembro de 2026 esta linha dizia "Ingress de
   > verdade (ingress-nginx)". O projeto foi **aposentado em março de 2026**, e o
   > substituto que os próprios mantenedores anunciaram — o InGate — nunca
-  > amadureceu e foi aposentado junto. O caminho hoje é a **Gateway API**, GA
-  > desde outubro de 2023. A instrução antiga sobreviveu aqui por onze meses
-  > sem que nada a contradissesse; é exatamente o tipo de envelhecimento
-  > silencioso que o [ADR 0014](adr/0014-o-mapa-de-mercado-como-dado.md) passou
-  > a impedir.
+  > amadureceu e foi aposentado junto. A instrução antiga sobreviveu aqui por
+  > onze meses sem que nada a contradissesse; é exatamente o tipo de
+  > envelhecimento silencioso que o [ADR 0014](adr/0014-o-mapa-de-mercado-como-dado.md)
+  > passou a impedir. O caminho seguido foi a **Gateway API**.

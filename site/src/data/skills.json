@@ -40,27 +40,34 @@
       "id": "kubernetes",
       "demand": 88,
       "quadrant": "orquestracao",
-      "status": "parcial",
+      "status": "coberto",
       "pt": {
         "label": "Kubernetes / EKS / GKE",
-        "gap": "O módulo 2 porta a stack inteira para um cluster kind e o portão prova auto-cura, probes e rolling update. Faltam as lições 4+ da trilha, e falta tudo o que é de cluster gerenciado: nó, control plane, IAM e custo. Falta também a Gateway API — o ingress-nginx foi APOSENTADO em março de 2026 e não tem substituto no projeto."
+        "gap": "A trilha tem 10 lições e o portão, 58 checagens: Gateway API com rota provada, RBAC com prova negativa por token real, HPA medido em três rodadas, StatefulSet, PDB pela API de eviction e Helm comparado ao Kustomize campo a campo. O que falta é o que um nó só não dá: topologySpreadConstraints, Cluster Autoscaler, VPA, service mesh e falha real de plano de controle. Cluster gerenciado está citado com preço conferido, nunca medido."
       },
       "en": {
         "label": "Kubernetes / EKS / GKE",
-        "gap": "Module 2 ports the whole stack to a kind cluster and the gate proves self-healing, probes and rolling updates. Lessons 4+ of the track are missing, and so is everything specific to managed clusters: nodes, control plane, IAM and cost. Gateway API is missing too — ingress-nginx was RETIRED in March 2026 with no in-project replacement."
+        "gap": "The track has 10 lessons and the gate 58 checks: Gateway API with routing proven, RBAC with a negative proof via a real token, HPA measured over three runs, StatefulSet, PDB through the eviction API, and Helm compared to Kustomize field by field. What is missing is what a single node cannot give: topologySpreadConstraints, Cluster Autoscaler, VPA, service mesh and a real control-plane failure. Managed clusters are cited with verified pricing, never measured."
       },
       "evidence": {
         "lessons": [
-          "why-an-orchestrator",
-          "from-compose-to-deployment",
-          "liveness-and-readiness"
+          "gateway-api",
+          "rbac-and-the-negative-proof",
+          "autoscaling-and-its-blind-window",
+          "helm-vs-kustomize",
+          "statefulsets-in-depth",
+          "rollouts-and-disruption"
         ],
         "checks": [
-          "auto-cura: pod deletado",
-          "rolling restart com"
+          "RBAC: a SA reader NÃO pode listar secrets (a prova negativa)",
+          "Gateway Programmed=True com",
+          "HPA escalou sob carga real em 3 rodadas",
+          "PDB: o segundo despejo é RECUSADO (429)",
+          "helm template ≡ kubectl kustomize"
         ],
         "measurements": [
-          "k8s-measured.json"
+          "k8s-measured.json",
+          "k8s-hpa.json"
         ]
       }
     },
@@ -246,11 +253,14 @@
       "items": [
         {
           "name": "Kubernetes em produção",
-          "status": "parcial"
+          "status": "coberto"
         },
         {
           "name": "EKS · GKE · AKS",
-          "status": "ausente"
+          "status": "citado",
+          "lesson": "managed-clusters",
+          "note_pt": "preços conferidos nas páginas oficiais em 2026-09-20; nada medido aqui",
+          "note_en": "prices verified on the official pages on 2026-09-20; nothing measured here"
         },
         {
           "name": "Docker",
@@ -258,13 +268,15 @@
         },
         {
           "name": "Helm",
-          "status": "ausente"
+          "status": "coberto",
+          "note_pt": "o mesmo serviço em chart e em overlay, comparados campo a campo pelo portão",
+          "note_en": "the same service as a chart and as an overlay, compared field by field by the gate"
         },
         {
           "name": "Ingress NGINX",
           "status": "ausente",
-          "note_pt": "aposentado em março de 2026; o caminho hoje é a Gateway API",
-          "note_en": "retired in March 2026; the path today is Gateway API"
+          "note_pt": "aposentado em março de 2026; o sucessor está coberto na lição gateway-api, com Envoy Gateway de pé e rota provada",
+          "note_en": "retired in March 2026; the successor is covered in the gateway-api lesson, with Envoy Gateway running and routing proven"
         },
         {
           "name": "Service Mesh",
@@ -272,11 +284,15 @@
         },
         {
           "name": "HPA / VPA",
-          "status": "ausente"
+          "status": "parcial",
+          "note_pt": "HPA medido em 3 rodadas (janela cega de 12,8 a 44,7 s); VPA não existe aqui",
+          "note_en": "HPA measured over 3 runs (blind window of 12.8 to 44.7 s); VPA does not exist here"
         },
         {
           "name": "RBAC",
-          "status": "ausente"
+          "status": "coberto",
+          "note_pt": "prova negativa por impersonação E por sonda com token real: 403 em secrets e em nodes",
+          "note_en": "negative proof by impersonation AND by a real-token probe: 403 on secrets and on nodes"
         }
       ]
     },
