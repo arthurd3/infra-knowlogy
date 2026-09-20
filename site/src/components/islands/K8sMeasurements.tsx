@@ -47,7 +47,11 @@ const GOOD = new Set(["selfHealSeconds", "rollingRequestsFailed"]);
 
 export default function K8sMeasurements({ lang = "pt" }: { lang?: "pt" | "en" }) {
   const t = COPY[lang];
-  const m = measured.measurements as Record<string, number>;
+  // `number | null` e não `number`: uma medição pode não ter acontecido nesta
+  // execução — cluster reaproveitado (`KEEP_CLUSTER=1`) não mede criação de
+  // cluster, e uma seção pulada não mede nada. Tipar como `number` fazia o
+  // `astro check` reprovar e, se passasse, renderizaria a palavra "null".
+  const m = measured.measurements as Record<string, number | null>;
 
   return (
     <figure className="km">

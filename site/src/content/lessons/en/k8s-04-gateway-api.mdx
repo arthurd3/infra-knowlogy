@@ -1,0 +1,277 @@
+---
+key: gateway-api
+lang: en
+track: kubernetes
+order: 4
+title: "The Gateway API, and the green that lies"
+summary: "ingress-nginx was retired in March 2026 and its announced replacement died with it. The successor is the Gateway API — not Ingress renamed, but a split into three roles. Installed here, with a discovery: every status goes green and nothing routes."
+minutes: 16
+tags: [kubernetes, gateway-api, ingress, envoy, networkpolicy, routing]
+sources:
+  - label: "Gateway API — Introduction"
+    url: "https://gateway-api.sigs.k8s.io/"
+    kind: spec
+  - label: "Gateway API — Conformance: Core, Extended, Implementation-specific"
+    url: "https://gateway-api.sigs.k8s.io/concepts/conformance/"
+    kind: spec
+  - label: "Kubernetes Blog — Gateway API v1.0: GA"
+    url: "https://kubernetes.io/blog/2023/10/31/gateway-api-ga/"
+    kind: blog
+    accessed: "2026-09-20"
+  - label: "ingress-nginx — retirement announcement"
+    url: "https://github.com/kubernetes/ingress-nginx/issues/13002"
+    kind: thread
+    accessed: "2026-09-20"
+  - label: "Envoy Gateway — Documentation"
+    url: "https://gateway.envoyproxy.io/docs/"
+    kind: docs
+---
+
+import GatewayRoles from "../../../components/diagrams/GatewayRoles.astro";
+import GreenAndBroken from "../../../components/diagrams/GreenAndBroken.astro";
+
+In March 2026 the `ingress-nginx` project was **retired**. Not deprecated with
+a ready successor: retired. The replacement its own maintainers announced — the
+InGate — never matured and was retired alongside it.
+
+That matters here for an embarrassing reason: this repository's roadmap asked
+for "a real Ingress (ingress-nginx)" for eleven months **after** the
+announcement. Nothing in the repository contradicted the line, so it aged into
+a lie in silence — exactly the failure mode the
+[market map](/en/#market) now exists to prevent.
+
+## Ingress did not die because it was bad
+
+<Term word="Ingress" alt="Ingress">
+The Kubernetes object describing how HTTP traffic from outside the cluster
+reaches the services inside. It carries the host (`app.example.com`), the paths
+(`/api` goes here, `/` goes there), the TLS certificate and the destination
+service.
+
+It still exists and still works; what ended was one of the controllers that
+implemented it.
+</Term>
+
+Ingress's problem was never technical. It routed fine. The problem is that
+**one object held decisions belonging to three different owners**, and
+Kubernetes grants permission per object type.
+
+<GatewayRoles />
+
+Whoever operates the cluster does not want a product team editing the wildcard
+certificate. The product team does not want to file a ticket to add a path.
+With Ingress there was no way to serve both: granting `update` on Ingress
+granted everything an Ingress can hold.
+
+And there was the second symptom everyone recognises: **the annotations**.
+Because the Ingress spec covered so little, each controller grew its own
+dialect of `metadata.annotations`. An annotation written for one controller is
+**silently ignored** by another — no error, no warning, manifest accepted by
+the API server.
+
+<Tradeoff
+  a="Ingress"
+  b="Gateway API"
+  whenA="One cluster, one team, one controller, simple routing that does not change. Ingress is fewer objects to maintain and still what most material on the internet explains."
+  whenB="More than one team attaching routes to the same entry point, or a need to delegate routing without delegating TLS. That is where splitting into three objects pays for having three objects."
+>
+  <Fragment slot="a">
+    One object, one implicit owner, and whatever the spec does not cover becomes
+    a controller-specific annotation — which another controller ignores without
+    complaining.
+  </Fragment>
+  <Fragment slot="b">
+    Three objects with three declared owners, and whatever is specific to one
+    implementation lives in an object **with a schema**, pointed at by
+    `parametersRef`. The API server validates it; nobody validates an
+    annotation.
+  </Fragment>
+</Tradeoff>
+
+## Installed here
+
+This cluster gained **Envoy Gateway v1.9.1** and publishes the stack on a
+second port. The two coexist on purpose:
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8081/   # via the edge
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8083/   # via the Gateway
+```
+
+The **same application**, two paths. The `edge` is the Caddy the stack has
+carried since the Docker module and behaves identically under Compose, under
+Kubernetes and under OpenTofu. The Gateway is the cluster-native path. Keeping
+them side by side is what allows comparison without hypotheticals — and
+`run_smoke`, the same one from module 1, runs through both.
+
+The controller choice was operational rather than technical, and it is recorded
+in [ADR 0021](https://github.com/arthurd3/infra-knowlogy/blob/main/docs/adr/0021-gateway-api-e-o-envoy-gateway.md):
+NGINX Gateway Fabric v2 stopped publishing a standalone manifest and installs
+only via a Helm chart, which puts Helm between the reader and the first working
+route.
+
+## And here is the discovery
+
+With the Gateway installed and without a NetworkPolicy nobody had written yet,
+the cluster reported this:
+
+```console
+$ kubectl -n infra-knowlogy get gateway stack
+NAME    CLASS   ADDRESS      PROGRAMMED   AGE
+stack   stack   172.23.0.2   True         12s
+
+$ kubectl -n infra-knowlogy get httproute stack -o jsonpath='{.status.parents[0].conditions[*].type}'
+Accepted ResolvedRefs
+```
+
+Four conditions, four greens, one attached route. And:
+
+```console
+$ curl --max-time 8 http://127.0.0.1:8083/api/links
+curl: (28) Operation timed out after 8001 milliseconds
+```
+
+<GreenAndBroken />
+
+The Envoy access log is what tells the truth:
+
+```json
+{"response_code": 0, "response_flags": "DC", "duration": 8002,
+ "route_name": "httproute/infra-knowlogy/stack/rule/0/match/0/*",
+ "upstream_host": "10.244.0.7:8080", "bytes_received": 0}
+```
+
+`DC` is *downstream disconnect*: the one who gave up was the **client**, at the
+timeout. Envoy matched the route and picked the **right** upstream. What never
+answered was the api — because its `NetworkPolicy` only accepted ingress from
+`podSelector: {app: edge}`, and the Gateway's proxy runs in another namespace.
+
+<Callout type="warn" title="Dropped is not refused">
+The packet is **dropped**, not rejected. That is why the client hangs until the
+timeout instead of getting an immediate `connection refused`, and why the api
+logs no error at all: nothing reached it. A `connection refused` would have
+pointed at the problem in half a second.
+</Callout>
+
+It is the same trap as the probes lesson, at a larger scale: **object status
+measures the control plane.** Nothing in the Gateway knows NetworkPolicy exists,
+and no Gateway condition will ever turn red because of one.
+
+The fix is a policy authorising the proxy's namespace — and the gate
+**reproduces the defect on purpose**: it deletes the policy, shows
+`Programmed=True` coexisting with the timeout, and restores it.
+
+## Matching is not rewriting
+
+The second surprise was smaller and more expensive to find. The edge's
+`Caddyfile` handles short links like this:
+
+```caddyfile
+handle_path /r/* {
+    reverse_proxy api:8080
+}
+```
+
+Caddy's `handle_path` **strips the prefix**: the api receives `/wuWrpSz`. An
+HTTPRoute with `PathPrefix: /r` matches the request and forwards the path
+**untouched** — and the api returned 404, with the route matching correctly and
+the Envoy log showing `rule/1`.
+
+```yaml
+- matches:
+    - path: {type: PathPrefix, value: /r}
+  filters:
+    - type: URLRewrite
+      urlRewrite:
+        path:
+          type: ReplacePrefixMatch
+          replacePrefixMatch: /
+```
+
+<Term word="Core, Extended and Implementation-specific" alt="conformance levels">
+The Gateway API grades every feature into three conformance levels:
+
+- **Core** — every conformant implementation provides it. Path matching,
+  `RequestRedirect`, `RequestHeaderModifier`.
+- **Extended** — standardised in the spec, but **optional**. The `URLRewrite`
+  used above is Extended.
+- **Implementation-specific** — outside the spec, via `parametersRef` to an
+  object with its own schema.
+
+That grading is the most practical advance over Ingress, and it is easy to
+underrate: before, "does this controller support path rewriting?" was answered
+by reading each one's documentation and hoping. Now there is a **name** for
+"this is optional", and a public conformance test that says who implements
+what.
+</Term>
+
+## Order does not decide routing
+
+A quiet detail that changes life for whoever maintains the file: in Caddy and in
+Ingress, rule order in the file matters. In the Gateway API it does **not**.
+
+The spec defines precedence: longest prefix wins, and ties break on declared
+criteria (method, header, query). Two people editing the same HTTPRoute cannot
+break each other's routing through careless ordering — a surprisingly common
+way to cause an incident.
+
+## The control Ingress never had
+
+```yaml
+listeners:
+  - name: http
+    protocol: HTTP
+    port: 80
+    allowedRoutes:
+      namespaces:
+        from: Same
+```
+
+`from: Same` means only this namespace may attach routes to this entry point.
+With `All`, any namespace could create an HTTPRoute for `/` and **hijack the
+site's root**.
+
+The gate proves the refusal by creating an intruding route in another namespace:
+
+```console
+$ kubectl -n gw-intruso get httproute intruso -o jsonpath='{...conditions}'
+Accepted=False · reason=NotAllowedByListeners
+```
+
+<FieldNote
+  source="Kubernetes Blog — Gateway API v1.0 GA"
+  url="https://kubernetes.io/blog/2023/10/31/gateway-api-ga/"
+  accessed="2026-09-20"
+>
+The Gateway API has been GA since October 2023 and was built by a multi-vendor
+group (Google, Microsoft, VMware, Kong, Solo.io, among others) precisely
+because no single vendor could retire the annotations on its own — they only
+disappear once the alternative is standardised. Not measured here: this cluster
+runs a single controller, and portability across implementations is exactly the
+thing a study cluster cannot prove.
+</FieldNote>
+
+<LabExercise
+  question="How would you show, without reading the application's code, that the Gateway picked the right upstream and the problem is in the network?"
+  check="sem a policy: Gateway ainda Programmed=True e a requisição NÃO completa"
+>
+  <Fragment slot="hint">
+    The Gateway's status will not help — it stays green. The component that logs
+    every request along with the upstream it chose is the proxy.
+  </Fragment>
+  <Fragment slot="answer">
+
+```bash
+kubectl -n envoy-gateway-system logs \
+  deploy/envoy-infra-knowlogy-stack-19b834ec -c envoy --tail=5
+```
+
+Look for three fields on the same line: `upstream_host` (Envoy **did** pick a
+destination), `bytes_received: 0` (no response came back) and
+`response_flags: "DC"` (the client is the one who gave up). Together they say
+"routing correct, data path blocked" — and they rule out the application.
+
+  </Fragment>
+</LabExercise>
+
+<Quiz set="gateway-api" />

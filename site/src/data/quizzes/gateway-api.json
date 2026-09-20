@@ -1,0 +1,152 @@
+{
+  "note_pt": "As perguntas vêm das duas descobertas medidas ao instalar a Gateway API neste cluster.",
+  "note_en": "The questions come from the two measured discoveries of installing the Gateway API on this cluster.",
+  "pt": [
+    {
+      "q": "O Gateway reporta `Programmed=True`, a HTTPRoute reporta `Accepted=True` e `ResolvedRefs=True`, o listener conta 1 rota anexada — e todo `curl` dá timeout. O que isso NÃO pode ser?",
+      "options": [
+        {
+          "text": "Um erro de roteamento: a rota casou e o upstream certo foi escolhido.",
+          "correct": true,
+          "why": "`ResolvedRefs=True` diz que o backend existe e foi resolvido, e o log de acesso do Envoy mostra `upstream_host` preenchido com o IP do pod certo. O roteamento fez o trabalho dele. O que falhou está depois: o pacote foi descartado pela NetworkPolicy, e nenhuma condição do Gateway jamais reflete isso."
+        },
+        {
+          "text": "Uma NetworkPolicy bloqueando o proxy.",
+          "why": "É exatamente o que era. Status de objeto mede o plano de CONTROLE; nada no Gateway sabe que NetworkPolicy existe, então ele permanece verde enquanto o caminho de dados está cortado."
+        },
+        {
+          "text": "O pod de destino não respondendo.",
+          "why": "É uma hipótese válida com esse sintoma — e é por isso que o log do Envoy importa: `bytes_received: 0` com `response_flags: \"DC\"` diz que o cliente desistiu antes de qualquer byte voltar, o que é compatível tanto com upstream mudo quanto com pacote descartado. Descartar a aplicação exige olhar se ela sequer recebeu a conexão."
+        }
+      ]
+    },
+    {
+      "q": "Por que o cliente PENDURA até o timeout em vez de levar `connection refused` imediato?",
+      "options": [
+        {
+          "text": "Porque o Envoy mantém a conexão aberta esperando o upstream.",
+          "why": "O Envoy realmente espera — mas ele espera porque o SYN dele para o pod não é respondido. Quem escolhe o timeout observado é o `--max-time` do curl, e o `response_flags: \"DC\"` prova que o cliente desistiu primeiro."
+        },
+        {
+          "text": "Porque a NetworkPolicy DESCARTA o pacote, e descartar não gera resposta nenhuma.",
+          "correct": true,
+          "why": "`connection refused` é um TCP RST — uma resposta ativa de quem recusa. Uma policy que dropa simplesmente não responde, então o cliente fica retransmitindo o SYN até o próprio timeout dele. A diferença é prática: um RST teria apontado o problema em meio segundo."
+        },
+        {
+          "text": "Porque falta `timeout` configurado na HTTPRoute.",
+          "why": "Um timeout na rota mudaria QUEM desiste primeiro e transformaria o pendurado num 504 — o que seria melhor diagnóstico. Mas não é a causa do bloqueio; é só o sintoma ficando mais legível."
+        }
+      ]
+    },
+    {
+      "q": "A HTTPRoute casou `/r/abc123` com `PathPrefix: /r` e a api devolveu 404. Por quê?",
+      "options": [
+        {
+          "text": "Faltou `ResolvedRefs` no backend.",
+          "why": "`ResolvedRefs=False` daria 500 do próprio Envoy, com a rota nem chegando ao upstream. Um 404 vindo com `upstream_host` preenchido é a APLICAÇÃO respondendo — e aplicação respondendo já prova que a rede e o roteamento funcionaram."
+        },
+        {
+          "text": "O prefixo `/r` é curto demais e perdeu para a regra `/`.",
+          "why": "Se tivesse perdido para `/`, o destino seria o `web` e não a api. O log do Envoy mostrou `rule/1` e o upstream da api: a precedência por prefixo mais longo funcionou corretamente."
+        },
+        {
+          "text": "Casar não reescreve: o caminho chegou íntegro na api, que espera `/abc123`.",
+          "correct": true,
+          "why": "O `handle_path /r/*` do Caddy remove o prefixo antes de encaminhar; a Gateway API encaminha o caminho como veio. São comportamentos diferentes para uma configuração que parece a mesma. A correção é o filtro `URLRewrite` com `ReplacePrefixMatch: /` — que é de nível Extended, e não Core."
+        }
+      ]
+    },
+    {
+      "q": "Qual a diferença prática entre `allowedRoutes: {namespaces: {from: Same}}` e `from: All`?",
+      "options": [
+        {
+          "text": "`Same` é mais rápido porque o controlador observa menos namespaces.",
+          "why": "O controlador observa o cluster inteiro de qualquer jeito — ele precisa saber que a rota intrusa existe para poder marcá-la como recusada. A diferença é de autorização, não de desempenho."
+        },
+        {
+          "text": "`All` só funciona com ReferenceGrant.",
+          "why": "O ReferenceGrant governa outra coisa: referência a BACKEND em outro namespace. Anexar a rota a um Gateway de outro namespace é governado pelo `allowedRoutes` do listener. São dois controles distintos e é comum confundi-los."
+        },
+        {
+          "text": "Com `All`, qualquer namespace pode pendurar uma rota para `/` e sequestrar a raiz do site.",
+          "correct": true,
+          "why": "É o controle que o Ingress não tinha: quem OPERA o cluster decide quais namespaces podem usar aquele ponto de entrada. O portão prova a recusa criando uma rota intrusa e conferindo `reason=NotAllowedByListeners`."
+        }
+      ]
+    }
+  ],
+  "en": [
+    {
+      "q": "The Gateway reports `Programmed=True`, the HTTPRoute reports `Accepted=True` and `ResolvedRefs=True`, the listener counts 1 attached route — and every `curl` times out. What can this NOT be?",
+      "options": [
+        {
+          "text": "A routing error: the route matched and the right upstream was chosen.",
+          "correct": true,
+          "why": "`ResolvedRefs=True` says the backend exists and was resolved, and the Envoy access log shows `upstream_host` filled in with the right pod IP. Routing did its job. The failure is downstream of it: the packet was dropped by the NetworkPolicy, and no Gateway condition ever reflects that."
+        },
+        {
+          "text": "A NetworkPolicy blocking the proxy.",
+          "why": "That is exactly what it was. Object status measures the CONTROL plane; nothing in the Gateway knows NetworkPolicy exists, so it stays green while the data path is severed."
+        },
+        {
+          "text": "The destination pod not answering.",
+          "why": "It is a valid hypothesis with that symptom — which is why the Envoy log matters: `bytes_received: 0` with `response_flags: \"DC\"` says the client gave up before any byte came back, which fits both a mute upstream and a dropped packet. Ruling out the application means checking whether it even received the connection."
+        }
+      ]
+    },
+    {
+      "q": "Why does the client HANG until timeout instead of getting an immediate `connection refused`?",
+      "options": [
+        {
+          "text": "Because Envoy holds the connection open waiting on the upstream.",
+          "why": "Envoy does wait — but it waits because its own SYN to the pod goes unanswered. What sets the observed timeout is curl's `--max-time`, and `response_flags: \"DC\"` proves the client gave up first."
+        },
+        {
+          "text": "Because the NetworkPolicy DROPS the packet, and dropping produces no response at all.",
+          "correct": true,
+          "why": "`connection refused` is a TCP RST — an active answer from whoever refuses. A policy that drops simply does not answer, so the client keeps retransmitting the SYN until its own timeout. The difference is practical: an RST would have pointed at the problem in half a second."
+        },
+        {
+          "text": "Because the HTTPRoute has no `timeout` configured.",
+          "why": "A route timeout would change WHO gives up first and turn the hang into a 504 — which would be a better diagnostic. But it is not the cause of the block; it only makes the symptom more legible."
+        }
+      ]
+    },
+    {
+      "q": "The HTTPRoute matched `/r/abc123` with `PathPrefix: /r` and the api returned 404. Why?",
+      "options": [
+        {
+          "text": "The backend was missing `ResolvedRefs`.",
+          "why": "`ResolvedRefs=False` would produce a 500 from Envoy itself, with the route never reaching an upstream. A 404 arriving with `upstream_host` filled in is the APPLICATION answering — and an answering application already proves network and routing worked."
+        },
+        {
+          "text": "The `/r` prefix is too short and lost to the `/` rule.",
+          "why": "Had it lost to `/`, the destination would be `web` and not the api. The Envoy log showed `rule/1` and the api upstream: longest-prefix precedence worked correctly."
+        },
+        {
+          "text": "Matching does not rewrite: the path arrived intact at the api, which expects `/abc123`.",
+          "correct": true,
+          "why": "Caddy's `handle_path /r/*` strips the prefix before forwarding; the Gateway API forwards the path as-is. Different behaviours for configuration that looks the same. The fix is the `URLRewrite` filter with `ReplacePrefixMatch: /` — which is Extended level, not Core."
+        }
+      ]
+    },
+    {
+      "q": "What is the practical difference between `allowedRoutes: {namespaces: {from: Same}}` and `from: All`?",
+      "options": [
+        {
+          "text": "`Same` is faster because the controller watches fewer namespaces.",
+          "why": "The controller watches the whole cluster regardless — it has to know the intruding route exists in order to mark it refused. The difference is authorisation, not performance."
+        },
+        {
+          "text": "`All` only works together with a ReferenceGrant.",
+          "why": "ReferenceGrant governs a different thing: referencing a BACKEND in another namespace. Attaching a route to a Gateway in another namespace is governed by the listener's `allowedRoutes`. Two distinct controls, and commonly confused."
+        },
+        {
+          "text": "With `All`, any namespace can attach a route for `/` and hijack the site's root.",
+          "correct": true,
+          "why": "This is the control Ingress never had: whoever OPERATES the cluster decides which namespaces may use that entry point. The gate proves the refusal by creating an intruding route and checking for `reason=NotAllowedByListeners`."
+        }
+      ]
+    }
+  ]
+}

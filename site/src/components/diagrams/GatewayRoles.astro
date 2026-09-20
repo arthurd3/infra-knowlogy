@@ -1,0 +1,80 @@
+---
+/** k8s-04 — o Ingress era um objeto; a Gateway API são três, um por papel. */
+import Figure from "../Figure.astro";
+import type { Lang } from "../../i18n/ui";
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+const C = {
+  pt: {
+    antes: "ANTES — Ingress", depois: "DEPOIS — Gateway API",
+    ing: "Ingress", ingSub: "host · TLS · caminhos · backend",
+    ingAnn: "+ anotações do controlador",
+    ingQuem: "quem edita? todo mundo",
+    gc: "GatewayClass", gcQuem: "quem FORNECE a infraestrutura",
+    gcO: "“existe esta implementação, e é este controlador que a atende”",
+    gw: "Gateway", gwQuem: "quem OPERA o cluster",
+    gwO: "“porta 80, este certificado, aceita rotas de QUAIS namespaces”",
+    rt: "HTTPRoute", rtQuem: "quem DESENVOLVE a aplicação",
+    rtO: "“/api vai para a api; / vai para o web”",
+    rbac: "dá para conceder HTTPRoute e negar Gateway — com Ingress, não dava",
+    caption:
+      "A Gateway API não é o Ingress com outro nome: é a resposta a um problema <b>organizacional</b>. O Ingress juntava num objeto só decisões de três donos diferentes, e não havia como dar a um time o direito de acrescentar um caminho sem dar, junto, o direito de trocar o certificado curinga. A separação em três objetos é operacionalizável em RBAC.",
+    alt: "À esquerda, um único objeto Ingress com tudo dentro; à direita, três objetos, um por papel.",
+  },
+  en: {
+    antes: "BEFORE — Ingress", depois: "AFTER — Gateway API",
+    ing: "Ingress", ingSub: "host · TLS · paths · backend",
+    ingAnn: "+ controller annotations",
+    ingQuem: "who edits it? everyone",
+    gc: "GatewayClass", gcQuem: "who PROVIDES the infrastructure",
+    gcO: "“this implementation exists, and this controller serves it”",
+    gw: "Gateway", gwQuem: "who OPERATES the cluster",
+    gwO: "“port 80, this certificate, accepts routes from WHICH namespaces”",
+    rt: "HTTPRoute", rtQuem: "who DEVELOPS the application",
+    rtO: "“/api goes to the api; / goes to the web”",
+    rbac: "you can grant HTTPRoute and deny Gateway — with Ingress you could not",
+    caption:
+      "The Gateway API is not Ingress renamed: it answers an <b>organizational</b> problem. Ingress packed decisions belonging to three different owners into one object, and there was no way to let a team add a path without also letting it swap the wildcard certificate. Splitting it into three objects is expressible in RBAC.",
+    alt: "On the left a single Ingress object holding everything; on the right three objects, one per role.",
+  },
+}[lang];
+---
+<Figure caption={C.caption} alt={C.alt}>
+  <svg viewBox="0 0 720 290" xmlns="http://www.w3.org/2000/svg" font-size="11">
+    <text x="14" y="16" class="dg-muted" font-weight="620" font-size="10.5">{C.antes}</text>
+    <rect x="14" y="26" width="190" height="104" rx="6" class="dg-box" />
+    <text x="109" y="50" text-anchor="middle" font-weight="640">{C.ing}</text>
+    <text x="109" y="68" text-anchor="middle" class="dg-faint" font-size="9.5">{C.ingSub}</text>
+    <text x="109" y="84" text-anchor="middle" class="dg-faint" font-size="9.5">{C.ingAnn}</text>
+    <line x1="30" y1="96" x2="188" y2="96" class="dg-line" stroke-dasharray="3 3" />
+    <text x="109" y="114" text-anchor="middle" class="dg-fill-warn" font-size="9.5">{C.ingQuem}</text>
+
+    <path d="M218 78 L252 78" class="dg-line" marker-end="url(#dg-arrow)" />
+
+    <text x="268" y="16" class="dg-muted" font-weight="620" font-size="10.5">{C.depois}</text>
+    <g>
+      <rect x="268" y="26" width="438" height="62" rx="6" class="dg-box dg-box--accent" />
+      <text x="284" y="47" font-weight="640">{C.gc}</text>
+      <text x="284" y="63" class="dg-muted" font-size="9.5">{C.gcQuem}</text>
+      <text x="284" y="78" class="dg-faint" font-size="9.5">{C.gcO}</text>
+    </g>
+    <g>
+      <rect x="268" y="96" width="438" height="62" rx="6" class="dg-box" />
+      <text x="284" y="117" font-weight="640">{C.gw}</text>
+      <text x="284" y="133" class="dg-muted" font-size="9.5">{C.gwQuem}</text>
+      <text x="284" y="148" class="dg-faint" font-size="9.5">{C.gwO}</text>
+    </g>
+    <g>
+      <rect x="268" y="166" width="438" height="62" rx="6" class="dg-box" />
+      <text x="284" y="187" font-weight="640">{C.rt}</text>
+      <text x="284" y="203" class="dg-muted" font-size="9.5">{C.rtQuem}</text>
+      <text x="284" y="218" class="dg-faint" font-size="9.5">{C.rtO}</text>
+    </g>
+    <text x="487" y="252" text-anchor="middle" class="dg-muted" font-size="10">{C.rbac}</text>
+    <defs>
+      <marker id="dg-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+        <path d="M0 0 L8 4 L0 8 z" fill="var(--border-strong)" />
+      </marker>
+    </defs>
+  </svg>
+</Figure>

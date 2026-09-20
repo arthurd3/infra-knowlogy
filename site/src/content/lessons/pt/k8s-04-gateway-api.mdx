@@ -1,0 +1,275 @@
+---
+key: gateway-api
+lang: pt
+track: kubernetes
+order: 4
+title: "A Gateway API, e o verde que mente"
+summary: "O ingress-nginx foi aposentado em março de 2026 e o substituto anunciado morreu junto. O sucessor é a Gateway API — que não é o Ingress renomeado, é a separação de três papéis. Instalada aqui, com uma descoberta: todo o status fica verde e nada roteia."
+minutes: 16
+tags: [kubernetes, gateway-api, ingress, envoy, networkpolicy, roteamento]
+sources:
+  - label: "Gateway API — Introduction"
+    url: "https://gateway-api.sigs.k8s.io/"
+    kind: spec
+  - label: "Gateway API — Conformance: Core, Extended, Implementation-specific"
+    url: "https://gateway-api.sigs.k8s.io/concepts/conformance/"
+    kind: spec
+  - label: "Kubernetes Blog — Gateway API v1.0: GA"
+    url: "https://kubernetes.io/blog/2023/10/31/gateway-api-ga/"
+    kind: blog
+    accessed: "2026-09-20"
+  - label: "ingress-nginx — retirement announcement"
+    url: "https://github.com/kubernetes/ingress-nginx/issues/13002"
+    kind: thread
+    accessed: "2026-09-20"
+  - label: "Envoy Gateway — Documentation"
+    url: "https://gateway.envoyproxy.io/docs/"
+    kind: docs
+---
+
+import GatewayRoles from "../../../components/diagrams/GatewayRoles.astro";
+import GreenAndBroken from "../../../components/diagrams/GreenAndBroken.astro";
+
+Em março de 2026 o projeto `ingress-nginx` foi **aposentado**. Não descontinuado
+com um substituto pronto: aposentado. O sucessor que os próprios mantenedores
+anunciaram — o InGate — nunca amadureceu e foi aposentado junto.
+
+Isso importa aqui por uma razão constrangedora: o roadmap deste repositório
+pediu "Ingress de verdade (ingress-nginx)" durante onze meses **depois** do
+anúncio. Nada no repositório contradizia a linha, então ela envelheceu mentindo
+em silêncio — que é exatamente o gênero de erro que o
+[mapa de mercado](/pt/#market) passou a impedir.
+
+## O Ingress não morreu por ser ruim
+
+<Term word="Ingress" alt="Ingress">
+O objeto do Kubernetes que descreve como o tráfego HTTP de fora do cluster
+chega aos serviços de dentro. Ele carrega o host (`app.exemplo.com`), os
+caminhos (`/api` vai para cá, `/` vai para lá), o certificado TLS e o serviço
+de destino.
+
+Continua existindo e continua funcionando; o que acabou foi um dos
+controladores que o implementavam.
+</Term>
+
+O problema do Ingress nunca foi técnico. Ele roteava bem. O problema é que
+**um objeto só continha decisões de três donos diferentes**, e o Kubernetes
+concede permissão por tipo de objeto.
+
+<GatewayRoles />
+
+Quem opera o cluster não quer que um time de produto edite o certificado
+curinga. O time de produto não quer abrir ticket para acrescentar um caminho.
+Com Ingress não havia como atender os dois: conceder `update` em Ingress
+concedia tudo o que cabe num Ingress.
+
+E havia o segundo sintoma, que todo mundo reconhece: **as anotações**. Como a
+especificação do Ingress cobria pouco, cada controlador cresceu um dialeto
+próprio de `metadata.annotations`. Uma anotação escrita para um controlador é
+**ignorada em silêncio** por outro — sem erro, sem aviso, com o manifesto
+aceito pelo API server.
+
+<Tradeoff
+  a="Ingress"
+  b="Gateway API"
+  whenA="Um cluster, um time, um controlador, roteamento simples e que não muda. O Ingress é menos objeto para manter e ainda é o que mais material da internet explica."
+  whenB="Mais de um time pendurando rota no mesmo ponto de entrada, ou necessidade de delegar roteamento sem delegar TLS. É aí que a separação em três objetos paga o custo de ter três objetos."
+>
+  <Fragment slot="a">
+    Um objeto, um dono implícito, e o que a especificação não cobre vira
+    anotação específica do controlador — que outro controlador ignora sem
+    reclamar.
+  </Fragment>
+  <Fragment slot="b">
+    Três objetos com três donos declarados, e o que é específico de uma
+    implementação mora num objeto **com schema**, apontado por `parametersRef`.
+    O API server valida; anotação ninguém valida.
+  </Fragment>
+</Tradeoff>
+
+## Instalada aqui
+
+Este cluster ganhou o **Envoy Gateway v1.9.1** e publica a stack numa segunda
+porta. As duas convivem de propósito:
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8081/   # pelo edge
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8083/   # pelo Gateway
+```
+
+A **mesma aplicação**, dois caminhos. O `edge` é o Caddy que a stack carrega
+consigo desde o módulo Docker e funciona igual em Compose, em Kubernetes e sob
+OpenTofu. O Gateway é o caminho nativo do cluster. Mantê-los lado a lado é o que
+permite comparar sem hipótese — e o `run_smoke`, o mesmo do módulo 1, roda pelos
+dois.
+
+A escolha do controlador foi operacional e não técnica, e está na
+[ADR 0021](https://github.com/arthurd3/infra-knowlogy/blob/main/docs/adr/0021-gateway-api-e-o-envoy-gateway.md):
+o NGINX Gateway Fabric v2 deixou de publicar manifesto avulso e só instala por
+chart Helm, o que põe o Helm entre o leitor e a primeira rota funcionando.
+
+## E aqui a descoberta
+
+Com o Gateway instalado e sem uma NetworkPolicy que ninguém tinha escrito
+ainda, o cluster respondeu isto:
+
+```console
+$ kubectl -n infra-knowlogy get gateway stack
+NAME    CLASS   ADDRESS      PROGRAMMED   AGE
+stack   stack   172.23.0.2   True         12s
+
+$ kubectl -n infra-knowlogy get httproute stack -o jsonpath='{.status.parents[0].conditions[*].type}'
+Accepted ResolvedRefs
+```
+
+Quatro condições, quatro verdes, uma rota anexada. E:
+
+```console
+$ curl --max-time 8 http://127.0.0.1:8083/api/links
+curl: (28) Operation timed out after 8001 milliseconds
+```
+
+<GreenAndBroken />
+
+O log de acesso do Envoy é quem conta a verdade:
+
+```json
+{"response_code": 0, "response_flags": "DC", "duration": 8002,
+ "route_name": "httproute/infra-knowlogy/stack/rule/0/match/0/*",
+ "upstream_host": "10.244.0.7:8080", "bytes_received": 0}
+```
+
+`DC` é *downstream disconnect*: quem desistiu foi o **cliente**, no timeout. O
+Envoy casou a rota e escolheu o upstream **certo**. Quem não respondeu foi a
+api — porque a `NetworkPolicy` dela só aceitava ingresso de
+`podSelector: {app: edge}`, e o proxy do Gateway roda em outro namespace.
+
+<Callout type="warn" title="Descartado não é recusado">
+O pacote é **dropado**, não rejeitado. Por isso o cliente pendura até o timeout
+em vez de levar `connection refused` imediato, e por isso a api não registra
+erro nenhum: nada chegou nela. Um `connection refused` teria apontado o
+problema em meio segundo.
+</Callout>
+
+É a mesma armadilha da lição de probes, em escala maior: **status de objeto mede
+o plano de controle.** Nada no Gateway sabe que NetworkPolicy existe, e nenhuma
+condição do Gateway jamais ficará vermelha por causa de uma.
+
+A correção é uma policy que autoriza o namespace do proxy — e o portão
+**reproduz o defeito de propósito**: apaga a policy, mostra `Programmed=True`
+convivendo com o timeout, e restaura.
+
+## Casar não é reescrever
+
+A segunda surpresa foi menor e mais cara de achar. O `Caddyfile` do edge trata
+os links curtos assim:
+
+```caddyfile
+handle_path /r/* {
+    reverse_proxy api:8080
+}
+```
+
+O `handle_path` do Caddy **remove o prefixo**: a api recebe `/wuWrpSz`. Uma
+HTTPRoute com `PathPrefix: /r` casa a requisição e encaminha o caminho
+**intacto** — e a api devolveu 404, com a rota casando corretamente e o log do
+Envoy mostrando `rule/1`.
+
+```yaml
+- matches:
+    - path: {type: PathPrefix, value: /r}
+  filters:
+    - type: URLRewrite
+      urlRewrite:
+        path:
+          type: ReplacePrefixMatch
+          replacePrefixMatch: /
+```
+
+<Term word="Core, Extended e Implementation-specific" alt="conformance levels">
+A Gateway API gradua cada funcionalidade em três níveis de conformidade:
+
+- **Core** — toda implementação conforme oferece. Casamento por caminho,
+  `RequestRedirect`, `RequestHeaderModifier`.
+- **Extended** — padronizado na especificação, mas **opcional**. O
+  `URLRewrite` usado acima é Extended.
+- **Implementation-specific** — fora da especificação, via `parametersRef`
+  para um objeto com schema próprio.
+
+Essa graduação é o avanço mais prático sobre o Ingress, e é fácil subestimá-lo:
+antes, "este controlador suporta reescrita de caminho?" se respondia lendo a
+documentação de cada um e torcendo. Agora existe um **nome** para "isto é
+opcional", e um teste de conformidade público que diz quem implementa o quê.
+</Term>
+
+## Ordem não decide roteamento
+
+Um detalhe silencioso que muda a vida de quem mantém o arquivo: no Caddy e no
+Ingress, a ordem das regras no arquivo importa. Na Gateway API, **não**.
+
+A especificação define a precedência: prefixo mais longo ganha, e empates
+desempatam por critérios declarados (método, header, query). Duas pessoas
+editando a mesma HTTPRoute não conseguem quebrar o roteamento uma da outra por
+descuido de ordenação — que é um jeito surpreendentemente comum de causar
+incidente.
+
+## O controle que o Ingress não tinha
+
+```yaml
+listeners:
+  - name: http
+    protocol: HTTP
+    port: 80
+    allowedRoutes:
+      namespaces:
+        from: Same
+```
+
+`from: Same` significa que só o próprio namespace pode pendurar rota neste
+ponto de entrada. Com `All`, qualquer namespace poderia criar uma HTTPRoute para
+`/` e **sequestrar a raiz do site**.
+
+O portão prova a recusa criando uma rota intrusa em outro namespace:
+
+```console
+$ kubectl -n gw-intruso get httproute intruso -o jsonpath='{...conditions}'
+Accepted=False · reason=NotAllowedByListeners
+```
+
+<FieldNote
+  source="Kubernetes Blog — Gateway API v1.0 GA"
+  url="https://kubernetes.io/blog/2023/10/31/gateway-api-ga/"
+  accessed="2026-09-20"
+>
+A Gateway API é GA desde outubro de 2023 e foi construída por um grupo
+multi-fornecedor (Google, Microsoft, VMware, Kong, Solo.io, entre outros)
+justamente porque nenhum fornecedor sozinho conseguiria aposentar as anotações
+— elas só somem quando a alternativa é padronizada. Não medido aqui: este
+cluster tem um controlador só, e a portabilidade entre implementações é
+exatamente a coisa que um cluster de estudo não consegue provar.
+</FieldNote>
+
+<LabExercise
+  question="Como você mostraria, sem olhar o código da aplicação, que o Gateway escolheu o upstream certo e o problema está na rede?"
+  check="sem a policy: Gateway ainda Programmed=True e a requisição NÃO completa"
+>
+  <Fragment slot="hint">
+    O status do Gateway não vai ajudar — ele fica verde. Quem registra cada
+    requisição com o upstream escolhido é o proxy.
+  </Fragment>
+  <Fragment slot="answer">
+
+```bash
+kubectl -n envoy-gateway-system logs \
+  deploy/envoy-infra-knowlogy-stack-19b834ec -c envoy --tail=5
+```
+
+Procure três campos na mesma linha: `upstream_host` (o Envoy **escolheu** um
+destino), `bytes_received: 0` (não veio resposta nenhuma) e
+`response_flags: "DC"` (quem desistiu foi o cliente). Os três juntos dizem
+"roteamento certo, caminho de dados bloqueado" — e excluem a aplicação.
+
+  </Fragment>
+</LabExercise>
+
+<Quiz set="gateway-api" />

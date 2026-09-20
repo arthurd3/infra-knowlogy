@@ -1,0 +1,84 @@
+---
+/** k8s-04 — todo o status verde, e nenhuma requisição completa. */
+import Figure from "../Figure.astro";
+import type { Lang } from "../../i18n/ui";
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+const C = {
+  pt: {
+    controle: "PLANO DE CONTROLE — o que os objetos dizem",
+    dados: "PLANO DE DADOS — o que acontece com o pacote",
+    g1: "Gateway  Programmed=True",
+    g2: "listener http  attachedRoutes=1",
+    g3: "HTTPRoute  Accepted=True",
+    g4: "HTTPRoute  ResolvedRefs=True",
+    cliente: "curl", envoy: "Envoy", api: "pod api",
+    ok1: "conecta", ok2: "casa a rota, escolhe o upstream CERTO",
+    drop: "DESCARTADO pela NetworkPolicy",
+    log: 'log do Envoy: "response_flags":"DC" · "bytes_received":0',
+    pend: "o cliente pendura até o timeout — não leva “connection refused”",
+    licao: "status de objeto mede o plano de CONTROLE. Nada no Gateway sabe que NetworkPolicy existe.",
+    caption:
+      "Medido neste cluster: sem a policy que autoriza o proxy, <b>todos os quatro sinais ficam verdes</b> e nenhuma requisição completa. O pacote é descartado e não recusado, então o cliente pendura em vez de levar erro — e a api não registra nada, porque nada chegou nela. Quem conta a verdade é o log de acesso do Envoy. O portão reproduz isso de propósito.",
+    alt: "Acima, quatro condições verdes; abaixo, o pacote sendo descartado entre o Envoy e o pod.",
+  },
+  en: {
+    controle: "CONTROL PLANE — what the objects say",
+    dados: "DATA PLANE — what happens to the packet",
+    g1: "Gateway  Programmed=True",
+    g2: "listener http  attachedRoutes=1",
+    g3: "HTTPRoute  Accepted=True",
+    g4: "HTTPRoute  ResolvedRefs=True",
+    cliente: "curl", envoy: "Envoy", api: "api pod",
+    ok1: "connects", ok2: "matches the route, picks the RIGHT upstream",
+    drop: "DROPPED by the NetworkPolicy",
+    log: 'Envoy log: "response_flags":"DC" · "bytes_received":0',
+    pend: "the client hangs until timeout — it never gets “connection refused”",
+    licao: "object status measures the CONTROL plane. Nothing in the Gateway knows NetworkPolicy exists.",
+    caption:
+      "Measured on this cluster: without the policy authorising the proxy, <b>all four signals are green</b> and no request completes. The packet is dropped rather than refused, so the client hangs instead of erroring — and the api logs nothing, because nothing reached it. The Envoy access log is what tells the truth. The gate reproduces this on purpose.",
+    alt: "Above, four green conditions; below, the packet being dropped between Envoy and the pod.",
+  },
+}[lang];
+---
+<Figure caption={C.caption} alt={C.alt}>
+  <svg viewBox="0 0 720 268" xmlns="http://www.w3.org/2000/svg" font-size="11">
+    <text x="14" y="15" class="dg-muted" font-weight="620" font-size="10.5">{C.controle}</text>
+    <rect x="14" y="24" width="692" height="60" rx="6" class="dg-box" />
+    {[C.g1, C.g2, C.g3, C.g4].map((t, i) => (
+      <g>
+        <circle cx={34 + (i % 2) * 348} cy={44 + Math.floor(i / 2) * 24} r="4.5" class="dg-fill-accent" />
+        <text x={46 + (i % 2) * 348} y={48 + Math.floor(i / 2) * 24} font-size="10">{t}</text>
+      </g>
+    ))}
+
+    <text x="14" y="112" class="dg-muted" font-weight="620" font-size="10.5">{C.dados}</text>
+    <rect x="14" y="122" width="96" height="40" rx="6" class="dg-box" />
+    <text x="62" y="146" text-anchor="middle" font-weight="620">{C.cliente}</text>
+    <path d="M114 142 L186 142" class="dg-line" marker-end="url(#gb-arrow)" />
+    <text x="150" y="134" text-anchor="middle" class="dg-faint" font-size="9">{C.ok1}</text>
+
+    <rect x="190" y="122" width="120" height="40" rx="6" class="dg-box dg-box--accent" />
+    <text x="250" y="146" text-anchor="middle" font-weight="620">{C.envoy}</text>
+    <path d="M314 142 L470 142" class="dg-line" stroke-dasharray="4 4" />
+    <text x="392" y="134" text-anchor="middle" class="dg-faint" font-size="9">{C.ok2}</text>
+    <g>
+      <line x1="470" y1="128" x2="494" y2="156" class="dg-line dg-line--warn" stroke-width="2.5" />
+      <line x1="494" y1="128" x2="470" y2="156" class="dg-line dg-line--warn" stroke-width="2.5" />
+    </g>
+    <text x="482" y="176" text-anchor="middle" class="dg-fill-warn" font-size="9.5">{C.drop}</text>
+
+    <rect x="530" y="122" width="176" height="40" rx="6" class="dg-box" />
+    <text x="618" y="146" text-anchor="middle" class="dg-faint">{C.api}</text>
+
+    <text x="14" y="206" class="dg-faint" font-size="9.5">{C.log}</text>
+    <text x="14" y="222" class="dg-faint" font-size="9.5">{C.pend}</text>
+    <line x1="14" y1="234" x2="706" y2="234" class="dg-line" stroke-dasharray="3 3" />
+    <text x="360" y="252" text-anchor="middle" class="dg-fill-warn" font-size="10" font-weight="620">{C.licao}</text>
+    <defs>
+      <marker id="gb-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+        <path d="M0 0 L8 4 L0 8 z" fill="var(--border-strong)" />
+      </marker>
+    </defs>
+  </svg>
+</Figure>
