@@ -62,6 +62,18 @@ else
   else
     bad "kubeconform"; sed 's/^/       /' /tmp/k8s-conform.txt | head -10
   fi
+
+  # Helm x Kustomize, decidido por diff e não por adjetivo. As duas descrições
+  # do MESMO serviço `web` — k8s/base/web/ em kustomize e k8s/charts/web/ em
+  # Helm — são renderizadas e comparadas campo a campo. Diferença nenhuma é o
+  # que dá direito de dizer "as duas resolvem o mesmo problema"; a escolha
+  # entre elas é sobre distribuição, e a lição trata disso.
+  if python3 tools/scripts/k8s-helm-vs-kustomize.py >/tmp/k8s-helm.txt 2>&1; then
+    ok "helm template ≡ kubectl kustomize (${MSG_HELM:-$(tr -s ' ' <"/tmp/k8s-helm.txt" | head -1 | sed 's/^ //')})"
+  else
+    bad "o chart Helm e o overlay Kustomize DIVERGEM:"
+    sed 's/^/       /' /tmp/k8s-helm.txt | head -8
+  fi
 fi
 
 # ─── 2. Build + cluster ──────────────────────────────────────────────────────
