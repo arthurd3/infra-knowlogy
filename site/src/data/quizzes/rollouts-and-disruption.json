@@ -1,0 +1,152 @@
+{
+  "note_pt": "As perguntas separam o que o rollout resolve, o que a aplicação precisa resolver e o que o PDB não alcança.",
+  "note_en": "The questions separate what the rollout solves, what the application must solve, and what the PDB cannot reach.",
+  "pt": [
+    {
+      "q": "O portão mede 26 requisições e 0 falhas durante um rolling update. O que faz esse zero existir?",
+      "options": [
+        {
+          "text": "O `maxUnavailable` do Deployment, que garante réplica de pé o tempo todo.",
+          "why": "Ele garante que há réplica DISPONÍVEL, e isso é necessário — mas não resolve a corrida do pod que está saindo. As conexões novas continuam chegando nele por alguns instantes depois do SIGTERM."
+        },
+        {
+          "text": "O `SHUTDOWN_DELAY` da aplicação: ela continua aceitando por 2 s DEPOIS de decidir morrer.",
+          "correct": true,
+          "why": "Remoção de endpoint é assíncrona e distribuída: cada kube-proxy reprograma no seu tempo. Fechar o listener no SIGTERM — que é o que todo manual ensina — recusa as conexões que ainda estão chegando. O zero é cooperação da aplicação, não do orquestrador."
+        },
+        {
+          "text": "A readinessProbe, que tira o pod do balanceamento antes do SIGTERM.",
+          "why": "A readiness reage a uma falha observada; no caminho de terminação quem remove o endpoint é o controlador, ao ver o pod entrar em Terminating. A probe não chega a reprovar nada aqui."
+        }
+      ]
+    },
+    {
+      "q": "Por que a api não usa um hook `preStop` com `sleep`, que é a solução canônica?",
+      "options": [
+        {
+          "text": "Porque `preStop` roda DEPOIS do SIGTERM e não ajudaria.",
+          "why": "Roda ANTES: o kubelet executa o hook e só então envia o sinal. Se rodasse depois, a solução canônica não funcionaria para ninguém."
+        },
+        {
+          "text": "Porque a imagem é distroless: não há `sleep`, não há shell, não há binário nenhum.",
+          "correct": true,
+          "why": "`preStop` com `exec` precisa de um binário DENTRO da imagem. Essa é a troca real do distroless — a mesma ausência de shell que tira ferramentas do invasor tira também as suas. Por isso a espera virou código da aplicação."
+        },
+        {
+          "text": "Porque `preStop` é incompatível com `terminationGracePeriodSeconds`.",
+          "why": "São complementares: o hook consome parte do período de graça, e é por isso que o período precisa ser maior que o sleep. Não há incompatibilidade."
+        }
+      ]
+    },
+    {
+      "q": "Um `kubectl drain` está parado há vinte minutos, sem erro. O que é mais provável?",
+      "options": [
+        {
+          "text": "Um PDB com `ALLOWED DISRUPTIONS` em zero recusando os despejos.",
+          "correct": true,
+          "why": "É o PDB fazendo o trabalho dele: o drain espera indefinidamente em vez de violar o orçamento. Frequentemente a causa raiz é outra — uma réplica não-Ready deixa `currentHealthy` abaixo de `desiredHealthy`, e o orçamento já estava no limite antes do drain começar."
+        },
+        {
+          "text": "O nó perdeu conexão com o API server.",
+          "why": "Aí o drain reportaria erro de conexão, não silêncio. Silêncio com progresso zero é a assinatura de espera por orçamento."
+        },
+        {
+          "text": "O PDB expirou e precisa ser recriado.",
+          "why": "PDB não tem validade nem expira. Ele é avaliado a cada pedido de eviction contra o estado atual das réplicas."
+        }
+      ]
+    },
+    {
+      "q": "Seu serviço tem PDB com `minAvailable: 1` e 2 réplicas. Um nó morre por falha de hardware, levando as duas. O PDB atuou?",
+      "options": [
+        {
+          "text": "Sim: ele impede que as duas caiam juntas.",
+          "why": "Ele impede apenas DESPEJOS simultâneos. Um nó que morre não despeja nada — os pods simplesmente deixam de existir, e não houve pedido a recusar."
+        },
+        {
+          "text": "Não: PDB é regra de admissão sobre a API de eviction, e ninguém pede licença antes de um nó falhar.",
+          "correct": true,
+          "why": "É a distinção entre disrupção voluntária e involuntária. Nó morto, OOM killer, kernel panic e hardware não passam por eviction. A resposta para involuntária é réplica em nós diferentes (`topologySpreadConstraints`), não orçamento — e confundir os dois produz uma sensação de proteção que não existe."
+        },
+        {
+          "text": "Parcialmente: ele atrasa a remoção dos endpoints.",
+          "why": "O PDB não participa da remoção de endpoints em momento nenhum. Quem faz isso é o controlador de endpoints, reagindo ao pod deixar de estar Ready."
+        }
+      ]
+    }
+  ],
+  "en": [
+    {
+      "q": "The gate measures 26 requests and 0 failures during a rolling update. What makes that zero exist?",
+      "options": [
+        {
+          "text": "The Deployment's `maxUnavailable`, which guarantees a replica is up at all times.",
+          "why": "It guarantees an AVAILABLE replica, and that is necessary — but it does not solve the race for the pod on its way out. New connections keep arriving at it for a moment after SIGTERM."
+        },
+        {
+          "text": "The application's `SHUTDOWN_DELAY`: it keeps accepting for 2 s AFTER deciding to die.",
+          "correct": true,
+          "why": "Endpoint removal is asynchronous and distributed: each kube-proxy reprograms on its own schedule. Closing the listener on SIGTERM — which is what every manual teaches — refuses the connections still arriving. The zero is the application cooperating, not the orchestrator."
+        },
+        {
+          "text": "The readinessProbe, which removes the pod from balancing before SIGTERM.",
+          "why": "Readiness reacts to an observed failure; on the termination path it is the controller that removes the endpoint, upon seeing the pod enter Terminating. The probe never fails anything here."
+        }
+      ]
+    },
+    {
+      "q": "Why does the api not use a `preStop` hook with `sleep`, the canonical solution?",
+      "options": [
+        {
+          "text": "Because `preStop` runs AFTER SIGTERM and would not help.",
+          "why": "It runs BEFORE: the kubelet executes the hook and only then sends the signal. If it ran afterwards, the canonical solution would work for nobody."
+        },
+        {
+          "text": "Because the image is distroless: no `sleep`, no shell, no binary at all.",
+          "correct": true,
+          "why": "`preStop` with `exec` needs a binary INSIDE the image. That is distroless's real trade — the same absence of a shell that denies an attacker tools denies them to you too. Which is why the wait became application code."
+        },
+        {
+          "text": "Because `preStop` is incompatible with `terminationGracePeriodSeconds`.",
+          "why": "They are complementary: the hook consumes part of the grace period, which is why the period must be longer than the sleep. There is no incompatibility."
+        }
+      ]
+    },
+    {
+      "q": "A `kubectl drain` has been stuck for twenty minutes, with no error. What is most likely?",
+      "options": [
+        {
+          "text": "A PDB with `ALLOWED DISRUPTIONS` at zero refusing the evictions.",
+          "correct": true,
+          "why": "That is the PDB doing its job: the drain waits indefinitely rather than violate the budget. Often the root cause is something else — a non-Ready replica leaves `currentHealthy` below `desiredHealthy`, and the budget was already at its limit before the drain began."
+        },
+        {
+          "text": "The node lost its connection to the API server.",
+          "why": "Then drain would report a connection error, not silence. Silence with zero progress is the signature of waiting on a budget."
+        },
+        {
+          "text": "The PDB expired and needs recreating.",
+          "why": "A PDB has no validity period and does not expire. It is evaluated on every eviction request against the current state of the replicas."
+        }
+      ]
+    },
+    {
+      "q": "Your service has a PDB with `minAvailable: 1` and 2 replicas. A node dies from hardware failure, taking both. Did the PDB act?",
+      "options": [
+        {
+          "text": "Yes: it prevents both from going down together.",
+          "why": "It prevents only simultaneous EVICTIONS. A node that dies evicts nothing — the pods simply stop existing, and there was no request to refuse."
+        },
+        {
+          "text": "No: a PDB is an admission rule over the eviction API, and nothing asks permission before a node fails.",
+          "correct": true,
+          "why": "That is the distinction between voluntary and involuntary disruption. A dead node, the OOM killer, a kernel panic and hardware do not go through eviction. The answer to involuntary disruption is replicas on different nodes (`topologySpreadConstraints`), not a budget — and confusing the two produces a feeling of protection that does not exist."
+        },
+        {
+          "text": "Partially: it delays endpoint removal.",
+          "why": "The PDB takes no part in endpoint removal at any point. That is the endpoints controller, reacting to the pod ceasing to be Ready."
+        }
+      ]
+    }
+  ]
+}

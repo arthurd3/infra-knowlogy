@@ -1,0 +1,65 @@
+---
+/** k8s-09 — o que o PDB cobre, o que o rollout cobre, e o que ninguém cobre. */
+import Figure from "../Figure.astro";
+import type { Lang } from "../../i18n/ui";
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+const C = {
+  pt: {
+    vol: "VOLUNTÁRIA — alguém PEDE licença ao API server",
+    inv: "INVOLUNTÁRIA — ninguém pede licença",
+    v1: "rolling update", v1q: "governado pelo próprio Deployment (maxUnavailable)",
+    v2: "kubectl drain de um nó", v2q: "governado pelo PDB",
+    v3: "cluster autoscaler compactando nós", v3q: "governado pelo PDB",
+    v4: "upgrade de versão pelo provedor", v4q: "governado pelo PDB",
+    i1: "o nó morre", i2: "OOM killer", i3: "hardware falha", i4: "kernel panic",
+    iq: "nada a governar: não há API de eviction num nó em chamas",
+    resp: "a resposta aqui é RÉPLICAS EM NÓS DIFERENTES, não orçamento",
+    medido: "medido: 1º despejo → 201 Success · 2º despejo → 429 TooManyRequests",
+    caption:
+      "O PDB só governa o que passa pela <b>API de eviction</b>. Rolling update não passa por ela (o Deployment se governa), e falha de hardware muito menos. Confundir os dois vira uma expectativa cara: um orçamento de disrupção não protege de nada que aconteça sem pedir licença.",
+    alt: "Duas colunas: disrupções voluntárias governadas pelo PDB e involuntárias que ninguém governa.",
+  },
+  en: {
+    vol: "VOLUNTARY — something ASKS the API server",
+    inv: "INVOLUNTARY — nothing asks",
+    v1: "rolling update", v1q: "governed by the Deployment itself (maxUnavailable)",
+    v2: "kubectl drain of a node", v2q: "governed by the PDB",
+    v3: "cluster autoscaler compacting nodes", v3q: "governed by the PDB",
+    v4: "version upgrade by the provider", v4q: "governed by the PDB",
+    i1: "the node dies", i2: "OOM killer", i3: "hardware fails", i4: "kernel panic",
+    iq: "nothing to govern: there is no eviction API on a burning node",
+    resp: "the answer here is REPLICAS ON DIFFERENT NODES, not a budget",
+    medido: "measured: 1st eviction → 201 Success · 2nd eviction → 429 TooManyRequests",
+    caption:
+      "A PDB only governs what goes through the <b>eviction API</b>. A rolling update does not (the Deployment governs itself), and a hardware failure much less. Confusing the two produces an expensive expectation: a disruption budget protects you from nothing that happens without asking.",
+    alt: "Two columns: voluntary disruptions governed by the PDB and involuntary ones nobody governs.",
+  },
+}[lang];
+---
+<Figure caption={C.caption} alt={C.alt}>
+  <svg viewBox="0 0 720 276" xmlns="http://www.w3.org/2000/svg" font-size="11">
+    <text x="14" y="15" class="dg-muted" font-weight="640" font-size="10.5">{C.vol}</text>
+    {[[C.v1, C.v1q], [C.v2, C.v2q], [C.v3, C.v3q], [C.v4, C.v4q]].map(([t, q], i) => (
+      <g>
+        <rect x="14" y={24 + i * 44} width="340" height="36" rx="5"
+              class={i === 0 ? "dg-box dg-box--dashed" : "dg-box dg-box--accent"} />
+        <text x="30" y={41 + i * 44} font-weight="620" font-size="10">{t}</text>
+        <text x="30" y={54 + i * 44} class="dg-faint" font-size="8.5">{q}</text>
+      </g>
+    ))}
+
+    <text x="380" y="15" class="dg-muted" font-weight="640" font-size="10.5">{C.inv}</text>
+    {[C.i1, C.i2, C.i3, C.i4].map((t, i) => (
+      <g>
+        <rect x="380" y={24 + i * 30} width="326" height="24" rx="5" class="dg-box dg-box--warn" />
+        <text x="396" y={40 + i * 30} class="dg-fill-warn" font-size="10">{t}</text>
+      </g>
+    ))}
+    <text x="380" y="164" class="dg-faint" font-size="8.5">{C.iq}</text>
+    <text x="380" y="180" class="dg-muted" font-size="9" font-weight="620">{C.resp}</text>
+
+    <line x1="14" y1="222" x2="706" y2="222" class="dg-line" stroke-dasharray="3 3" />
+    <text x="360" y="242" text-anchor="middle" class="dg-mono dg-muted" font-size="9.5">{C.medido}</text>
+  </svg>
+</Figure>

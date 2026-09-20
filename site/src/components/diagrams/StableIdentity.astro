@@ -1,0 +1,80 @@
+---
+/** k8s-08 — Deployment dá réplicas intercambiáveis; StatefulSet dá identidades. */
+import Figure from "../Figure.astro";
+import type { Lang } from "../../i18n/ui";
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+const C = {
+  pt: {
+    dep: "DEPLOYMENT — réplicas intercambiáveis",
+    sts: "STATEFULSET — identidades",
+    d1: "api-96499c896-6c4kd", d2: "api-96499c896-gp476", d3: "api-96499c896-t25qn",
+    dsub: "nome sorteado · morre e volta com OUTRO nome · nenhum estado seu",
+    dvol: "um PVC compartilhado, se houver — e RWO é por NÓ, não por pod",
+    s1: "db-0", s2: "db-1", s3: "db-2",
+    ssub: "nome ordinal · morre e volta com o MESMO nome",
+    svol: "um PVC POR RÉPLICA, criado do volumeClaimTemplate",
+    pvc: "pgdata-db-0", pvc1: "pgdata-db-1", pvc2: "pgdata-db-2",
+    dns: "DNS: db-0.db.infra-knowlogy.svc.cluster.local",
+    medido: "medido: apaguei o db-0 · nome igual · IP 10.244.0.64 → 10.244.0.67 · dado intacto · PVC o mesmo objeto",
+    porque: "o nome é estável porque o IP não é — é isso que o Service headless existe para nomear",
+    caption:
+      "A pergunta que escolhe entre os dois não é “tem estado?”, é <b>as réplicas são intercambiáveis?</b>. Se qualquer uma serve qualquer requisição, Deployment. Se a réplica 0 é o primário e a 1 é a réplica de leitura, alguém precisa saber <i>qual é qual</i> — e é isso que o nome ordinal mais o PVC por réplica entregam.",
+    alt: "À esquerda pods com nomes sorteados; à direita pods ordinais, cada um com seu PVC.",
+  },
+  en: {
+    dep: "DEPLOYMENT — interchangeable replicas",
+    sts: "STATEFULSET — identities",
+    d1: "api-96499c896-6c4kd", d2: "api-96499c896-gp476", d3: "api-96499c896-t25qn",
+    dsub: "random name · dies and returns with ANOTHER name · no state of its own",
+    dvol: "one shared PVC, if any — and RWO is per NODE, not per pod",
+    s1: "db-0", s2: "db-1", s3: "db-2",
+    ssub: "ordinal name · dies and returns with the SAME name",
+    svol: "one PVC PER REPLICA, created from the volumeClaimTemplate",
+    pvc: "pgdata-db-0", pvc1: "pgdata-db-1", pvc2: "pgdata-db-2",
+    dns: "DNS: db-0.db.infra-knowlogy.svc.cluster.local",
+    medido: "measured: deleted db-0 · same name · IP 10.244.0.64 → 10.244.0.67 · data intact · PVC the same object",
+    porque: "the name is stable because the IP is not — that is what the headless Service exists to name",
+    caption:
+      "The question that picks between them is not “is it stateful?”, it is <b>are the replicas interchangeable?</b>. If any one can serve any request, Deployment. If replica 0 is the primary and replica 1 is the read replica, something has to know <i>which is which</i> — and that is what the ordinal name plus a per-replica PVC deliver.",
+    alt: "On the left pods with random names; on the right ordinal pods, each with its own PVC.",
+  },
+}[lang];
+---
+<Figure caption={C.caption} alt={C.alt}>
+  <svg viewBox="0 0 720 286" xmlns="http://www.w3.org/2000/svg" font-size="11">
+    <text x="14" y="15" class="dg-muted" font-weight="640" font-size="10.5">{C.dep}</text>
+    {[C.d1, C.d2, C.d3].map((t, i) => (
+      <g>
+        <rect x="14" y={24 + i * 34} width="316" height="26" rx="5" class="dg-box" />
+        <text x="28" y={41 + i * 34} class="dg-mono dg-faint" font-size="9">{t}</text>
+      </g>
+    ))}
+    <text x="14" y="140" class="dg-faint" font-size="8.5">{C.dsub}</text>
+    <rect x="14" y="150" width="316" height="26" rx="5" class="dg-box dg-box--dashed" />
+    <text x="28" y="167" class="dg-faint" font-size="8.5">{C.dvol}</text>
+
+    <text x="390" y="15" class="dg-muted" font-weight="640" font-size="10.5">{C.sts}</text>
+    {[[C.s1, C.pvc], [C.s2, C.pvc1], [C.s3, C.pvc2]].map(([n, v], i) => (
+      <g>
+        <rect x="390" y={24 + i * 34} width="110" height="26" rx="5" class="dg-box dg-box--accent" />
+        <text x="445" y={41 + i * 34} text-anchor="middle" class="dg-mono" font-size="9.5">{n}</text>
+        <path d={`M504 ${37 + i * 34} L534 ${37 + i * 34}`} class="dg-line" marker-end="url(#si-arrow)" />
+        <rect x="538" y={24 + i * 34} width="168" height="26" rx="5" class="dg-box dg-box--dashed" />
+        <text x="622" y={41 + i * 34} text-anchor="middle" class="dg-mono dg-faint" font-size="9">{v}</text>
+      </g>
+    ))}
+    <text x="390" y="140" class="dg-faint" font-size="8.5">{C.ssub}</text>
+    <text x="390" y="152" class="dg-faint" font-size="8.5">{C.svol}</text>
+    <text x="390" y="167" class="dg-mono dg-muted" font-size="8.5">{C.dns}</text>
+
+    <line x1="14" y1="204" x2="706" y2="204" class="dg-line" stroke-dasharray="3 3" />
+    <text x="14" y="224" class="dg-muted" font-size="9.5">{C.medido}</text>
+    <text x="14" y="242" class="dg-fill-warn" font-size="10" font-weight="620">{C.porque}</text>
+    <defs>
+      <marker id="si-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+        <path d="M0 0 L10 5 L0 10 z" fill="var(--border-strong)" />
+      </marker>
+    </defs>
+  </svg>
+</Figure>

@@ -1,0 +1,223 @@
+---
+key: rollouts-and-disruption
+lang: pt
+track: kubernetes
+order: 9
+title: "Rollout, PDB e o que derruba requisição"
+summary: "O rolling update não perde requisição — mas só porque a aplicação coopera, e esse detalhe está numa variável de ambiente. E o PodDisruptionBudget governa outra coisa: as disrupções que ninguém combinou com você."
+minutes: 15
+tags: [kubernetes, rollout, pdb, eviction, disponibilidade]
+sources:
+  - label: "Kubernetes Docs — Disruptions"
+    url: "https://kubernetes.io/docs/concepts/workloads/pods/disruptions/"
+    kind: docs
+  - label: "Kubernetes Docs — Specifying a Disruption Budget"
+    url: "https://kubernetes.io/docs/tasks/run-application/configure-pdb/"
+    kind: docs
+  - label: "Kubernetes Docs — Pod Lifecycle: termination"
+    url: "https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#pod-termination"
+    kind: docs
+  - label: "Kubernetes Docs — Safely Drain a Node"
+    url: "https://kubernetes.io/docs/tasks/administer-cluster/safely-drain-node/"
+    kind: docs
+---
+
+import DisruptionKinds from "../../../components/diagrams/DisruptionKinds.astro";
+
+O portão deste módulo dispara um rolling update com um gerador de carga em cima
+e conta o resultado:
+
+```
+rolling restart com 26 requisições concorrentes e 0 falhas
+```
+
+Zero falhas parece a conclusão da história. É a **premissa**: essa linha só
+existe porque alguém escreveu duas linhas de código na aplicação.
+
+## A corrida que o Kubernetes não resolve
+
+Quando um pod entra em terminação, duas coisas acontecem **em paralelo**:
+
+1. o kubelet manda `SIGTERM` para o processo;
+2. o endpoint do pod é removido da lista, e o kube-proxy de **cada nó**
+   reprograma suas regras.
+
+A segunda é assíncrona e distribuída. Entre o `SIGTERM` chegar e o último nó
+parar de mandar conexão nova, existe uma janela — e nela o pod ainda recebe
+requisições que já não quer.
+
+Uma aplicação bem-comportada que fecha o listener imediatamente ao receber
+`SIGTERM` **recusa** essas conexões. Cada recusa é um erro para o cliente.
+
+<Callout type="warn" title="O erro é fazer a coisa certa cedo demais">
+Fechar o listener no `SIGTERM` é o comportamento que todo manual ensina, e é o
+que causa o erro. O pod precisa continuar aceitando por alguns segundos
+**depois** de decidir morrer — tempo para a notícia se espalhar.
+</Callout>
+
+A api desta stack faz isso:
+
+```go
+// SHUTDOWN_DELAY: espera antes de fechar o listener, para o kube-proxy de
+// cada nó ter tempo de tirar este pod da lista de endpoints.
+```
+
+```yaml
+env:
+  - {name: SHUTDOWN_DELAY, value: "2s"}
+```
+
+Padrão zero, 2 segundos no Deployment. É o que separa "26 requisições, 0 falhas"
+de "26 requisições, algumas falhas".
+
+<Term word="preStop" alt="preStop hook">
+O jeito canônico de resolver isso **sem tocar na aplicação** é um hook
+`preStop` que dorme:
+
+```yaml
+lifecycle:
+  preStop:
+    exec: {command: ["sleep", "5"]}
+```
+
+O kubelet roda o hook **antes** do `SIGTERM`, então o pod continua servindo
+normalmente enquanto a remoção do endpoint se propaga.
+
+Por que não é usado aqui: `exec` precisa de um binário **dentro da imagem**, e
+a imagem da api é distroless — não há `sleep`, não há shell, não há nada. Essa
+é a troca real do distroless, e vale conhecê-la antes de escolher a base.
+</Term>
+
+## A outra família de disrupções
+
+<DisruptionKinds />
+
+O rolling update é uma disrupção voluntária que o **próprio Deployment**
+orquestra: ele sabe quantas réplicas quer de pé e respeita `maxUnavailable`.
+
+Mas há disrupções voluntárias que **ninguém combinou com o seu Deployment**:
+
+- `kubectl drain` de um nó para manutenção;
+- o *cluster autoscaler* compactando nós para economizar;
+- o provedor gerenciado atualizando a versão do Kubernetes.
+
+Todas passam pela **API de eviction**. E é só isso que um PDB governa.
+
+## O PDB, medido
+
+```yaml
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels: {app: api}
+```
+
+Com duas réplicas, despejar a primeira é permitido; a segunda, não:
+
+```console
+$ kubectl create --raw "/api/v1/namespaces/infra-knowlogy/pods/api-…-5jncz/eviction" -f -
+{"kind":"Status","apiVersion":"v1","status":"Success","code":201}
+
+$ kubectl create --raw "/api/v1/namespaces/infra-knowlogy/pods/api-…-p7v7l/eviction" -f -
+Error from server (TooManyRequests): Cannot evict pod as it would violate
+the pod's disruption budget.
+```
+
+`429`. **O cluster parou por causa da sua aplicação** — e essa é a única coisa
+que faz isso.
+
+<Callout type="note" title="Travar a manutenção É o comportamento correto">
+Um `kubectl drain` que não consegue respeitar o orçamento **fica esperando para
+sempre**. Isso não é bug: é o PDB fazendo exatamente o trabalho dele.
+
+Mas quem opera precisa saber disso, senão o drain travado vira meia hora de
+investigação. E um PDB mal escrito — `minAvailable` igual ao número de réplicas
+— torna o nó **impossível** de drenar.
+</Callout>
+
+## `minAvailable` ou `maxUnavailable`?
+
+Com 2 réplicas os dois parecem equivalentes. Eles divergem assim que o HPA
+escala:
+
+| réplicas | `minAvailable: 1` | `maxUnavailable: 1` |
+|---|---|---|
+| 2 | pode despejar 1 | pode despejar 1 |
+| 6 | pode despejar **5** | pode despejar **1** |
+
+<Tradeoff
+  a="minAvailable"
+  b="maxUnavailable"
+  whenA="Você garante que o serviço NÃO SOME. É o piso de disponibilidade, e é o que você quer quando qualquer réplica atende qualquer requisição."
+  whenB="Você garante que a CAPACIDADE não cai. É o que você quer quando as réplicas existem para aguentar a carga, e ficar com uma seria o mesmo que ficar com nenhuma."
+>
+  <Fragment slot="a">
+    Expresso como número absoluto, ele não acompanha a escala: com 6 réplicas,
+    `minAvailable: 1` autoriza esvaziar 5 de uma vez.
+  </Fragment>
+  <Fragment slot="b">
+    Acompanha a escala naturalmente, mas pode travar manutenção: com 2
+    réplicas e `maxUnavailable: 1`, drenar dois nós exige esperar o rollout
+    entre eles.
+  </Fragment>
+</Tradeoff>
+
+Percentual (`minAvailable: 50%`) acompanha a escala nos dois casos — e é a
+escolha mais comum em produção.
+
+## O que o PDB não faz
+
+Ele é uma regra de admissão sobre a API de eviction. **Ninguém pede licença ao
+API server antes de um nó pegar fogo.**
+
+Nó que morre, OOM killer, kernel panic, hardware — nada disso passa por
+eviction, e nenhum orçamento protege. A resposta para disrupção involuntária é
+**réplicas em nós diferentes** (`topologySpreadConstraints`), não orçamento.
+
+Confundir os dois é caro: você escreve um PDB, acha que está protegido, e
+descobre no primeiro nó que morre que o orçamento nunca foi consultado.
+
+<FieldNote
+  source="Kubernetes Docs — Disruptions"
+  url="https://kubernetes.io/docs/concepts/workloads/pods/disruptions/"
+  accessed="2026-09-20"
+>
+A documentação separa explicitamente disrupção voluntária de involuntária e diz
+que o PDB só se aplica à primeira, recomendando réplicas distribuídas e
+`topologySpreadConstraints` para a segunda. Não medido aqui: este cluster tem um
+nó, então não há topologia a distribuir nem drain de nó real a observar — o
+portão usa a API de eviction diretamente, que é o mesmo caminho que o drain
+percorre.
+</FieldNote>
+
+<LabExercise
+  question="Um `kubectl drain` está parado há vinte minutos sem mensagem de erro. Como descobrir se é um PDB, e qual?"
+  check="PDB: o segundo despejo é RECUSADO (429)"
+>
+  <Fragment slot="hint">
+    O PDB publica, no próprio status, quantos despejos ele ainda autoriza.
+  </Fragment>
+  <Fragment slot="answer">
+
+```bash
+kubectl get pdb --all-namespaces
+```
+
+Procure a coluna `ALLOWED DISRUPTIONS`. **Zero é a resposta**: aquele PDB está
+recusando, e o drain vai esperar indefinidamente.
+
+Para ver por quê:
+
+```bash
+kubectl -n <ns> describe pdb <nome>
+```
+
+`currentHealthy` abaixo de `desiredHealthy` significa que há réplica não-`Ready`
+— então o orçamento já está no limite antes mesmo do drain. Frequentemente o
+problema não é o PDB: é uma réplica quebrada que ninguém notou, e o PDB está
+sendo o único a reclamar.
+
+  </Fragment>
+</LabExercise>
+
+<Quiz set="rollouts-and-disruption" />

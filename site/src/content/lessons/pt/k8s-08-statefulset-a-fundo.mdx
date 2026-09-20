@@ -1,0 +1,211 @@
+---
+key: statefulsets-in-depth
+lang: pt
+track: kubernetes
+order: 8
+title: "StatefulSet: identidade, e o que o RWO não garante"
+summary: "A pergunta que escolhe entre Deployment e StatefulSet não é “tem estado?”. É se as réplicas são intercambiáveis. Medido aqui — e uma das medições contrariou o que eu ia escrever sobre ReadWriteOnce."
+minutes: 15
+tags: [kubernetes, statefulset, pvc, armazenamento, dns]
+sources:
+  - label: "Kubernetes Docs — StatefulSets"
+    url: "https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/"
+    kind: docs
+  - label: "Kubernetes Docs — Persistent Volumes: access modes"
+    url: "https://kubernetes.io/docs/concepts/storage/persistent-volumes/#access-modes"
+    kind: docs
+  - label: "Kubernetes Docs — Headless Services"
+    url: "https://kubernetes.io/docs/concepts/services-networking/service/#headless-services"
+    kind: docs
+  - label: "Kubernetes Docs — StatefulSets: limitações"
+    url: "https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#limitations"
+    kind: docs
+    accessed: "2026-09-20"
+  - label: "Kubernetes Docs — StatefulSet PVC retention policy"
+    url: "https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#persistentvolumeclaim-retention"
+    kind: docs
+---
+
+import StableIdentity from "../../../components/diagrams/StableIdentity.astro";
+
+A explicação comum é "Deployment para stateless, StatefulSet para stateful", e
+ela erra o alvo. O `cache` desta stack tem estado — é um Redis com volume — e é
+um Deployment. O critério é outro.
+
+> **As réplicas são intercambiáveis?**
+
+Se qualquer uma serve qualquer requisição, Deployment. Se a réplica 0 é o
+primário e a 1 é a réplica de leitura, alguém precisa saber **qual é qual** —
+e é aí que o StatefulSet entra.
+
+<StableIdentity />
+
+## O que o StatefulSet garante, medido
+
+O `db` desta stack é um StatefulSet. Escrevi um dado, apaguei o pod e olhei:
+
+```console
+$ psql -c "INSERT INTO prova_sts VALUES ('sobrevivi');"
+$ kubectl -n infra-knowlogy delete pod db-0
+$ kubectl -n infra-knowlogy wait --for=condition=Ready pod/db-0
+
+$ psql -tAc 'SELECT v FROM prova_sts;'
+sobrevivi
+```
+
+Três coisas aconteceram, e a terceira é a que explica as outras duas:
+
+| | antes | depois |
+|---|---|---|
+| nome do pod | `db-0` | `db-0` — **o mesmo** |
+| IP do pod | `10.244.0.64` | `10.244.0.67` — **mudou** |
+| PVC | `pgdata-db-0` | `pgdata-db-0`, **mesmo uid** |
+
+**O nome é estável porque o IP não é.** Essa é a razão de existir o Service
+headless.
+
+<Term word="Service headless" alt="headless Service">
+Um `Service` com `clusterIP: None`. Ele não recebe IP virtual e não balanceia
+nada — em vez disso, o DNS do cluster passa a responder com os endereços dos
+pods **individualmente**, e cada pod de um StatefulSet ganha um nome próprio:
+
+```
+db-0.db.infra-knowlogy.svc.cluster.local
+```
+
+Um Service normal responde "qual é o IP do serviço `db`?" com um endereço
+virtual e distribui as conexões. Um headless responde "quais são os pods de
+`db`?" — e é a única forma de um cliente escolher **uma réplica específica**,
+que é exatamente o que replicação de banco exige.
+</Term>
+
+## O PVC por réplica
+
+```yaml
+volumeClaimTemplates:
+  - metadata: {name: pgdata}
+```
+
+Não é um PVC: é um **molde**. Cada réplica ganha o seu, nomeado por convenção:
+`<template>-<statefulset>-<ordinal>` → `pgdata-db-0`.
+
+E há uma propriedade de segurança que quase passa despercebida:
+
+```console
+$ kubectl -n infra-knowlogy get statefulset db \
+    -o jsonpath='{.spec.persistentVolumeClaimRetentionPolicy}'
+{"whenDeleted":"Retain","whenScaled":"Retain"}
+```
+
+**Apagar o StatefulSet não apaga os PVCs.** O padrão é reter nos dois casos —
+apagar o objeto e reduzir réplicas. É deliberado: o Kubernetes prefere deixar
+lixo a apagar o seu banco porque alguém errou um `kubectl delete`.
+
+<Callout type="note" title="O preço desse padrão">
+Volumes órfãos custam dinheiro e ninguém os vê, porque não aparecem em
+`get pods`. Vale um `kubectl get pvc` periódico — especialmente depois de
+experimentos que criaram e apagaram StatefulSets.
+</Callout>
+
+## A medição que me contrariou
+
+Eu ia escrever que "um Deployment com PVC não escala". O `cache` é um
+Deployment com um PVC `ReadWriteOnce`, então escalá-lo para 2 deveria falhar.
+
+```console
+$ kubectl -n infra-knowlogy scale deploy/cache --replicas=2
+$ kubectl -n infra-knowlogy get pods -l app=cache \
+    -o custom-columns='POD:.metadata.name,NODE:.spec.nodeName,STATUS:.status.phase'
+POD                      NODE                           STATUS
+cache-6b4d54cddf-ghmc2   infra-knowlogy-control-plane   Running
+cache-6b4d54cddf-hldz6   infra-knowlogy-control-plane   Running
+```
+
+**Os dois subiram.** Sem evento, sem aviso, montando o mesmo volume.
+
+<Callout type="warn" title="ReadWriteOnce é por NÓ, não por pod">
+O nome engana quase todo mundo. `ReadWriteOnce` significa **"um nó pode montar
+este volume em escrita"** — e dois pods agendados no mesmo nó compartilham essa
+montagem sem nenhuma objeção.
+
+Num cluster de um nó, você **nunca** descobre. A falha aparece em produção, no
+dia em que o segundo pod é agendado noutro nó e fica `Pending` com
+`Multi-Attach error for volume`.
+
+Desde o Kubernetes 1.27 existe `ReadWriteOncePod`, que é o que as pessoas
+achavam que `ReadWriteOnce` fazia.
+</Callout>
+
+E dois Redis escrevendo no mesmo arquivo de dump não é um erro que o Kubernetes
+vá reportar: é corrupção silenciosa, descoberta na próxima reinicialização.
+
+<Tradeoff
+  a="Deployment com PVC"
+  b="StatefulSet"
+  whenA="Uma réplica só, e você aceita que escalar é um erro de operação que nada impede. É o caso do `cache` aqui: um Redis de cache, cujo conteúdo é descartável por definição."
+  whenB="Mais de uma réplica com estado próprio, ou qualquer cenário em que um cliente precise endereçar UMA réplica específica — primário e réplica, membros de um quorum, partições."
+>
+  <Fragment slot="a">
+    Simples, e o rollout é o de sempre. Mas nada impede `scale --replicas=2`, e
+    o RWO não vai salvar você no mesmo nó.
+  </Fragment>
+  <Fragment slot="b">
+    PVC por réplica, nome ordinal, ordem de criação e de destruição, DNS
+    individual. Em troca: rollout mais lento (ordenado) e mais objetos para
+    entender.
+  </Fragment>
+</Tradeoff>
+
+## A ordem, que é o terceiro serviço
+
+Com `podManagementPolicy: OrderedReady` (o padrão), o StatefulSet **cria em
+ordem** — `db-0` precisa estar `Ready` antes de `db-1` começar — e **destrói na
+ordem inversa**.
+
+Isso não é estética. Para um banco com replicação, o primário precisa existir
+antes de a réplica tentar se conectar; na descida, derrubar o primário primeiro
+deixaria réplicas órfãs. A alternativa é `Parallel`, e ela existe para os casos
+em que a ordem realmente não importa — cada réplica com seu próprio shard
+independente, por exemplo.
+
+<FieldNote
+  source="Kubernetes Docs — StatefulSet Basics: limitations"
+  url="https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#limitations"
+  accessed="2026-09-20"
+>
+A própria documentação avisa que o StatefulSet **não faz backup, não promove
+primário e não sabe nada sobre replicação**: ele entrega identidade, ordem e
+volume, e o resto é da aplicação ou de um operator. É por isso que rodar
+Postgres em Kubernetes na prática significa rodar um *operator* de Postgres.
+Não medido aqui — este cluster tem uma réplica só, e failover exigiria pelo
+menos duas com replicação configurada.
+</FieldNote>
+
+<LabExercise
+  question="Você apagou um StatefulSet por engano. O que precisa conferir ANTES de recriá-lo, e o que acontece se recriar direto?"
+  check="o PVC pgdata-db-0 é o MESMO objeto (não foi recriado)"
+>
+  <Fragment slot="hint">
+    O padrão de retenção protege você — mas só se o nome bater.
+  </Fragment>
+  <Fragment slot="answer">
+
+```bash
+kubectl -n infra-knowlogy get pvc
+```
+
+Com `persistentVolumeClaimRetentionPolicy` no padrão (`Retain`), os PVCs
+sobreviveram. Recriar o StatefulSet **com o mesmo nome, o mesmo
+`volumeClaimTemplate` e o mesmo namespace** faz cada réplica reencontrar o seu
+volume — o nome `pgdata-db-0` é derivado, não sorteado, e é isso que torna a
+recuperação possível.
+
+O perigo é o contrário: se você recriar com nome diferente (`db2` em vez de
+`db`), os PVCs novos serão `pgdata-db2-0` — **vazios** — e os antigos ficam
+órfãos, ocupando disco e sem ninguém para lê-los. O banco não sumiu; ele está
+num volume que o novo StatefulSet não procura.
+
+  </Fragment>
+</LabExercise>
+
+<Quiz set="statefulsets-in-depth" />

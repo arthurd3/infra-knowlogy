@@ -1,0 +1,224 @@
+---
+key: rollouts-and-disruption
+lang: en
+track: kubernetes
+order: 9
+title: "Rollouts, PDBs and what actually drops requests"
+summary: "A rolling update loses no requests — but only because the application cooperates, and that detail lives in an environment variable. And the PodDisruptionBudget governs something else: the disruptions nobody agreed with you about."
+minutes: 15
+tags: [kubernetes, rollout, pdb, eviction, availability]
+sources:
+  - label: "Kubernetes Docs — Disruptions"
+    url: "https://kubernetes.io/docs/concepts/workloads/pods/disruptions/"
+    kind: docs
+  - label: "Kubernetes Docs — Specifying a Disruption Budget"
+    url: "https://kubernetes.io/docs/tasks/run-application/configure-pdb/"
+    kind: docs
+  - label: "Kubernetes Docs — Pod Lifecycle: termination"
+    url: "https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#pod-termination"
+    kind: docs
+  - label: "Kubernetes Docs — Safely Drain a Node"
+    url: "https://kubernetes.io/docs/tasks/administer-cluster/safely-drain-node/"
+    kind: docs
+---
+
+import DisruptionKinds from "../../../components/diagrams/DisruptionKinds.astro";
+
+This module's gate fires a rolling update with a load generator running on top
+and counts the result:
+
+```
+rolling restart com 26 requisições concorrentes e 0 falhas
+```
+
+Zero failures looks like the end of the story. It is the **premise**: that line
+only exists because somebody wrote two lines of code in the application.
+
+## The race Kubernetes does not solve
+
+When a pod enters termination, two things happen **in parallel**:
+
+1. the kubelet sends `SIGTERM` to the process;
+2. the pod's endpoint is removed from the list, and **every node's** kube-proxy
+   reprograms its rules.
+
+The second is asynchronous and distributed. Between `SIGTERM` arriving and the
+last node stopping new connections, there is a window — and in it the pod still
+receives requests it no longer wants.
+
+A well-behaved application that closes its listener immediately on `SIGTERM`
+**refuses** those connections. Each refusal is an error for the client.
+
+<Callout type="warn" title="The mistake is doing the right thing too early">
+Closing the listener on `SIGTERM` is the behaviour every manual teaches, and it
+is what causes the error. The pod needs to keep accepting for a few seconds
+**after** deciding to die — time for the news to spread.
+</Callout>
+
+This stack's api does that:
+
+```go
+// SHUTDOWN_DELAY: wait before closing the listener, so that every node's
+// kube-proxy has time to take this pod off the endpoint list.
+```
+
+```yaml
+env:
+  - {name: SHUTDOWN_DELAY, value: "2s"}
+```
+
+Zero by default, 2 seconds in the Deployment. That is what separates "26
+requests, 0 failures" from "26 requests, some failures".
+
+<Term word="preStop" alt="preStop hook">
+The canonical way to solve this **without touching the application** is a
+`preStop` hook that sleeps:
+
+```yaml
+lifecycle:
+  preStop:
+    exec: {command: ["sleep", "5"]}
+```
+
+The kubelet runs the hook **before** `SIGTERM`, so the pod keeps serving
+normally while endpoint removal propagates.
+
+Why it is not used here: `exec` needs a binary **inside the image**, and the
+api's image is distroless — no `sleep`, no shell, nothing. That is distroless's
+real trade, and it is worth knowing before picking the base.
+</Term>
+
+## The other family of disruptions
+
+<DisruptionKinds />
+
+A rolling update is a voluntary disruption the **Deployment itself**
+orchestrates: it knows how many replicas it wants up and respects
+`maxUnavailable`.
+
+But there are voluntary disruptions **nobody agreed with your Deployment
+about**:
+
+- `kubectl drain` of a node for maintenance;
+- the *cluster autoscaler* compacting nodes to save money;
+- the managed provider upgrading the Kubernetes version.
+
+All of them go through the **eviction API**. And that is all a PDB governs.
+
+## The PDB, measured
+
+```yaml
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels: {app: api}
+```
+
+With two replicas, evicting the first is allowed; the second is not:
+
+```console
+$ kubectl create --raw "/api/v1/namespaces/infra-knowlogy/pods/api-…-5jncz/eviction" -f -
+{"kind":"Status","apiVersion":"v1","status":"Success","code":201}
+
+$ kubectl create --raw "/api/v1/namespaces/infra-knowlogy/pods/api-…-p7v7l/eviction" -f -
+Error from server (TooManyRequests): Cannot evict pod as it would violate
+the pod's disruption budget.
+```
+
+`429`. **The cluster stopped because of your application** — and that is the
+only thing that does this.
+
+<Callout type="note" title="Blocking maintenance IS the correct behaviour">
+A `kubectl drain` that cannot respect the budget **waits forever**. That is not
+a bug: it is the PDB doing exactly its job.
+
+But whoever operates needs to know it, or a stuck drain turns into half an hour
+of investigation. And a badly written PDB — `minAvailable` equal to the replica
+count — makes the node **impossible** to drain.
+</Callout>
+
+## `minAvailable` or `maxUnavailable`?
+
+With 2 replicas the two look equivalent. They diverge as soon as the HPA scales:
+
+| replicas | `minAvailable: 1` | `maxUnavailable: 1` |
+|---|---|---|
+| 2 | may evict 1 | may evict 1 |
+| 6 | may evict **5** | may evict **1** |
+
+<Tradeoff
+  a="minAvailable"
+  b="maxUnavailable"
+  whenA="You guarantee the service DOES NOT DISAPPEAR. It is the availability floor, and it is what you want when any replica serves any request."
+  whenB="You guarantee CAPACITY does not collapse. It is what you want when replicas exist to carry the load, and being left with one would be the same as being left with none."
+>
+  <Fragment slot="a">
+    Expressed as an absolute number, it does not follow scale: with 6 replicas,
+    `minAvailable: 1` authorises emptying 5 at once.
+  </Fragment>
+  <Fragment slot="b">
+    Follows scale naturally, but can block maintenance: with 2 replicas and
+    `maxUnavailable: 1`, draining two nodes means waiting for the rollout in
+    between.
+  </Fragment>
+</Tradeoff>
+
+A percentage (`minAvailable: 50%`) follows scale in both cases — and is the more
+common production choice.
+
+## What the PDB does not do
+
+It is an admission rule over the eviction API. **Nothing asks the API server
+before a node catches fire.**
+
+A dying node, the OOM killer, a kernel panic, hardware — none of it goes through
+eviction, and no budget protects you. The answer to involuntary disruption is
+**replicas on different nodes** (`topologySpreadConstraints`), not a budget.
+
+Confusing the two is expensive: you write a PDB, believe you are protected, and
+find out on the first dead node that the budget was never consulted.
+
+<FieldNote
+  source="Kubernetes Docs — Disruptions"
+  url="https://kubernetes.io/docs/concepts/workloads/pods/disruptions/"
+  accessed="2026-09-20"
+>
+The documentation explicitly separates voluntary from involuntary disruption and
+states the PDB applies only to the first, recommending spread replicas and
+`topologySpreadConstraints` for the second. Not measured here: this cluster has
+one node, so there is no topology to spread across and no real node drain to
+observe — the gate uses the eviction API directly, which is the same path drain
+walks.
+</FieldNote>
+
+<LabExercise
+  question="A `kubectl drain` has been stuck for twenty minutes with no error message. How do you find out whether it is a PDB, and which one?"
+  check="PDB: o segundo despejo é RECUSADO (429)"
+>
+  <Fragment slot="hint">
+    The PDB publishes, in its own status, how many evictions it still allows.
+  </Fragment>
+  <Fragment slot="answer">
+
+```bash
+kubectl get pdb --all-namespaces
+```
+
+Look at the `ALLOWED DISRUPTIONS` column. **Zero is the answer**: that PDB is
+refusing, and the drain will wait indefinitely.
+
+To see why:
+
+```bash
+kubectl -n <ns> describe pdb <name>
+```
+
+`currentHealthy` below `desiredHealthy` means there is a non-`Ready` replica —
+so the budget was already at its limit before the drain even started. Often the
+problem is not the PDB: it is a broken replica nobody noticed, and the PDB is
+the only thing complaining.
+
+  </Fragment>
+</LabExercise>
+
+<Quiz set="rollouts-and-disruption" />

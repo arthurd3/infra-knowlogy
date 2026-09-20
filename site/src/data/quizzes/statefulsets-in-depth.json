@@ -1,0 +1,152 @@
+{
+  "note_pt": "As perguntas vêm das três medições feitas no `db` desta stack — e da que contrariou o que eu ia escrever.",
+  "note_en": "The questions come from three measurements taken on this stack's `db` — and from the one that contradicted what I was about to write.",
+  "pt": [
+    {
+      "q": "O `cache` desta stack tem estado (um Redis com volume) e mesmo assim é um Deployment. Por quê?",
+      "options": [
+        {
+          "text": "Porque Redis é um cache e caches não são stateful.",
+          "why": "Este Redis TEM estado: há um PVC montado e um dump em disco. O critério não é a existência de estado — é se as réplicas precisam ser distinguíveis."
+        },
+        {
+          "text": "Porque as réplicas seriam intercambiáveis: qualquer uma serve qualquer requisição.",
+          "correct": true,
+          "why": "É o critério real. StatefulSet entrega identidade — nome ordinal, PVC por réplica, DNS individual — e isso só é necessário quando alguém precisa endereçar UMA réplica específica: o primário, o membro do quorum, o dono de um shard."
+        },
+        {
+          "text": "Porque StatefulSet não aceita PVC de 256Mi.",
+          "why": "Não há limite de tamanho envolvido. O `volumeClaimTemplate` aceita qualquer tamanho que a StorageClass ofereça."
+        }
+      ]
+    },
+    {
+      "q": "Você apaga o pod `db-0`. O que muda e o que não muda?",
+      "options": [
+        {
+          "text": "Muda o IP; o nome, o PVC e o dado permanecem.",
+          "correct": true,
+          "why": "Medido neste cluster: o IP foi de 10.244.0.64 para 10.244.0.67, o nome continuou `db-0`, o PVC `pgdata-db-0` continuou sendo o MESMO objeto (mesmo uid) e o dado inserido antes foi lido depois. O nome é estável PORQUE o IP não é — é isso que o Service headless existe para nomear."
+        },
+        {
+          "text": "Nada muda: o pod é recriado idêntico.",
+          "why": "O uid do pod muda e o IP também — é um pod novo. O que o StatefulSet garante é a IDENTIDADE (nome e volume), não a instância."
+        },
+        {
+          "text": "O PVC é recriado vazio e o dado se perde.",
+          "why": "Seria o comportamento se o PVC pertencesse ao pod. Ele pertence ao StatefulSet, com nome derivado (`<template>-<sts>-<ordinal>`), e por isso o pod novo reencontra exatamente o mesmo volume."
+        }
+      ]
+    },
+    {
+      "q": "Escalando um Deployment com PVC `ReadWriteOnce` para 2 réplicas neste cluster, os dois pods subiram Running. O que isso revela?",
+      "options": [
+        {
+          "text": "Que o provisionador ignorou o accessMode.",
+          "why": "O accessMode foi respeitado — o que ele diz é diferente do que se imagina. Não houve falha de provisionamento nenhuma."
+        },
+        {
+          "text": "Que o PVC virou ReadWriteMany automaticamente.",
+          "why": "O modo não muda sozinho; `kubectl get pvc` continua mostrando ReadWriteOnce. O que mudou foi o entendimento do que esse modo significa."
+        },
+        {
+          "text": "Que `ReadWriteOnce` é por NÓ, não por pod — e num cluster de um nó isso nunca falha.",
+          "correct": true,
+          "why": "O modo diz 'um nó pode montar em escrita', e dois pods do mesmo nó compartilham essa montagem sem objeção. A falha só aparece quando o segundo pod cai noutro nó: `Multi-Attach error for volume`. Desde o 1.27 existe `ReadWriteOncePod`, que é o que as pessoas achavam que o RWO fazia."
+        }
+      ]
+    },
+    {
+      "q": "Você apagou um StatefulSet por engano. Qual o risco REAL ao recriá-lo?",
+      "options": [
+        {
+          "text": "Recriar com nome diferente: os PVCs novos nascem vazios e os antigos ficam órfãos.",
+          "correct": true,
+          "why": "O padrão de retenção (`Retain` em whenDeleted e whenScaled) preservou os volumes, e o nome `pgdata-db-0` é DERIVADO do nome do StatefulSet. Recriar como `db2` faz o controlador procurar `pgdata-db2-0`, que não existe — então ele cria um vazio. O banco não sumiu; está num volume que ninguém procura."
+        },
+        {
+          "text": "Os PVCs já foram apagados junto, não há o que recuperar.",
+          "why": "O padrão é `Retain` nos dois casos, justamente para que um `delete` errado não apague um banco. É deliberado, e o preço é volume órfão que ninguém vê num `get pods`."
+        },
+        {
+          "text": "O StatefulSet vai recusar subir enquanto os PVCs antigos existirem.",
+          "why": "Ele não recusa — reutiliza, se os nomes baterem. É exatamente isso que torna a recuperação possível."
+        }
+      ]
+    }
+  ],
+  "en": [
+    {
+      "q": "This stack's `cache` has state (a Redis with a volume) and is still a Deployment. Why?",
+      "options": [
+        {
+          "text": "Because Redis is a cache and caches are not stateful.",
+          "why": "This Redis HAS state: there is a PVC mounted and a dump on disk. The criterion is not the existence of state — it is whether the replicas need to be distinguishable."
+        },
+        {
+          "text": "Because the replicas would be interchangeable: any one serves any request.",
+          "correct": true,
+          "why": "That is the real criterion. A StatefulSet delivers identity — ordinal name, per-replica PVC, individual DNS — and that is only needed when something must address ONE specific replica: the primary, the quorum member, the owner of a shard."
+        },
+        {
+          "text": "Because StatefulSet does not accept a 256Mi PVC.",
+          "why": "No size limit is involved. The `volumeClaimTemplate` accepts whatever size the StorageClass offers."
+        }
+      ]
+    },
+    {
+      "q": "You delete the `db-0` pod. What changes and what does not?",
+      "options": [
+        {
+          "text": "The IP changes; the name, the PVC and the data remain.",
+          "correct": true,
+          "why": "Measured on this cluster: the IP went from 10.244.0.64 to 10.244.0.67, the name stayed `db-0`, the `pgdata-db-0` PVC remained the SAME object (same uid), and the row inserted before was read afterwards. The name is stable BECAUSE the IP is not — that is what the headless Service exists to name."
+        },
+        {
+          "text": "Nothing changes: the pod is recreated identical.",
+          "why": "The pod's uid changes and so does the IP — it is a new pod. What the StatefulSet guarantees is the IDENTITY (name and volume), not the instance."
+        },
+        {
+          "text": "The PVC is recreated empty and the data is lost.",
+          "why": "That would be the behaviour if the PVC belonged to the pod. It belongs to the StatefulSet, with a derived name (`<template>-<sts>-<ordinal>`), which is why the new pod finds exactly the same volume."
+        }
+      ]
+    },
+    {
+      "q": "Scaling a Deployment with a `ReadWriteOnce` PVC to 2 replicas on this cluster, both pods came up Running. What does that reveal?",
+      "options": [
+        {
+          "text": "That the provisioner ignored the accessMode.",
+          "why": "The accessMode was respected — what it says is simply different from what people assume. There was no provisioning failure at all."
+        },
+        {
+          "text": "That the PVC became ReadWriteMany automatically.",
+          "why": "The mode does not change on its own; `kubectl get pvc` still shows ReadWriteOnce. What changed is the understanding of what that mode means."
+        },
+        {
+          "text": "That `ReadWriteOnce` is per NODE, not per pod — and on a single-node cluster it never fails.",
+          "correct": true,
+          "why": "The mode says 'one node may mount for writing', and two pods on the same node share that mount without objection. The failure only appears when the second pod lands on another node: `Multi-Attach error for volume`. Since 1.27 there is `ReadWriteOncePod`, which is what people thought RWO did."
+        }
+      ]
+    },
+    {
+      "q": "You deleted a StatefulSet by mistake. What is the REAL risk when recreating it?",
+      "options": [
+        {
+          "text": "Recreating it under a different name: the new PVCs are born empty and the old ones are orphaned.",
+          "correct": true,
+          "why": "The retention default (`Retain` for whenDeleted and whenScaled) preserved the volumes, and the name `pgdata-db-0` is DERIVED from the StatefulSet's name. Recreating as `db2` makes the controller look for `pgdata-db2-0`, which does not exist — so it creates an empty one. The database did not disappear; it is in a volume nobody is looking for."
+        },
+        {
+          "text": "The PVCs were deleted along with it, so there is nothing to recover.",
+          "why": "The default is `Retain` in both cases, precisely so that a mistaken `delete` does not erase a database. It is deliberate, and the price is orphaned volumes nobody sees in a `get pods`."
+        },
+        {
+          "text": "The StatefulSet will refuse to start while the old PVCs exist.",
+          "why": "It does not refuse — it reuses them, if the names match. That is exactly what makes recovery possible."
+        }
+      ]
+    }
+  ]
+}

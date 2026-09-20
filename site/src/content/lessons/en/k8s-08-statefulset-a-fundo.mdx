@@ -1,0 +1,211 @@
+---
+key: statefulsets-in-depth
+lang: en
+track: kubernetes
+order: 8
+title: "StatefulSet: identity, and what RWO does not guarantee"
+summary: "The question that picks between Deployment and StatefulSet is not “is it stateful?”. It is whether the replicas are interchangeable. Measured here — and one of the measurements contradicted what I was about to write about ReadWriteOnce."
+minutes: 15
+tags: [kubernetes, statefulset, pvc, storage, dns]
+sources:
+  - label: "Kubernetes Docs — StatefulSets"
+    url: "https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/"
+    kind: docs
+  - label: "Kubernetes Docs — Persistent Volumes: access modes"
+    url: "https://kubernetes.io/docs/concepts/storage/persistent-volumes/#access-modes"
+    kind: docs
+  - label: "Kubernetes Docs — Headless Services"
+    url: "https://kubernetes.io/docs/concepts/services-networking/service/#headless-services"
+    kind: docs
+  - label: "Kubernetes Docs — StatefulSets: limitations"
+    url: "https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#limitations"
+    kind: docs
+    accessed: "2026-09-20"
+  - label: "Kubernetes Docs — StatefulSet PVC retention policy"
+    url: "https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#persistentvolumeclaim-retention"
+    kind: docs
+---
+
+import StableIdentity from "../../../components/diagrams/StableIdentity.astro";
+
+The common explanation is "Deployment for stateless, StatefulSet for stateful",
+and it misses the target. This stack's `cache` has state — it is a Redis with a
+volume — and it is a Deployment. The criterion is a different one.
+
+> **Are the replicas interchangeable?**
+
+If any one can serve any request, Deployment. If replica 0 is the primary and
+replica 1 is the read replica, something has to know **which is which** — and
+that is where StatefulSet comes in.
+
+<StableIdentity />
+
+## What the StatefulSet guarantees, measured
+
+This stack's `db` is a StatefulSet. I wrote a row, deleted the pod and looked:
+
+```console
+$ psql -c "INSERT INTO prova_sts VALUES ('sobrevivi');"
+$ kubectl -n infra-knowlogy delete pod db-0
+$ kubectl -n infra-knowlogy wait --for=condition=Ready pod/db-0
+
+$ psql -tAc 'SELECT v FROM prova_sts;'
+sobrevivi
+```
+
+Three things happened, and the third explains the other two:
+
+| | before | after |
+|---|---|---|
+| pod name | `db-0` | `db-0` — **the same** |
+| pod IP | `10.244.0.64` | `10.244.0.67` — **changed** |
+| PVC | `pgdata-db-0` | `pgdata-db-0`, **same uid** |
+
+**The name is stable because the IP is not.** That is the reason the headless
+Service exists.
+
+<Term word="Headless Service" alt="headless Service">
+A `Service` with `clusterIP: None`. It gets no virtual IP and balances nothing —
+instead, cluster DNS starts answering with the pods' addresses
+**individually**, and each pod of a StatefulSet gets a name of its own:
+
+```
+db-0.db.infra-knowlogy.svc.cluster.local
+```
+
+A normal Service answers "what is the IP of the `db` service?" with a virtual
+address and spreads connections. A headless one answers "what are the pods of
+`db`?" — and it is the only way for a client to choose **one specific replica**,
+which is exactly what database replication requires.
+</Term>
+
+## The per-replica PVC
+
+```yaml
+volumeClaimTemplates:
+  - metadata: {name: pgdata}
+```
+
+It is not a PVC: it is a **mould**. Each replica gets its own, named by
+convention: `<template>-<statefulset>-<ordinal>` → `pgdata-db-0`.
+
+And there is a safety property that almost slips by:
+
+```console
+$ kubectl -n infra-knowlogy get statefulset db \
+    -o jsonpath='{.spec.persistentVolumeClaimRetentionPolicy}'
+{"whenDeleted":"Retain","whenScaled":"Retain"}
+```
+
+**Deleting the StatefulSet does not delete the PVCs.** The default is to retain
+in both cases — deleting the object and scaling down. It is deliberate:
+Kubernetes would rather leave litter behind than delete your database because
+somebody mistyped a `kubectl delete`.
+
+<Callout type="note" title="The price of that default">
+Orphaned volumes cost money and nobody sees them, because they do not show up in
+`get pods`. A periodic `kubectl get pvc` is worth it — especially after
+experiments that created and deleted StatefulSets.
+</Callout>
+
+## The measurement that contradicted me
+
+I was about to write that "a Deployment with a PVC does not scale". The `cache`
+is a Deployment with a `ReadWriteOnce` PVC, so scaling it to 2 should fail.
+
+```console
+$ kubectl -n infra-knowlogy scale deploy/cache --replicas=2
+$ kubectl -n infra-knowlogy get pods -l app=cache \
+    -o custom-columns='POD:.metadata.name,NODE:.spec.nodeName,STATUS:.status.phase'
+POD                      NODE                           STATUS
+cache-6b4d54cddf-ghmc2   infra-knowlogy-control-plane   Running
+cache-6b4d54cddf-hldz6   infra-knowlogy-control-plane   Running
+```
+
+**Both came up.** No event, no warning, mounting the same volume.
+
+<Callout type="warn" title="ReadWriteOnce is per NODE, not per pod">
+The name misleads almost everyone. `ReadWriteOnce` means **"one node may mount
+this volume for writing"** — and two pods scheduled on the same node share that
+mount with no objection whatsoever.
+
+On a single-node cluster you **never** find out. The failure shows up in
+production, the day the second pod is scheduled on another node and sits
+`Pending` with `Multi-Attach error for volume`.
+
+Since Kubernetes 1.27 there is `ReadWriteOncePod`, which is what people thought
+`ReadWriteOnce` did.
+</Callout>
+
+And two Redis instances writing the same dump file is not an error Kubernetes
+will report: it is silent corruption, discovered at the next restart.
+
+<Tradeoff
+  a="Deployment with a PVC"
+  b="StatefulSet"
+  whenA="A single replica, and you accept that scaling is an operator error nothing prevents. That is the `cache` here: a cache Redis whose contents are disposable by definition."
+  whenB="More than one replica with state of its own, or any scenario where a client must address ONE specific replica — primary and replica, quorum members, partitions."
+>
+  <Fragment slot="a">
+    Simple, and the rollout is the usual one. But nothing prevents
+    `scale --replicas=2`, and RWO will not save you on the same node.
+  </Fragment>
+  <Fragment slot="b">
+    Per-replica PVC, ordinal name, creation and destruction order, individual
+    DNS. In exchange: a slower (ordered) rollout and more objects to understand.
+  </Fragment>
+</Tradeoff>
+
+## Order, which is the third service
+
+With `podManagementPolicy: OrderedReady` (the default), the StatefulSet
+**creates in order** — `db-0` must be `Ready` before `db-1` starts — and
+**destroys in reverse**.
+
+This is not aesthetics. For a replicated database, the primary must exist before
+the replica tries to connect; on the way down, taking the primary first would
+leave orphaned replicas. The alternative is `Parallel`, and it exists for the
+cases where order genuinely does not matter — each replica owning an independent
+shard, for instance.
+
+<FieldNote
+  source="Kubernetes Docs — StatefulSet Basics: limitations"
+  url="https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#limitations"
+  accessed="2026-09-20"
+>
+The documentation itself warns that a StatefulSet **does not back up, does not
+promote a primary and knows nothing about replication**: it delivers identity,
+order and volume, and the rest belongs to the application or to an operator.
+That is why running Postgres on Kubernetes in practice means running a Postgres
+*operator*. Not measured here — this cluster has a single replica, and failover
+would require at least two with replication configured.
+</FieldNote>
+
+<LabExercise
+  question="You deleted a StatefulSet by mistake. What must you check BEFORE recreating it, and what happens if you just recreate it?"
+  check="o PVC pgdata-db-0 é o MESMO objeto (não foi recriado)"
+>
+  <Fragment slot="hint">
+    The retention default protects you — but only if the name matches.
+  </Fragment>
+  <Fragment slot="answer">
+
+```bash
+kubectl -n infra-knowlogy get pvc
+```
+
+With `persistentVolumeClaimRetentionPolicy` at its default (`Retain`), the PVCs
+survived. Recreating the StatefulSet **with the same name, the same
+`volumeClaimTemplate` and the same namespace** makes each replica find its
+volume again — the name `pgdata-db-0` is derived, not random, and that is what
+makes the recovery possible.
+
+The danger is the opposite: recreate it under a different name (`db2` instead of
+`db`) and the new PVCs will be `pgdata-db2-0` — **empty** — while the old ones
+sit orphaned, taking disk with nobody reading them. The database did not
+disappear; it is in a volume the new StatefulSet is not looking for.
+
+  </Fragment>
+</LabExercise>
+
+<Quiz set="statefulsets-in-depth" />
