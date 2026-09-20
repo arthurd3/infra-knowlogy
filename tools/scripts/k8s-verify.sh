@@ -69,7 +69,7 @@ else
   # que dá direito de dizer "as duas resolvem o mesmo problema"; a escolha
   # entre elas é sobre distribuição, e a lição trata disso.
   if python3 tools/scripts/k8s-helm-vs-kustomize.py >/tmp/k8s-helm.txt 2>&1; then
-    ok "helm template ≡ kubectl kustomize (${MSG_HELM:-$(tr -s ' ' <"/tmp/k8s-helm.txt" | head -1 | sed 's/^ //')})"
+    ok "helm template ≡ kubectl kustomize ($(sed -n '1s/^ *//p' /tmp/k8s-helm.txt))"
   else
     bad "o chart Helm e o overlay Kustomize DIVERGEM:"
     sed 's/^/       /' /tmp/k8s-helm.txt | head -8
