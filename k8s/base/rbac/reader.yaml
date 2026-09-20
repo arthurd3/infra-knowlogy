@@ -1,0 +1,66 @@
+# rbac — quem pode perguntar o quê ao servidor de API.
+#
+# ─── A parte que já existia, e que é a resposta mais forte ──────────────────
+# Todo Deployment desta stack tem `automountServiceAccountToken: false`. Isso
+# não é RBAC: é NÃO ENTREGAR A CREDENCIAL. Sem o token montado em
+# /var/run/secrets/kubernetes.io/serviceaccount, o processo não tem com o que
+# falar com o servidor de API, e nenhuma Role — nem uma errada — pode ser
+# abusada a partir dali.
+#
+# A api, o worker e o web não falam com o Kubernetes. Não têm motivo para
+# carregar uma credencial dele.
+#
+# ─── E esta parte, que existe para ensinar o outro lado ─────────────────────
+# Um ServiceAccount com escopo estreito, para o caso em que a carga PRECISA
+# perguntar algo ao cluster — descobrir os pares de um StatefulSet, por
+# exemplo, ou ler um ConfigMap em tempo de execução.
+#
+# O portão prova as duas metades com `kubectl auth can-i --as`, que responde
+# pela decisão REAL do autorizador em vez de reler o YAML:
+#
+#   can-i list pods    --as=…:reader   -> yes
+#   can-i list secrets --as=…:reader   -> no     <- a prova que importa
+#   can-i list secrets --as=…:default  -> no
+#
+# A segunda linha é a que vale. Uma Role que permite tudo também passaria na
+# primeira — só a negativa distingue escopo estreito de escopo inexistente.
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: reader
+  labels: {app: reader}
+# Mesmo a conta estreita não monta o token por padrão. Quem precisar dele
+# declara `automountServiceAccountToken: true` no POD, e essa declaração vira
+# uma linha revisável no code review.
+automountServiceAccountToken: false
+
+---
+# Role e não ClusterRole: o escopo é o namespace, e é o menor escopo que
+# resolve. ClusterRole vale para recurso que não pertence a namespace (nó,
+# PersistentVolume) ou para permissão que precisa atravessar namespaces — e
+# usá-la por conveniência é como dar root porque dá menos trabalho.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: reader
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "services", "endpoints"]
+    # Sem `create`, `update`, `delete` nem `patch`. E sem `secrets`: um
+    # ServiceAccount que lê secrets do namespace lê a senha do Postgres, que
+    # torna a segmentação de rede das NetworkPolicies irrelevante.
+    verbs: ["get", "list", "watch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: reader
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: reader
+subjects:
+  - kind: ServiceAccount
+    name: reader

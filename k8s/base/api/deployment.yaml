@@ -81,7 +81,11 @@ spec:
               drop: [ALL]
           resources:
             limits: {cpu: "1", memory: 256Mi}
-            requests: {memory: 64Mi}
+            # O `cpu` no REQUESTS não é redundante com o limit, e sem ele o HPA
+            # não funciona: utilização de HPA é percentual DO REQUEST, não do
+            # limit. Sem `requests.cpu` o HPA reporta `<unknown>` para sempre —
+            # e um HPA em `<unknown>` não escala nem reclama.
+            requests: {cpu: 50m, memory: 64Mi}
           volumeMounts:
             - {name: secrets, mountPath: /run/secrets, readOnly: true}
             - {name: tmp, mountPath: /tmp}

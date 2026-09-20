@@ -1,0 +1,51 @@
+{
+  "_comentario": "Medido por tools/scripts/k8s-measure-hpa.py contra o cluster kind. Carga real pelo edge; os tempos são do instante em que a carga começou.",
+  "threadsDeCarga": 24,
+  "repeticoes": 3,
+  "rodadas": [
+    {
+      "rodada": 1,
+      "replicasAntes": 2,
+      "replicasDepois": 4,
+      "segundosAtePerceber": 12.8,
+      "segundosAteEscalar": 12.8,
+      "resolucaoDosCarimbosSegundos": 1,
+      "segundosAtePodPronto": 15.0,
+      "segundosDeBootDoPod": 2.0,
+      "janelaCegaSegundos": 12.8
+    },
+    {
+      "rodada": 2,
+      "replicasAntes": 4,
+      "replicasDepois": 5,
+      "segundosAtePerceber": 29.8,
+      "segundosAteEscalar": 29.8,
+      "resolucaoDosCarimbosSegundos": 1,
+      "segundosAtePodPronto": 31.9,
+      "segundosDeBootDoPod": 2.0,
+      "janelaCegaSegundos": 29.8
+    },
+    {
+      "rodada": 3,
+      "replicasAntes": 4,
+      "replicasDepois": 6,
+      "segundosAtePerceber": 29.8,
+      "segundosAteEscalar": 29.8,
+      "resolucaoDosCarimbosSegundos": 1,
+      "segundosAtePodPronto": 32.0,
+      "segundosDeBootDoPod": 2.0,
+      "janelaCegaSegundos": 29.8
+    }
+  ],
+  "janelaCegaMinSegundos": 12.8,
+  "janelaCegaMaxSegundos": 29.8,
+  "limiteTeoricoSegundos": 45,
+  "limiteTeoricoTermos": {
+    "raspagensParaFormarTaxa": 2,
+    "metricResolutionSegundos": 15,
+    "hpaSyncPeriodSegundos": 15
+  },
+  "bootMaxSegundos": 2.0,
+  "resolucaoDosCarimbosSegundos": 1,
+  "estabilizacaoParaDescerSegundos": 300
+}

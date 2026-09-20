@@ -271,6 +271,54 @@ justamente por isso.
     a valid JSX tag"* — apontando para a LINHA DO COMPONENTE, não para o escape.
     Use aspas tipográficas (`“ ”`) no texto do atributo.
 
+48. **A NetworkPolicy NÃO vale no instante em que o pod nasce.** A
+    `default-deny` seleciona todos os pods do namespace com
+    `policyTypes: [Ingress, Egress]` e, ainda assim, um pod recém-criado
+    alcança a internet por um átimo: as regras de dataplane são programadas
+    DEPOIS de o container começar a rodar, porque o agente de rede reage a um
+    evento que já aconteceu. Medido neste kind, em várias execuções: janelas
+    de **33 ms a 479 ms**. Duas consequências, e as duas importam. Segurança:
+    defesa em profundidade (o guard de SSRF na aplicação, segredo que não está
+    na imagem) é o que cobre esse intervalo — policy não cobre. E portão: uma
+    sonda rápida PASSA por causa da corrida e some numa máquina mais lenta;
+    por isso o `rbac-probe` declara o egresso de que precisa em vez de
+    depender da janela. O `k8s-verify` mede a janela e exige que ela exista
+    **e** feche — as duas metades detectam regressões diferentes.
+49. **HPA sem `requests.cpu` fica em `<unknown>` para sempre, e não reclama.**
+    Utilização de HPA é percentual **do request**, nunca do limit. A api tinha
+    `limits.cpu` e nenhum request — o objeto sobe, o `get hpa` mostra
+    `cpu: <unknown>/60%`, nada escala e nenhum evento diz por quê. Foi preciso
+    acrescentar `requests: {cpu: 50m}` ao Deployment para o HPA funcionar.
+50. **`valor or ''` em Python engole o zero.** `0.0` é falsy, então
+    `d.get('campo') or ''` devolve string vazia para uma medição perfeitamente
+    válida de zero. No `k8s-verify` isso reprovou uma checagem que tinha o
+    número CERTO na mão. Use `v = d.get(...); '' if v is None else v`.
+51. **`.status.replicas` do Deployment ATRASA em relação ao pod existir**, e
+    os carimbos do Kubernetes têm resolução de **1 segundo**. Medir "quanto o
+    pod levou para subir" por diferença de dois instantes de um laço de
+    polling deu `0.0s` — errado. O tempo honesto vem dos carimbos do próprio
+    pod (`creationTimestamp` → condição `Ready`), e mesmo assim só distingue
+    segundos inteiros: a api (Go, distroless, imagem já no nó) sobe em 1 s ou
+    menos, que é o piso do que o Kubernetes consegue reportar.
+52. **Uso de CPU é uma TAXA, e taxa não sai de uma amostra** — é o termo que
+    falta na conta de quase todo mundo. O tempo de reação do HPA tem TRÊS
+    parcelas, não duas: `2 × --metric-resolution` (o metrics-server calcula o
+    valor pela diferença entre as duas últimas raspagens, então uma mudança
+    degrau leva duas janelas para estar inteiramente refletida) mais
+    `1 × sync-period do HPA`. Com os padrões de 15 s: **45 s**, não 30. A
+    checagem do portão nasceu com 30 s, reprovou contra uma medição de
+    **44,7 s**, e o errado era o limite. Medido também: a janela cega
+    (12,8–44,7 s) domina o boot do pod (1 s) por mais de uma ordem de
+    grandeza — otimizar a imagem não compra reação de autoscaling.
+53. **Medição de HPA precisa de linha de base FRIA, não só de métrica
+    disponível.** Rodadas seguidas começavam com 136% e 96% de utilização
+    herdados da carga anterior, e o "t=0" deixava de ser o instante em que a
+    carga chegou: o HPA já tinha visto CPU alta antes do teste. Isso produziu
+    uma medição de 53 s, **acima do limite teórico** — número impossível que
+    só existia por causa da contaminação. O `zerar()` apaga o HPA (com ele de
+    pé, `scale --replicas=2` é desfeito no ciclo seguinte), volta à base e
+    espera a utilização cair abaixo de 30%.
+
 ## Ao mexer na stack
 
 - Rode `make verify` antes de considerar qualquer coisa pronta. Para iterar

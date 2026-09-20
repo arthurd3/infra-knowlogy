@@ -25,6 +25,19 @@ else
   kind create cluster --config k8s/kind/kind-config.yaml --kubeconfig "$KUBECONFIG" --wait 120s
 fi
 
+step "metrics-server (o HPA não funciona sem ele)"
+# O kind NÃO traz metrics-server. Sem ele o HPA fica com `targets: <unknown>`
+# para sempre — e um HPA em `<unknown>` não escala nem reclama.
+#
+# A imagem é carregada do host em vez de puxada pelo nó: assim o portão não
+# depende de registry.k8s.io estar no ar, e o digest pinado no manifesto é o
+# mesmo que o `make pins` confere.
+MS_IMG=$(grep -oE 'registry\.k8s\.io/metrics-server/metrics-server:[^ ]+' k8s/addons/metrics-server.yaml | head -1)
+docker image inspect "$MS_IMG" >/dev/null 2>&1 || docker pull -q "$MS_IMG" >/dev/null
+kind load docker-image --name "$CLUSTER" "$MS_IMG" >/dev/null 2>&1 || true
+kubectl apply -f k8s/addons/metrics-server.yaml
+kubectl -n kube-system rollout status deployment/metrics-server --timeout=120s
+
 step "build das imagens (as mesmas do módulo Docker)"
 docker compose -f stack/compose.yaml -f stack/compose.prod.yaml build
 
@@ -59,6 +72,20 @@ kubectl -n "$NS" rollout status deployment/api --timeout=180s
 kubectl -n "$NS" rollout status deployment/worker --timeout=120s
 kubectl -n "$NS" rollout status deployment/web --timeout=120s
 kubectl -n "$NS" rollout status deployment/edge --timeout=120s
+
+step "esperando a API de métricas responder"
+# Rollout pronto NÃO é métrica disponível: o metrics-server precisa de pelo
+# menos uma janela de `--metric-resolution` (15s) raspando os kubelets antes de
+# ter o que servir, e o APIService só então sai de `False`. É a armadilha 25 do
+# CLAUDE.md noutra roupa — prontidão de processo não é função disponível.
+for _ in $(seq 1 40); do
+  kubectl -n "$NS" top pod >/dev/null 2>&1 && break
+  sleep 3
+done
+# Sem pipe para `head`: com `pipefail`, o `head` fecha o cano e o `kubectl`
+# morre de SIGPIPE — a armadilha 29 do CLAUDE.md. Guarde primeiro, corte depois.
+TOPO=$(kubectl -n "$NS" top pod 2>/dev/null || true)
+[ -n "$TOPO" ] && sed -n '1,3p' <<<"$TOPO" | sed 's/^/   /' || echo "   (métricas ainda indisponíveis)"
 
 printf '\n   stack no ar: http://127.0.0.1:8081\n'
 printf '   kubectl --kubeconfig k8s/.kubeconfig -n %s get pods\n' "$NS"

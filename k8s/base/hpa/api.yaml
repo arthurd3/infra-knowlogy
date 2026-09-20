@@ -1,0 +1,62 @@
+# hpa — o fator VIII do 12-Factor, que o Compose não cumpre.
+#
+# A lição `twelve-factor-measured` do módulo 1 audita a stack Compose e encontra
+# um único fator não cumprido: concorrência. Não há `replicas:` em compose
+# nenhum, e escalar de verdade exige balanceamento, descoberta e recolocação —
+# que é o que um orquestrador faz. Este objeto é a resposta.
+#
+# ─── O detalhe que faz a maioria dos HPA nascer quebrada ────────────────────
+# `averageUtilization: 60` é 60% DO REQUEST, não do limit. A api pede
+# `requests.cpu: 50m`, então o alvo é 30m por pod. Sem `requests.cpu` declarado,
+# o HPA não tem denominador: ele reporta `<unknown>`, não escala, e não reclama.
+#
+# Foi preciso ACRESCENTAR o `requests.cpu` ao Deployment para este objeto
+# funcionar — ele não existia, porque até agora nada precisava dele.
+#
+# ─── E o que o HPA NÃO resolve ──────────────────────────────────────────────
+# Ele cria réplicas. Se não houver nó com capacidade, os pods novos ficam
+# `Pending` e a escala não acontece — quem resolve isso é o Cluster Autoscaler,
+# que é outra peça e não existe neste cluster de um nó só.
+#
+# E ele não ajuda em nada se o gargalo for o banco: mais réplicas de api contra
+# um Postgres saturado só multiplicam a fila.
+
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: api
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: api
+  # O mínimo é 2 e não 1 de propósito: o Deployment já declara 2 réplicas para
+  # o rolling update poder provar zero requisição perdida. Um HPA com
+  # `minReplicas: 1` desfaria isso na primeira janela de baixa carga.
+  minReplicas: 2
+  maxReplicas: 6
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 60
+  behavior:
+    scaleUp:
+      # Sem janela de estabilização para SUBIR: quando a carga chega, esperar é
+      # o erro caro. O padrão do Kubernetes aqui já é 0.
+      stabilizationWindowSeconds: 0
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 15
+    scaleDown:
+      # E cinco minutos para DESCER. Assimetria deliberada: descer rápido demais
+      # produz oscilação — a carga volta, o HPA sobe de novo, e o rollout
+      # constante custa mais que as réplicas extras.
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Percent
+          value: 50
+          periodSeconds: 60

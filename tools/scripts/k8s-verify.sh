@@ -8,6 +8,7 @@
 # citam.
 #
 #   SKIP_LINT=1      pula o lint estático (kustomize + kubeconform)
+#   SKIP_HPA=1       pula a medição de reação do HPA (~2 min de carga real)
 #   KEEP_CLUSTER=1   reaproveita o cluster existente e não o destrói no final
 #                    (para iterar; a medição de criação do cluster fica de fora)
 set -uo pipefail
@@ -35,9 +36,11 @@ now_ms() { date +%s%3N; }
 # As medições que viram k8s-measured.json (e depois, números nas lições).
 M_CLUSTER_CREATE_S=""; M_STACK_READY_S=""; M_SELF_HEAL_S=""
 M_NOTREADY_S=""; M_ROLLING_TOTAL=""; M_ROLLING_FAILS=""; M_SHUTDOWN_MAX_MS=""
+M_NETPOL_WINDOW_MS=""; M_HPA_CEGA=""; M_HPA_CEGA_MIN=""
+M_HPA_BOOT=""; M_HPA_DEPOIS=""; M_HPA_TEORICO=""
 
 # ─── 1. Pré-requisitos e lint estático ───────────────────────────────────────
-step "1/9  Pré-requisitos e lint dos manifests"
+step "1/10 Pré-requisitos e lint dos manifests"
 if bash tools/scripts/k8s-prereqs.sh >/tmp/k8s-pre.txt 2>&1; then
   ok "pré-requisitos (docker, kind >= 0.23, kubectl)"
 else
@@ -61,7 +64,7 @@ else
 fi
 
 # ─── 2. Build + cluster ──────────────────────────────────────────────────────
-step "2/9  Build das imagens e criação do cluster kind"
+step "2/10 Build das imagens e criação do cluster kind"
 if docker compose -f stack/compose.yaml -f stack/compose.prod.yaml build >/tmp/k8s-build.txt 2>&1; then
   ok "docker compose build (as mesmas imagens do módulo Docker)"
 else
@@ -91,7 +94,7 @@ else
 fi
 
 # ─── 3. Secret/ConfigMaps gerados + apply + rollout ──────────────────────────
-step "3/9  Aplicar manifests e esperar todos os rollouts"
+step "3/10 Aplicar manifests e esperar todos os rollouts"
 t0=$(now_ms)
 bash tools/scripts/init-secrets.sh >/dev/null 2>&1
 if kubectl apply -f k8s/base/namespace.yaml >/dev/null 2>&1 \
@@ -130,7 +133,7 @@ else
 fi
 
 # ─── 4. Smoke test do fluxo completo ─────────────────────────────────────────
-step "4/9  Smoke test: criar link -> redirecionar -> enriquecer (via :8081)"
+step "4/10 Smoke test: criar link -> redirecionar -> enriquecer (via :8081)"
 
 # Rollout completo não significa caminho de rede pronto: num cluster recém-
 # criado, o agente de NetworkPolicy ainda está programando as regras e o
@@ -154,7 +157,7 @@ smoke_logs() {
 run_smoke
 
 # ─── 5. NetworkPolicy: a topologia declarada precisa VALER ───────────────────
-step "5/9  NetworkPolicy (o espelho das redes edge/data/egress)"
+step "5/10 NetworkPolicy (o espelho das redes edge/data/egress)"
 
 # A prova-espelho do módulo 1: o proxy não alcança o banco.
 if "${KC[@]}" exec deploy/edge -- nc -z -w 2 db 5432 >/dev/null 2>&1; then
@@ -188,7 +191,7 @@ else
 fi
 
 # ─── 6. Endurecimento ────────────────────────────────────────────────────────
-step "6/9  Provas de endurecimento (o mesmo OWASP, agora em securityContext)"
+step "6/10 Provas de endurecimento (o mesmo OWASP, agora em securityContext)"
 
 if "${KC[@]}" exec deploy/worker -- sh -c 'echo x > /provaescrita' >/dev/null 2>&1; then
   bad "rootfs do worker é GRAVÁVEL (readOnlyRootFilesystem não está valendo)"
@@ -231,7 +234,7 @@ else
 fi
 
 # ─── 7. Desligamento gracioso ────────────────────────────────────────────────
-step "7/9  Desligamento gracioso por workload"
+step "7/10 Desligamento gracioso por workload"
 # O mesmo limite de 3s do módulo 1 para o processo, mais uma folga fixa de 2s
 # para o que é do Kubernetes (chamada de API + remoção do pod). O
 # discriminador é claro: um processo que IGNORA o SIGTERM só morre no
@@ -261,7 +264,7 @@ fi
 rollout_all || bad "a stack não voltou a ficar Ready após os deletes"
 
 # ─── 8. As provas que o Compose não faz ──────────────────────────────────────
-step "8/9  O que o ADR 0001 listou como limite do Compose, medido aqui"
+step "8/10 O que o ADR 0001 listou como limite do Compose, medido aqui"
 
 # (a) Auto-cura: deletar um pod e medir até o substituto ficar Ready.
 pod=$("${KC[@]}" get pod -l app=api -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
@@ -364,20 +367,215 @@ else
   bad "não consegui criar o link-testemunha para o teste de rolling"
 fi
 
-# ─── 9. Medições + teardown ──────────────────────────────────────────────────
-step "9/9  Gravar medições e derrubar o cluster"
+# ─── 9. RBAC, HPA e a janela em que a NetworkPolicy ainda não vale ───────────
+step "9/10 RBAC, HPA e a janela da NetworkPolicy"
+
+# ── RBAC, primeiro pelo barato: a impersonação.
+# `auth can-i --as=` pergunta ao API server o que ELE faria. Não precisa de pod
+# e responde em milissegundos — mas é o mesmo componente perguntando e
+# julgando, então não prova que o token foi projetado nem que o pod ALCANÇA o
+# API server. A sonda logo abaixo fecha esses buracos.
+SA="system:serviceaccount:$NS:reader"
+if [ "$(kubectl auth can-i list pods --as="$SA" -n "$NS" 2>/dev/null)" = "yes" ]; then
+  ok "RBAC: a SA reader PODE listar pods no próprio namespace"
+else
+  bad "RBAC: a SA reader não consegue listar pods — a Role não está valendo"
+fi
+if [ "$(kubectl auth can-i list secrets --as="$SA" -n "$NS" 2>/dev/null)" = "no" ]; then
+  ok "RBAC: a SA reader NÃO pode listar secrets (a prova negativa)"
+else
+  bad "RBAC: a SA reader consegue listar SECRETS — a Role está larga demais"
+fi
+# Role é namespaced: o mesmo verbo sem namespace é outro recurso, e negar isso
+# é o que separa `Role` de `ClusterRole` na prática.
+if [ "$(kubectl auth can-i list pods --as="$SA" --all-namespaces 2>/dev/null)" = "no" ]; then
+  ok "RBAC: a Role não vaza para outros namespaces (Role ≠ ClusterRole)"
+else
+  bad "RBAC: a SA reader lista pods em TODOS os namespaces"
+fi
+
+# ── Nenhum workload da stack fala com o API server, e prova isso não montando
+# o token. É a superfície que não existe — melhor do que uma Role apertada.
+SEM_TOKEN=0; COM_TOKEN=""
+for d in api worker web edge cache; do
+  v=$("${KC[@]}" get deploy "$d" -o jsonpath='{.spec.template.spec.automountServiceAccountToken}' 2>/dev/null)
+  if [ "$v" = "false" ]; then SEM_TOKEN=$((SEM_TOKEN+1)); else COM_TOKEN="$COM_TOKEN $d"; fi
+done
+v=$("${KC[@]}" get statefulset db -o jsonpath='{.spec.template.spec.automountServiceAccountToken}' 2>/dev/null)
+[ "$v" = "false" ] && SEM_TOKEN=$((SEM_TOKEN+1)) || COM_TOKEN="$COM_TOKEN db"
+if [ "$SEM_TOKEN" -eq 6 ]; then
+  ok "os 6 workloads da stack não montam token de ServiceAccount"
+else
+  bad "workload montando token sem precisar:$COM_TOKEN"
+fi
+
+# ── E agora a prova cara: um pod com o token DE VERDADE, no caminho inteiro.
+"${KC[@]}" delete pod rbac-probe --ignore-not-found >/dev/null 2>&1
+if "${KC[@]}" apply -f k8s/probes/rbac-probe.yaml >/dev/null 2>&1 &&
+   "${KC[@]}" wait --for=jsonpath='{.status.phase}'=Succeeded pod/rbac-probe --timeout=120s >/dev/null 2>&1; then
+  SONDA=$("${KC[@]}" logs pod/rbac-probe 2>/dev/null | tail -1)
+  # Sem pipe para grep: com pipefail, `grep -q` que acha cedo inverte o
+  # resultado (armadilha 29). `case` não tem cano, não tem sinal.
+  case "$SONDA" in
+    *'"pods": 200'*) ok "sonda RBAC: o token real lista pods (HTTP 200)" ;;
+    *) bad "sonda RBAC: listar pods não deu 200 — $SONDA" ;;
+  esac
+  case "$SONDA" in
+    *'"secrets": 403'*) ok "sonda RBAC: o token real recebe 403 em secrets" ;;
+    *) bad "sonda RBAC: secrets não deu 403 — $SONDA" ;;
+  esac
+  case "$SONDA" in
+    *'"nodes": 403'*) ok "sonda RBAC: 403 em nodes (recurso de cluster, fora da Role)" ;;
+    *) bad "sonda RBAC: nodes não deu 403 — $SONDA" ;;
+  esac
+else
+  bad "a sonda de RBAC não completou"
+fi
+"${KC[@]}" delete pod rbac-probe --ignore-not-found >/dev/null 2>&1
+
+# ── A janela de egresso livre: a NetworkPolicy NÃO vale no instante do boot.
+# Medido aqui e não copiado: o pod tenta a internet num laço apertado e
+# registra a última conexão que passou. O portão não exige um valor — exige
+# que a janela EXISTA e FECHE, porque as duas metades ensinam coisas
+# diferentes e uma regressão em qualquer uma delas é notícia.
+"${KC[@]}" delete pod netpol-window --ignore-not-found >/dev/null 2>&1
+"${KC[@]}" create configmap netpol-window-py \
+  --from-file=janela.py=tools/scripts/k8s-netpol-window.py \
+  --dry-run=client -o yaml 2>/dev/null | "${KC[@]}" apply -f - >/dev/null 2>&1
+if "${KC[@]}" run netpol-window --image=infra-knowlogy/worker-py:dev --restart=Never \
+     --overrides='{"spec":{"volumes":[{"name":"s","configMap":{"name":"netpol-window-py"}}],"containers":[{"name":"c","image":"infra-knowlogy/worker-py:dev","imagePullPolicy":"Never","command":["python3","/s/janela.py"],"volumeMounts":[{"name":"s","mountPath":"/s"}]}]}}' >/dev/null 2>&1 &&
+   "${KC[@]}" wait --for=jsonpath='{.status.phase}'=Succeeded pod/netpol-window --timeout=120s >/dev/null 2>&1; then
+  JAN=$("${KC[@]}" logs netpol-window 2>/dev/null | tail -1)
+  M_NETPOL_WINDOW_MS=$(printf '%s' "$JAN" | python3 -c \
+    "import sys,json;d=json.load(sys.stdin);print(int(d['janelaMs']) if d.get('janelaMs') is not None else '')" 2>/dev/null)
+  case "$JAN" in
+    *'"fechou": true'*)
+      ok "a NetworkPolicy fecha o egresso do pod novo (janela: ${M_NETPOL_WINDOW_MS:-?} ms)" ;;
+    *) bad "o egresso do pod novo NUNCA foi bloqueado — default-deny não vale" ;;
+  esac
+  case "$JAN" in
+    *'"houveJanela": true'*)
+      ok "e existe janela livre no boot — defesa em profundidade não é opcional" ;;
+    *) M_NETPOL_WINDOW_MS=""
+       skip "sem janela livre observável nesta execução (policy chegou antes do 1º pacote)" ;;
+  esac
+else
+  bad "a sonda da janela de NetworkPolicy não completou"
+fi
+"${KC[@]}" delete pod netpol-window --ignore-not-found >/dev/null 2>&1
+
+# ── HPA: métrica disponível, e reação a carga REAL cronometrada.
+if "${KC[@]}" get hpa api >/dev/null 2>&1; then
+  # Esperar a métrica, e não perguntar uma vez: a seção anterior acabou de
+  # fazer rolling restart, e pod novo fica sem métrica por uma ou duas janelas
+  # de `--metric-resolution`. É a armadilha 25 (prontidão ≠ configuração
+  # aplicada) na roupa do metrics-server — a primeira versão desta checagem
+  # reprovava por corrida, com o HPA perfeitamente funcional.
+  UTIL=""
+  for _ in $(seq 1 30); do
+    UTIL=$("${KC[@]}" get hpa api -o jsonpath='{.status.currentMetrics[0].resource.current.averageUtilization}' 2>/dev/null)
+    [ -n "$UTIL" ] && break
+    sleep 3
+  done
+  if [ -n "$UTIL" ]; then
+    ok "HPA: a API de métricas responde (utilização atual ${UTIL}%)"
+  else
+    bad "HPA em <unknown> — falta metrics-server ou requests.cpu na api"
+  fi
+
+  if [ "${SKIP_HPA:-}" = "1" ]; then
+    skip "reação do HPA sob carga (SKIP_HPA=1)"
+  elif HPA_JSON=$(python3 tools/scripts/k8s-measure-hpa.py 2>/dev/null | tail -1) &&
+       [ -n "$HPA_JSON" ]; then
+    campo() { printf '%s' "$HPA_JSON" | python3 -c \
+      "import sys,json;v=json.load(sys.stdin).get('$1');print('' if v is None else v)" 2>/dev/null; }
+    M_HPA_CEGA=$(campo janelaCegaMaxSegundos)
+    M_HPA_CEGA_MIN=$(campo janelaCegaMinSegundos)
+    M_HPA_BOOT=$(campo bootMaxSegundos)
+    M_HPA_TEORICO=$(campo limiteTeoricoSegundos)
+    M_HPA_DEPOIS=$("${KC[@]}" get deploy api -o jsonpath='{.status.replicas}' 2>/dev/null)
+    if [ -n "$M_HPA_CEGA" ]; then
+      ok "HPA escalou sob carga real em 3 rodadas (janela cega ${M_HPA_CEGA_MIN}s–${M_HPA_CEGA}s)"
+    else
+      bad "o HPA não escalou sob carga — verifique metrics-server e o alvo"
+    fi
+
+    # A CONFIGURAÇÃO PREVÊ O COMPORTAMENTO — em três termos, e o terceiro é o
+    # que quase todo mundo esquece:
+    #
+    #   2 × --metric-resolution (15s) .... 30s  uso de CPU é TAXA, e taxa sai
+    #                                           da diferença entre DUAS
+    #                                           raspagens, não de uma
+    #   1 × sync-period do HPA (15s) ..... 15s
+    #                                    ──────
+    #                                      45s
+    #
+    # Esta checagem já reprovou de verdade: escrita com 30 s (contando só dois
+    # termos), ela falhou contra uma medição de 44,7 s. O limite é que estava
+    # errado. Se voltar a estourar, ou a configuração mudou ou o cluster está
+    # sob pressão — e a lição, que cita os números lado a lado, precisa saber.
+    if [ -n "$M_HPA_CEGA" ] && python3 -c "
+import sys; sys.exit(0 if float('$M_HPA_CEGA') <= float('$M_HPA_TEORICO') else 1)"; then
+      ok "o medido (${M_HPA_CEGA}s) cabe no que a configuração prevê (${M_HPA_TEORICO}s)"
+    else
+      bad "janela cega de ${M_HPA_CEGA}s acima do limite previsto de ${M_HPA_TEORICO}s"
+    fi
+
+    # A afirmação que a lição faz: a maior parte do tempo de reação é o
+    # Kubernetes PERCEBER, não o pod subir. Se isso deixar de valer, a lição
+    # passa a mentir e o portão precisa falhar.
+    #
+    # O fator 10 não é decoração. Comparar `cega > boot` passaria com folga de
+    # um milissegundo e não detectaria regressão nenhuma; a lição afirma uma
+    # ORDEM DE GRANDEZA, e é isso que tem que ser defendido. O piso de 1s no
+    # boot vem da resolução dos carimbos do Kubernetes.
+    # Dois fatores e não um, porque a janela cega é uma FAIXA e as duas
+    # pontas afirmam coisas diferentes. No pior caso o usuário espera uma
+    # ordem de grandeza a mais que o boot (10x); no melhor caso o boot ainda
+    # é uma fração pequena (5x). A primeira versão exigia 10x do MÍNIMO e
+    # reprovou com 12,8s contra 2,0s — 6,4x. O número estava certo; a
+    # afirmação é que era forte demais numa das pontas.
+    if [ -n "$M_HPA_BOOT" ] && python3 -c "
+import sys
+boot = max(float('$M_HPA_BOOT'), 1.0)
+pior, melhor = float('$M_HPA_CEGA'), float('$M_HPA_CEGA_MIN')
+sys.exit(0 if pior >= 10 * boot and melhor >= 5 * boot else 1)"; then
+      ok "perceber domina subir: ${M_HPA_CEGA_MIN}s–${M_HPA_CEGA}s contra ${M_HPA_BOOT}s de boot"
+    else
+      bad "o boot (${M_HPA_BOOT}s) deixou de ser desprezível diante da janela cega (${M_HPA_CEGA_MIN}s–${M_HPA_CEGA}s)"
+    fi
+  else
+    bad "a medição do HPA falhou"
+  fi
+else
+  bad "o HorizontalPodAutoscaler 'api' não existe"
+fi
+
+# ─── 10. Medições + teardown ─────────────────────────────────────────────────
+step "10/10 Gravar medições e derrubar o cluster"
 
 if K8S_MEASURED_OUT="site/src/data/k8s-measured.json" \
    M_CLUSTER_CREATE_S="$M_CLUSTER_CREATE_S" M_STACK_READY_S="$M_STACK_READY_S" \
    M_SELF_HEAL_S="$M_SELF_HEAL_S" M_NOTREADY_S="$M_NOTREADY_S" \
    M_ROLLING_TOTAL="$M_ROLLING_TOTAL" M_ROLLING_FAILS="$M_ROLLING_FAILS" \
    M_SHUTDOWN_MAX_MS="$M_SHUTDOWN_MAX_MS" \
+   M_NETPOL_WINDOW_MS="$M_NETPOL_WINDOW_MS" \
+   M_HPA_CEGA="$M_HPA_CEGA" M_HPA_CEGA_MIN="$M_HPA_CEGA_MIN" \
+   M_HPA_BOOT="$M_HPA_BOOT" M_HPA_DEPOIS="$M_HPA_DEPOIS" \
    python3 - <<'PY'
 import json, os, subprocess, datetime
 
 def num(name):
     v = os.environ.get(name, "")
     return int(v) if v.strip().isdigit() else None
+
+
+def flo(name):
+    v = os.environ.get(name, "").strip()
+    try:
+        return float(v)
+    except ValueError:
+        return None
 
 kind_v = subprocess.run(["kind", "version"], capture_output=True, text=True).stdout.split()[1]
 k8s_v = ""
@@ -397,6 +595,16 @@ data = {
         "stackReadySeconds": num("M_STACK_READY_S"),
         "selfHealSeconds": num("M_SELF_HEAL_S"),
         "readinessReactSeconds": num("M_NOTREADY_S"),
+        # A janela em que a NetworkPolicy ainda não valia, em ms. Não é um
+        # defeito deste cluster: é como o dataplane é programado.
+        "netpolWindowMs": num("M_NETPOL_WINDOW_MS"),
+        # A reação do HPA, partida em duas: o que o Kubernetes leva para
+        # PERCEBER, e o que o pod leva para SUBIR. A lição vive da razão
+        # entre os dois.
+        "hpaBlindWindowMinSeconds": flo("M_HPA_CEGA_MIN"),
+        "hpaBlindWindowMaxSeconds": flo("M_HPA_CEGA"),
+        "hpaPodBootSeconds": flo("M_HPA_BOOT"),
+        "hpaReplicasAfterLoad": num("M_HPA_DEPOIS"),
         "rollingRequestsTotal": num("M_ROLLING_TOTAL"),
         "rollingRequestsFailed": num("M_ROLLING_FAILS"),
         "shutdownMaxMs": num("M_SHUTDOWN_MAX_MS"),

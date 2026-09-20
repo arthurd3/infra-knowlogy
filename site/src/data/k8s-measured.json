@@ -1,14 +1,19 @@
 {
-  "generatedAt": "2026-09-18T12:01:20Z",
+  "generatedAt": "2026-09-20T22:04:45Z",
   "kindVersion": "v0.33.0",
   "kubernetesVersion": "v1.37.0",
   "measurements": {
-    "clusterCreateSeconds": 25,
-    "stackReadySeconds": 22,
+    "clusterCreateSeconds": null,
+    "stackReadySeconds": 1,
     "selfHealSeconds": 2,
-    "readinessReactSeconds": 11,
-    "rollingRequestsTotal": 27,
+    "readinessReactSeconds": 12,
+    "netpolWindowMs": 0,
+    "hpaBlindWindowMinSeconds": 12.8,
+    "hpaBlindWindowMaxSeconds": 29.8,
+    "hpaPodBootSeconds": 2.0,
+    "hpaReplicasAfterLoad": 6,
+    "rollingRequestsTotal": 26,
     "rollingRequestsFailed": 0,
-    "shutdownMaxMs": 2958
+    "shutdownMaxMs": 2963
   }
 }

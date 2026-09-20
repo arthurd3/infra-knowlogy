@@ -1,0 +1,89 @@
+# A sonda de RBAC — o pod que USA o token, e não uma hipótese sobre ele.
+#
+# `kubectl auth can-i --as=…` pergunta ao API server o que ELE faria. É rápido,
+# não precisa de pod, e é uma boa primeira prova. Mas é uma simulação: quem
+# responde é o mesmo componente que julga, e nada garante que o token tenha
+# sido projetado, que o volume tenha sido montado, ou que a NetworkPolicy
+# deixe o pod ALCANÇAR o API server.
+#
+# Esta sonda fecha esses três buracos porque faz o caminho inteiro: lê o token
+# do volume projetado, abre TLS contra `kubernetes.default.svc` validando a CA
+# do cluster, e compara os códigos de status.
+#
+# Não entra no `kustomization.yaml` de propósito: é artefato de portão, roda e
+# morre. `k8s/base` é o que a stack É.
+
+# ─── O egresso que a sonda precisa, declarado ───────────────────────────────
+# Sem isto a sonda DEPENDE de uma corrida para funcionar. Medido neste cluster:
+# um pod recém-criado tem egresso livre por ~0,3 s antes de a `default-deny`
+# passar a valer (ver armadilha 42 no CLAUDE.md). A sonda é rápida e caberia
+# nessa janela — e um portão que passa por causa de uma corrida é um portão que
+# vai falhar sozinho numa máquina mais lenta.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: rbac-probe
+spec:
+  podSelector: {matchLabels: {app: rbac-probe}}
+  policyTypes: [Egress]
+  egress:
+    # O API server não é um pod: ele escuta no IP do nó, então não há
+    # `podSelector` que o alcance. `ipBlock` é o único jeito — e por isso o
+    # endereço do control plane é a coisa mais difícil de fechar com
+    # NetworkPolicy num cluster de verdade.
+    - ports: [{protocol: TCP, port: 6443}, {protocol: TCP, port: 443}]
+      to: [{ipBlock: {cidr: 0.0.0.0/0}}]
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: rbac-probe
+  labels: {app: rbac-probe}
+spec:
+  serviceAccountName: reader
+  # A SA declara `automountServiceAccountToken: false`; o POD pede o contrário,
+  # e o pedido do pod vence. É a razão de o default da SA ser seguro: quem
+  # precisa do token tem que dizer que precisa, aqui, onde se lê.
+  automountServiceAccountToken: true
+  restartPolicy: Never
+  containers:
+    - name: probe
+      image: infra-knowlogy/worker-py:dev
+      imagePullPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities: {drop: [ALL]}
+      command: ["python3", "-c"]
+      args:
+        - |
+          import json, ssl, urllib.request
+          RAIZ = "/var/run/secrets/kubernetes.io/serviceaccount"
+          token = open(f"{RAIZ}/token").read().strip()
+          ns = open(f"{RAIZ}/namespace").read().strip()
+          ctx = ssl.create_default_context(cafile=f"{RAIZ}/ca.crt")
+
+          def status(caminho):
+              req = urllib.request.Request(
+                  f"https://kubernetes.default.svc{caminho}",
+                  headers={"Authorization": f"Bearer {token}"})
+              try:
+                  with urllib.request.urlopen(req, context=ctx, timeout=10) as r:
+                      return r.status
+              except urllib.error.HTTPError as e:
+                  return e.code
+
+          print(json.dumps({
+              "namespace": ns,
+              "tokenMontado": len(token) > 0,
+              # O que a Role concede.
+              "pods":              status(f"/api/v1/namespaces/{ns}/pods"),
+              "services":          status(f"/api/v1/namespaces/{ns}/services"),
+              # O que ela NÃO concede — e é aqui que a lição mora.
+              "secrets":           status(f"/api/v1/namespaces/{ns}/secrets"),
+              # Role é NAMESPACED: o mesmo verbo, sem namespace, é outro recurso.
+              "podsTodosNamespaces": status("/api/v1/pods"),
+              "nodes":             status("/api/v1/nodes"),
+          }))

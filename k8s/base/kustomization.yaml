@@ -15,8 +15,10 @@ resources:
   - cache/deployment.yaml
   - cache/service.yaml
   - cache/pvc.yaml
+  - rbac/reader.yaml
   - api/deployment.yaml
   - api/service.yaml
+  - hpa/api.yaml
   - worker/deployment.yaml
   - web/deployment.yaml
   - web/service.yaml
