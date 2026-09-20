@@ -1,0 +1,203 @@
+---
+key: the-state-file
+lang: en
+track: iac
+order: 2
+title: State, the file in charge
+summary: "It is neither a cache nor a log. It is the map between the address you wrote and the object that exists — and losing it does not lose the infrastructure, it loses ownership of it."
+minutes: 15
+tags: [iac, state, tfstate, drift, lock, backend]
+sources:
+  - label: "OpenTofu — state"
+    url: "https://opentofu.org/docs/language/state/"
+    kind: docs
+    accessed: "2026-09-20"
+  - label: "State and plan encryption — OpenTofu"
+    url: "https://opentofu.org/docs/language/state/encryption/"
+    kind: docs
+    accessed: "2026-09-20"
+  - label: "How Terraform works under the hood (modules, state, DAG)"
+    url: "https://one2n.io/blog/terraform-under-the-hood"
+    kind: blog
+    accessed: "2026-09-20"
+  - label: "Secrets in Terraform state"
+    url: "https://scalr.com/learning-center/secrets-in-terraform-state"
+    kind: blog
+    accessed: "2026-09-20"
+---
+
+import StateLoop from "../../../components/diagrams/StateLoop.astro";
+
+`compose.yaml` keeps no state at all, and it works. So why does OpenTofu need an
+extra file?
+
+## What Compose does and OpenTofu cannot
+
+Compose finds out what exists by **asking Docker**: it labels everything it
+creates (`com.docker.compose.project`, `com.docker.compose.service`) and then
+filters on those labels. That works because Compose talks to **one** system, and
+that system accepts arbitrary labels.
+
+An IaC provider is not that lucky. An S3 bucket has no "who created me" field;
+neither does a DNS zone. And even where a label exists, it does not say **which
+address in your code** corresponds to that object. That correspondence is what
+state keeps:
+
+<StateLoop />
+
+```json
+"resources": [
+  {
+    "type": "docker_container",
+    "name": "db",
+    "instances": [
+      { "attributes": { "name": "iac-db", "id": "3b7c1e…" } }
+    ]
+  }
+]
+```
+
+`docker_container.db` — the address you wrote — points at `3b7c1e…`, the
+64-character id the daemon handed back. Without that line, `tofu` has no way to
+know that container is its own.
+
+<Callout type="why" label="Why this is what enables `plan`">
+With state, `plan` has **three** things to compare: what you wrote, what state
+says exists, and what the world answers when asked.
+
+- configuration × state → **what you changed**
+- state × world → **what changed without you** (drift)
+
+Without state only "configuration × world" remains, and the most important piece
+of information disappears: what was **yours** and vanished. A missing resource
+would become indistinguishable from one that never existed.
+</Callout>
+
+## Losing state does not lose the infrastructure
+
+This is the most expensive confusion in the lesson. The stack stays up; the
+containers keep serving. What is lost is **ownership**: `tofu` no longer knows
+that `iac-db` is its own, and the next `apply` tries to create it again — and
+collides, because the name is already taken.
+
+<RunIt>
+```bash
+make iac-up
+mv iac/terraform.tfstate /tmp/backup.tfstate
+make iac-plan          # it wants to CREATE everything again
+mv /tmp/backup.tfstate iac/terraform.tfstate
+make iac-plan          # nothing to do
+```
+</RunIt>
+
+The escape hatch exists and is called `tofu import`: you tell it which address
+corresponds to which id, one at a time, and the state is rebuilt. It works — and
+for nineteen resources it is an afternoon's work.
+
+<Term term="state lock" alt="state lock">
+The file that stops two people from applying at the same time.
+
+Two concurrent `apply` runs read the same state, each decides on its own, and
+the last one to write erases the record of what the other created — leaving a
+resource orphaned in the world and absent from the file. That is why every
+serious backend takes a lock before writing.
+
+With a local backend the lock is a file alongside
+(`.terraform.tfstate.lock.info`); with a remote backend it belongs to the
+service. OpenTofu 1.12 gained native S3 locking, with no DynamoDB table needed
+just for that.
+</Term>
+
+## Where state lives
+
+In this module, in a file alongside — `iac/terraform.tfstate`, which
+`.gitignore` refuses. That is enough for one person on one machine and **not**
+enough for a team.
+
+<Tradeoff
+  a="Local state, in a file"
+  b="Remote state, in a shared backend"
+  whenA="One person, one machine, one lab. That is this module's case — and it is honest to say so, rather than fake a backend nobody shares."
+  whenB="More than one person, or any automation at all. The gain is not the storage: it is the <b>lock</b>, which stops two concurrent applies from overwriting each other. It costs one more service to operate and protect."
+  chose="a"
+  verdict="local, and declared. What the module does not prove — real locking, concurrency, durability — becomes a field note, not prose pretending to have been measured."
+  adr="0015-opentofu-e-o-provider-docker"
+/>
+
+<Callout type="danger" label="State is a target">
+It records in plaintext everything that became a resource attribute. If the
+database password entered the configuration, it is in there — readable, in the
+file that goes to the backup, to the bucket and to the CI runner.
+
+In this module it is **not** there, and the gate proves it. The reason is the
+`<VAR>_FILE` convention: what gets passed is the path, not the value. Lesson 7
+measures both cases side by side.
+</Callout>
+
+<FieldNote
+  source="Scalr — Secrets in Terraform state"
+  url="https://scalr.com/learning-center/secrets-in-terraform-state"
+  kind="blog"
+  accessed="2026-09-20"
+>
+Marking a variable `sensitive = true` hides the value from command-line output
+and changes **nothing** about what is written to state or to a saved plan. The
+real answers are different: encrypt the state (OpenTofu 1.7+) or stop the secret
+from getting there at all — `ephemeral` (Terraform 1.10) and *write-only*
+arguments (Terraform 1.11).
+</FieldNote>
+
+<LabExercise check="a senha NÃO está no estado" file="iac/containers.tf">
+
+The gate claims the Postgres password never appears in `iac/terraform.tfstate`.
+But the container **needs** it in order to start.
+
+Question: how are both things true at the same time?
+
+<Fragment slot="hint">
+Look for `POSTGRES_PASSWORD_FILE` in `iac/containers.tf` and see what it gets.
+</Fragment>
+
+<Fragment slot="answer">
+
+Because `tofu` never reads the password. It passes a **path**:
+
+```hcl
+env = ["POSTGRES_PASSWORD_FILE=/run/secrets/postgres_password"]
+
+volumes {
+  host_path      = "${var.host_repo_root}/stack/secrets/postgres_password"
+  container_path = "/run/secrets/postgres_password"
+  read_only      = true
+}
+```
+
+The one who opens the file is the **Postgres entrypoint**, already inside the
+container. The value never passes through `tofu`, and what is never read cannot
+be written down.
+
+It is the same convention as `compose.yaml`, `config.go` and `config.py` — and
+here it gains a benefit it did not have there: protecting the state.
+
+If the configuration did `file(var.password_file)` instead, the value would
+become a resource attribute and go into state in plaintext. That is exactly what
+the `iac/demo-secret/` folder demonstrates, and what the gate counts: **two
+plaintext occurrences**.
+
+</Fragment>
+</LabExercise>
+
+## What sticks
+
+- State is the **map** between an address in your code and an object in the
+  world.
+- It exists because not every resource accepts labels, and a label does not name
+  an address.
+- It is what makes `plan` and `destroy` possible — and what tells "it vanished"
+  apart from "it never existed".
+- Losing it brings nothing down: it loses **ownership**. `tofu import` rebuilds,
+  one at a time.
+- It records in plaintext whatever became an attribute. The `<VAR>_FILE`
+  convention avoids that at the source.
+
+<Quiz set="the-state-file" />

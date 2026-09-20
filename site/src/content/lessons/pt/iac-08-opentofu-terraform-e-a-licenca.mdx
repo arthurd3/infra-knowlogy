@@ -1,0 +1,195 @@
+---
+key: opentofu-terraform-and-the-license
+lang: pt
+track: iac
+order: 8
+title: "OpenTofu, Terraform e a licença"
+summary: "A pergunta 'qual dos dois?' costuma ser respondida por hábito. A resposta honesta passa por uma cláusula de 2023 — e pelo que este módulo NÃO prova."
+minutes: 15
+tags: [iac, opentofu, terraform, licenca, busl, mpl, nuvem]
+sources:
+  - label: "OpenTofu anuncia o fork do Terraform"
+    url: "https://opentofu.org/blog/opentofu-announces-fork-of-terraform/"
+    kind: blog
+    accessed: "2026-09-20"
+  - label: "OpenTofu — FAQ"
+    url: "https://opentofu.org/faq/"
+    kind: docs
+    accessed: "2026-09-20"
+  - label: "Terraform e OpenTofu: cláusula, fork, fundação e aquisição"
+    url: "https://hidekazu-konishi.com/entry/terraform_and_opentofu_history_and_timeline.html"
+    kind: blog
+    accessed: "2026-09-20"
+  - label: "OpenTofu (Wikipédia)"
+    url: "https://en.wikipedia.org/wiki/OpenTofu"
+    kind: docs
+    accessed: "2026-09-20"
+  - label: "OpenTofu — o que há de novo na 1.12"
+    url: "https://opentofu.org/docs/intro/whats-new/"
+    kind: docs
+    accessed: "2026-09-20"
+---
+
+import ForkTimeline from "../../../components/diagrams/ForkTimeline.astro";
+
+Esta lição fecha a trilha com duas coisas que nenhuma outra cobre: **por que a
+ferramenta se chama `tofu` aqui**, e **o que este módulo inteiro não prova**.
+
+<ForkTimeline />
+
+## A cláusula, e o que ela mudou
+
+Em **10 de agosto de 2023** a HashiCorp anunciou que o Terraform passaria de
+MPL 2.0 para **BUSL 1.1**. A primeira versão publicada sob a nova licença foi a
+**1.6.0, em 4 de outubro de 2023**.
+
+<Term term="BUSL" alt="BUSL — Business Source License">
+Uma licença *source-available*: o código está lá para ler e modificar, e há uma
+restrição de uso — tipicamente, não competir com quem a publica.
+
+Não é open source pela definição da OSI, e a diferença não é filosófica: ela
+muda quem pode construir um produto em cima, quem pode oferecer o serviço
+gerenciado, e o que o departamento jurídico da sua empresa vai responder.
+
+Cada versão costuma virar open source depois de um prazo (quatro anos, no caso),
+o que ajuda pouco para quem precisa da versão atual.
+</Term>
+
+A resposta da comunidade foi um fork: **OpenTF**, que virou **OpenTofu** em 20
+de setembro de 2023 ao ser aceito pela Linux Foundation. Ele permanece sob
+MPL 2.0 e aprovado pela OSI. Em **2025**, a IBM concluiu a aquisição da
+HashiCorp.
+
+<Callout type="why" label="Por que isto não é fofoca de comunidade">
+O `LICENSE` do Terraform escopa a BUSL para "Terraform Version 1.6.0 or later".
+Como não existe versão atual anterior a essa, **toda versão que você baixaria
+hoje** está sob ela.
+
+Para a maioria dos usos — provisionar a própria infraestrutura — isso não muda
+nada na prática. Mas é uma frase que alguém vai ter que escrever num formulário,
+e é melhor sabê-la antes.
+</Callout>
+
+## O que diverge, na prática
+
+| | Terraform | OpenTofu |
+|---|---|---|
+| licença | BUSL 1.1 (desde 1.6.0) | MPL 2.0, aprovada pela OSI |
+| governança | IBM / HashiCorp | Linux Foundation |
+| linguagem | HCL | HCL — a mesma |
+| providers | mesmos | mesmos, com registry próprio |
+| cifragem de estado | não, no CLI aberto | **sim**, desde a 1.7 |
+| segredo fora do estado | `ephemeral`, write-only | — |
+
+As duas primeiras linhas são de política. A quinta e a sexta são técnicas e
+opostas: **o OpenTofu cifra o arquivo; o Terraform impede o segredo de chegar
+nele.** A lição 7 mede a primeira e cita a segunda.
+
+<Tradeoff
+  a="Terraform"
+  b="OpenTofu"
+  whenA="Quando o time já opera nele, há módulos internos escritos contra ele, ou quando o ecossistema comercial em volta (Terraform Cloud, integrações de fornecedor) faz parte do desenho."
+  whenB="Quando a licença importa para quem te contrata, quando você quer o recurso de cifragem de estado, ou quando prefere governança de fundação a governança de um fornecedor."
+  chose="b"
+  verdict="OpenTofu, e a razão de peso não é ideológica: a cifragem de estado é medida pelo portão, e o CLI aberto do Terraform não a tem."
+  adr="0015-opentofu-e-o-provider-docker"
+/>
+
+<Callout type="trap" label="A vaga pede 'Terraform' e isso não muda nada">
+A linguagem é a mesma, os providers são os mesmos, os comandos são os mesmos. O
+que você aprendeu nesta trilha se usa num Terraform **sem tradução** — `tofu
+plan` e `terraform plan` recebem as mesmas flags e produzem a mesma saída.
+
+Ensinar a ferramenta minoritária para provar um ponto de gosto seria um
+desserviço. Não é o caso: aqui a escolha tem uma consequência técnica medida.
+</Callout>
+
+## O que este módulo NÃO prova
+
+A parte mais importante da lição, e a razão de ela existir. O módulo 4 provisiona
+containers num daemon local. Isso cobre estado, grafo, plano, drift, provider e
+pin — e **não** cobre:
+
+- **primitiva de nuvem**: VPC, subnet, security group, IAM. É a maior parte do
+  HCL que se escreve no mercado, e nada dela aparece aqui;
+- **remote state com lock de verdade**: o backend é arquivo local. Concorrência
+  e durabilidade não foram exercitadas;
+- **custo**: não há fatura, então não há a lição mais cara de todas — a de um
+  `destroy` no diretório errado;
+- **módulos publicados e workspaces em equipe**: são prática de time, e um time
+  de uma pessoa não a exercita.
+
+<FieldNote
+  source="OpenTofu — novidades da 1.12"
+  url="https://opentofu.org/docs/intro/whats-new/"
+  kind="docs"
+  accessed="2026-09-20"
+>
+A série 1.12 trouxe suporte a registry OCI para providers e módulos, lock nativo
+de estado no S3 (sem precisar de uma tabela DynamoDB só para isso) e tracing por
+OpenTelemetry em caráter experimental. O lock nativo em S3 é a mudança mais
+prática das três: ele remove um recurso inteiro do desenho de qualquer backend
+remoto em AWS.
+</FieldNote>
+
+<Callout type="danger" label="O `destroy` que ninguém esquece">
+Na nuvem, `tofu destroy` no diretório errado apaga infraestrutura de verdade, e
+o `-auto-approve` que é conveniente no laboratório é o que remove a última
+pergunta antes disso.
+
+As defesas conhecidas — `prevent_destroy` no `lifecycle`, estados separados por
+ambiente, credencial de leitura por padrão — são exatamente as que um módulo
+local não consegue exercitar, porque aqui apagar tudo custa 24 segundos para
+recriar.
+</Callout>
+
+<LabExercise check="zero containers, redes e volumes com o rótulo do módulo" file="tools/scripts/iac-verify.sh">
+
+O portão roda `tofu destroy` e depois confere que não sobrou nada com o rótulo
+`infra-knowlogy.module=iac`. Mas ele **não** confere as imagens — e elas
+continuam no host de propósito.
+
+Pergunta: por que as imagens ficam, e o que isso ensina sobre `destroy`?
+
+<Fragment slot="hint">
+Procure `keep_locally` no `iac/images.tf` e pense em quem mais usa aqueles
+digests.
+</Fragment>
+
+<Fragment slot="answer">
+
+Porque as imagens base são **compartilhadas**. O `postgres:17-alpine` daquele
+digest é o mesmo que o `compose.yaml` e o cluster kind usam; apagá-lo no
+`destroy` do módulo 4 obrigaria os outros dois a baixarem tudo de novo.
+
+```hcl
+resource "docker_image" "base" {
+  # ...
+  keep_locally = true
+}
+```
+
+A lição geral é que **`destroy` apaga o que o estado lista, e o estado lista o
+que você declarou** — inclusive coisas que outra pessoa também usa. Num
+provedor de nuvem isso tem nome e conta: uma sub-rede declarada em dois estados
+diferentes é destruída pelo primeiro que rodar, e o segundo descobre depois.
+
+A fronteira certa não é técnica, é de propriedade: cada recurso deve pertencer a
+**um** estado, e recurso compartilhado entra por referência (`data`), nunca por
+declaração.
+
+</Fragment>
+</LabExercise>
+
+## O que fica
+
+- Terraform é BUSL desde a 1.6.0; OpenTofu é o fork MPL 2.0 na Linux Foundation.
+- A linguagem é a mesma: o que você aprendeu aqui serve nos dois.
+- A divergência técnica que importa: cifragem de estado de um lado, `ephemeral`
+  e write-only do outro.
+- Este módulo não prova nuvem, lock real, custo nem prática de equipe — e dizer
+  isso faz parte de ensinar.
+- `destroy` apaga o que o estado lista. Recurso compartilhado entra por
+  referência, não por declaração.
+
+<Quiz set="opentofu-terraform-and-the-license" />

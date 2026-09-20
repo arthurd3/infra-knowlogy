@@ -1,0 +1,140 @@
+{
+  "note_pt": "O provider como processo separado, o schema como autoridade, e o lock que engana quem testa pela metade.",
+  "note_en": "The provider as a separate process, the schema as authority, and the lock that fools a half-done test.",
+  "pt": [
+    {
+      "q": "Por que `pids_limit` não aparece no `iac/containers.tf`, se o `compose.prod.yaml` põe o limite em todo serviço?",
+      "options": [
+        {
+          "text": "Porque o provider não expõe esse atributo — a API do Docker tem `PidsLimit`, o schema do provider não tem, e não há como escrevê-lo.",
+          "correct": true,
+          "why": "Dá para conferir: `tofu providers schema -json` lista os atributos de `docker_container` e `pids_limit` não está lá. É o exemplo mais direto de que um provider é um mapeamento PARCIAL da API — e de que migrar para IaC pode perder um controle de segurança em silêncio."
+        },
+        {
+          "text": "Porque o limite de PIDs é herdado do daemon e não precisa ser declarado.",
+          "why": "Não é herdado de nada útil: sem `PidsLimit`, o container fica sem teto de processos, que é exatamente o cenário de fork bomb que o limite existe para conter."
+        },
+        {
+          "text": "Porque foi esquecido ao portar o compose.",
+          "why": "Seria uma explicação razoável e é falsa — e o comentário no arquivo diz isso explicitamente. Esquecimento é hipótese cara: vale conferir o schema antes de assumi-la."
+        },
+        {
+          "text": "Porque `pids_limit` só existe no Swarm.",
+          "why": "Confusão com o `deploy.resources` do Compose, cuja maior parte é mesmo de Swarm. `PidsLimit` é do HostConfig e funciona num `docker run` comum."
+        }
+      ]
+    },
+    {
+      "q": "Você adultera todos os hashes `h1:` do `.terraform.lock.hcl` e roda `tofu init`. O que acontece?",
+      "options": [
+        {
+          "text": "Passa — as entradas `zh:` continuam válidas, e uma família de hash satisfeita já basta.",
+          "correct": true,
+          "why": "`zh:` é o hash do zip assinado pelo registry; `h1:` é o do diretório extraído. Foi exatamente assim que a primeira prova negativa deste módulo nasceu inútil: ela anunciava proteção tendo testado metade. Adulterando as duas, o init reprova."
+        },
+        {
+          "text": "Reprova imediatamente, com erro de checksum.",
+          "why": "É o que se espera e não é o que acontece. Vale rodar: a diferença entre o esperado e o medido é justamente o que torna esta checagem do portão honesta."
+        },
+        {
+          "text": "Passa, mas emite um aviso sobre hashes divergentes.",
+          "why": "Não há aviso — a instalação é silenciosa e bem-sucedida, o que é pior: um teste que passa sem provar nada não deixa rastro de que não provou."
+        },
+        {
+          "text": "Reprova só se o provider não estiver no cache de plugins.",
+          "why": "O cache muda de onde o pacote vem, não o critério de verificação. Com as duas famílias adulteradas, reprova com ou sem cache."
+        }
+      ]
+    },
+    {
+      "q": "O que significa, na prática, o provider ser um processo separado falando gRPC?",
+      "options": [
+        {
+          "text": "O `tofu init` baixa um binário de terceiro que o `apply` executa na sua máquina, com as suas credenciais — por isso o pin por hash importa.",
+          "correct": true,
+          "why": "É a mesma cadeia de suprimentos de uma imagem base, e a mesma resposta: pinar o conteúdo, não o rótulo. O ADR 0004 pina imagem por digest exatamente pelo mesmo motivo."
+        },
+        {
+          "text": "O provider roda num container isolado, então código malicioso fica contido.",
+          "why": "Não há isolamento nenhum: é um processo filho, com o mesmo usuário e o mesmo acesso a arquivos e sockets que o `tofu`."
+        },
+        {
+          "text": "O `tofu` pode falar com providers remotos pela rede.",
+          "why": "O gRPC aqui é sobre stdio local, entre pai e filho. O que fala com a rede é o provider, ao chamar a API do serviço."
+        },
+        {
+          "text": "Cada recurso do plano vira um processo separado.",
+          "why": "É um processo por provider, reutilizado para todos os recursos daquele tipo. O paralelismo do grafo acontece em chamadas concorrentes ao mesmo plugin."
+        }
+      ]
+    }
+  ],
+  "en": [
+    {
+      "q": "Why is there no `pids_limit` in `iac/containers.tf`, when `compose.prod.yaml` sets it on every service?",
+      "options": [
+        {
+          "text": "Because the provider does not expose that attribute — the Docker API has `PidsLimit`, the provider schema does not, and there is no way to write it.",
+          "correct": true,
+          "why": "You can check: `tofu providers schema -json` lists `docker_container`'s attributes and `pids_limit` is not among them. It is the most direct example that a provider is a PARTIAL mapping of an API — and that migrating to IaC can silently drop a security control."
+        },
+        {
+          "text": "Because the PID limit is inherited from the daemon and need not be declared.",
+          "why": "Nothing useful is inherited: with no `PidsLimit`, the container has no process ceiling, which is exactly the fork-bomb scenario the limit exists to contain."
+        },
+        {
+          "text": "Because it was forgotten while porting the compose file.",
+          "why": "A reasonable explanation, and a false one — the comment in the file says so explicitly. 'Forgotten' is an expensive hypothesis: check the schema before assuming it."
+        },
+        {
+          "text": "Because `pids_limit` only exists in Swarm.",
+          "why": "A confusion with Compose's `deploy.resources`, most of which really is Swarm-only. `PidsLimit` belongs to HostConfig and works in a plain `docker run`."
+        }
+      ]
+    },
+    {
+      "q": "You tamper with every `h1:` hash in `.terraform.lock.hcl` and run `tofu init`. What happens?",
+      "options": [
+        {
+          "text": "It passes — the `zh:` entries are still valid, and one satisfied hash family is enough.",
+          "correct": true,
+          "why": "`zh:` is the hash of the registry-signed zip; `h1:` is the hash of the extracted directory. That is exactly how this module's first negative proof was born useless: it announced protection having tested half. Tamper with both and init fails."
+        },
+        {
+          "text": "It fails immediately, with a checksum error.",
+          "why": "That is what you expect and not what happens. Worth running: the gap between expected and measured is precisely what makes this gate check honest."
+        },
+        {
+          "text": "It passes, but warns about mismatched hashes.",
+          "why": "There is no warning — the install is silent and successful, which is worse: a test that passes without proving anything leaves no trace that it proved nothing."
+        },
+        {
+          "text": "It fails only if the provider is not in the plugin cache.",
+          "why": "The cache changes where the package comes from, not the verification criterion. With both families tampered, it fails with or without the cache."
+        }
+      ]
+    },
+    {
+      "q": "What does it mean in practice that the provider is a separate process speaking gRPC?",
+      "options": [
+        {
+          "text": "`tofu init` downloads a third-party binary that `apply` executes on your machine, with your credentials — which is why hash pinning matters.",
+          "correct": true,
+          "why": "It is the same supply chain as a base image, and the same answer: pin the content, not the label. ADR 0004 pins images by digest for exactly the same reason."
+        },
+        {
+          "text": "The provider runs in an isolated container, so malicious code is contained.",
+          "why": "There is no isolation at all: it is a child process, with the same user and the same access to files and sockets as `tofu`."
+        },
+        {
+          "text": "`tofu` can talk to remote providers over the network.",
+          "why": "The gRPC here runs over local stdio, between parent and child. What talks to the network is the provider, when it calls the service's API."
+        },
+        {
+          "text": "Each resource in the plan becomes its own process.",
+          "why": "It is one process per provider, reused for every resource of that type. The graph's parallelism happens as concurrent calls into the same plugin."
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,209 @@
+---
+key: why-infrastructure-becomes-code
+lang: pt
+track: iac
+order: 1
+title: Por que infraestrutura vira código
+summary: "O problema não é digitar comando: é não conseguir responder o que existe, o que mudaria e como desfazer. IaC é a ferramenta que responde as três."
+minutes: 14
+tags: [iac, opentofu, terraform, declarativo, idempotencia, compose]
+sources:
+  - label: "OpenTofu — documentação"
+    url: "https://opentofu.org/docs/intro/whats-new/"
+    kind: docs
+    accessed: "2026-09-20"
+  - label: "O que acontece quando você roda um comando do Terraform"
+    url: "https://one2n.io/blog/terraform-under-the-hood"
+    kind: blog
+    accessed: "2026-09-20"
+  - label: "Compose Specification"
+    url: "https://github.com/compose-spec/compose-spec/blob/main/spec.md"
+    kind: spec
+  - label: "OpenTofu — FAQ"
+    url: "https://opentofu.org/faq/"
+    kind: docs
+    accessed: "2026-09-20"
+---
+
+import DeclarativeSpectrum from "../../../components/diagrams/DeclarativeSpectrum.astro";
+
+Antes de falar de HCL, vale olhar o que veio antes — porque a maior parte do que
+se chama de "infraestrutura como código" por aí ainda é a etapa anterior.
+
+## O servidor que ninguém sabe reconstruir
+
+Um host que foi configurado à mão ao longo de dois anos tem uma propriedade
+desagradável: **ele não é reproduzível**. Alguém instalou um pacote numa
+madrugada, alguém editou um `sysctl` para resolver um incidente, alguém abriu
+uma porta no firewall "só para testar". Nada disso está escrito em lugar nenhum,
+e a única cópia do conhecimento está no disco daquela máquina.
+
+<Term term="drift" alt="drift">
+A diferença entre o que você acha que está no ar e o que de fato está.
+
+Ele não nasce de má-fé: nasce de um incidente às 3h da manhã em que alguém
+precisou de um `iptables` a mais para o site voltar, e nunca registrou. Seis
+meses depois, montar um servidor "igual" produz um servidor diferente — e o que
+falha em produção é justamente a diferença que ninguém lembra.
+</Term>
+
+A primeira resposta da indústria foi escrever um **runbook**: um documento com a
+sequência de comandos. Melhora pouco. O documento envelhece em silêncio, e
+ninguém consegue perguntar a ele o que está no ar agora.
+
+A segunda foi virar o runbook em **script**. Melhora mais, e cria um problema
+novo: rodar o script duas vezes não dá o mesmo resultado que rodar uma vez.
+
+<Callout type="trap" label="Um script cria; ele não converge">
+```bash
+# roda uma vez: cria o usuário. roda de novo: erro.
+useradd links
+# roda uma vez: acrescenta a linha. roda de novo: acrescenta OUTRA.
+echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
+```
+
+Para o script ficar seguro de rodar duas vezes, cada comando precisa checar
+antes se já fez o que ia fazer. É possível — e é literalmente reimplementar, à
+mão e com bugs, o que uma ferramenta de IaC faz por desenho.
+</Callout>
+
+## As três perguntas
+
+O que separa as ferramentas não é idade nem moda. É **quantas perguntas elas
+conseguem responder**:
+
+<DeclarativeSpectrum />
+
+Repare onde o **Compose** cai nessa régua. Ele já é declarativo: o
+`stack/compose.yaml` descreve o estado desejado, e `docker compose up -d`
+converge para ele quantas vezes você rodar. A lição 8 dos Fundamentos mede isso.
+
+O Compose responde bem a duas perguntas e meia. O que ele não tem é um **plano**
+— uma resposta separada para "o que mudaria se eu aplicasse isto agora?", antes
+de mudar qualquer coisa.
+
+<Tradeoff
+  a="Compose"
+  b="OpenTofu"
+  whenA="Quando tudo o que você orquestra é Docker num host só, e a velocidade do ciclo editar–subir importa mais do que saber de antemão o que vai mudar. Não há estado para guardar: o Compose descobre o que existe pelos rótulos que ele mesmo põe."
+  whenB="Quando existe mais de um tipo de recurso, mais de uma pessoa mexendo, ou quando aplicar sem revisar o que vai mudar é caro demais. O preço é um <b>estado gravado</b> — um arquivo a mais para guardar, proteger e não perder."
+  chose="none"
+  verdict="os dois, de propósito. O módulo 1 é Compose, o módulo 4 é OpenTofu, e a MESMA stack sobe nos dois — é o que torna a comparação honesta."
+  adr="0015-opentofu-e-o-provider-docker"
+/>
+
+## A mesma stack, agora em HCL
+
+O módulo 4 não inventa aplicação nova. Ele provisiona os mesmos seis serviços
+que o `make up` sobe — e o portão prova que é a mesma coisa rodando o **mesmo
+smoke test** do módulo 1, só que contra a porta 8082.
+
+```hcl
+resource "docker_container" "db" {
+  name  = "iac-db"
+  image = docker_image.base["postgres"].image_id
+
+  env = [
+    "POSTGRES_DB=${var.postgres_db}",
+    "POSTGRES_PASSWORD_FILE=/run/secrets/postgres_password",
+  ]
+
+  healthcheck {
+    test     = ["CMD-SHELL", "pg_isready -U links -d links -q"]
+    interval = "5s"
+    retries  = 10
+  }
+
+  wait = true
+}
+```
+
+Quem leu o `compose.yaml` reconhece tudo. A convenção `<VAR>_FILE` é a mesma, o
+healthcheck é o mesmo, o digest é o mesmo. O que muda é o que a ferramenta
+consegue fazer **com** essa descrição.
+
+<RunIt>
+```bash
+make iac-prereqs   # como o tofu alcança o daemon nesta máquina
+make iac-up        # a mesma stack, em 127.0.0.1:8082
+make iac-verify    # 28 checagens
+```
+</RunIt>
+
+<Callout type="why" label="Por que OpenTofu e não Terraform">
+Em agosto de 2023 a HashiCorp trocou a licença do Terraform de MPL 2.0 para
+BUSL 1.1, e a primeira versão sob a nova licença foi a 1.6.0. BUSL é
+*source-available*, não open source. O **OpenTofu** é o fork que ficou na MPL
+2.0, sob a Linux Foundation.
+
+A linguagem é a mesma e o que você aprende aqui vale num Terraform sem tradução.
+A lição 8 conta a história inteira — e mostra o recurso que só existe de um dos
+lados.
+</Callout>
+
+## O que a ferramenta não conserta
+
+Vale dizer isto agora, e não no fim da trilha: **IaC não resolve drift.** Ela o
+torna *visível*. Alguém que entre no host e apague um container continua
+apagando o container; a diferença é que o `plan` passa a saber disso e a dizer.
+Quem corrige ainda é uma pessoa rodando um comando — e é aí que o Kubernetes faz
+diferente, o que é assunto da lição 6.
+
+<FieldNote
+  source="OpenTofu — FAQ"
+  url="https://opentofu.org/faq/"
+  kind="docs"
+  accessed="2026-09-20"
+>
+O OpenTofu é mantido pela Linux Foundation e permanece sob MPL 2.0, aprovada
+pela OSI. Providers e módulos do ecossistema Terraform continuam funcionando,
+e existe um registry próprio em `registry.opentofu.org`.
+</FieldNote>
+
+<LabExercise check="plan sai com 2 = há mudanças a aplicar" file="iac/containers.tf">
+
+Sem a stack do módulo 4 no ar, rode `make iac-plan` e olhe a última linha.
+
+Pergunta: por que o comando termina com um código de saída **diferente de zero**
+mesmo tendo funcionado perfeitamente?
+
+<Fragment slot="hint">
+Procure por `-detailed-exitcode` no `tools/scripts/iac-verify.sh`.
+</Fragment>
+
+<Fragment slot="answer">
+
+Porque com `-detailed-exitcode` o `plan` para de responder "deu certo?" e passa
+a responder **"há mudanças?"**:
+
+| saída | significado |
+|---|---|
+| `0` | nada a fazer — é a prova de idempotência |
+| `1` | erro de verdade: não deu nem para planejar |
+| `2` | há mudanças a aplicar, e isto **não é erro** |
+
+É o que torna o `plan` automatizável. O portão deste módulo usa os dois lados:
+espera `2` num mundo sem a stack e exige `0` logo depois do `apply`.
+
+O `make iac-plan` não passa a flag, então ele sai 0 — a flag é do portão. Quem
+escreve automação precisa saber que ela existe: um wrapper de CI que trate
+qualquer saída não-zero como falha destrói justamente o sinal que interessa.
+
+```bash
+tofu plan -detailed-exitcode; echo "saiu $?"
+```
+
+</Fragment>
+</LabExercise>
+
+## O que fica
+
+- O problema nunca foi digitar comando: foi não saber **o que existe**.
+- Script cria; ele não converge, e tornar um script idempotente é reimplementar
+  IaC à mão.
+- O Compose **já é** declarativo. O que falta nele é o **plano**.
+- O módulo 4 sobe a MESMA aplicação, e o portão prova isso com o mesmo smoke.
+- IaC não conserta drift — ela o torna visível. Corrigir continua sendo ato de
+  alguém.
+
+<Quiz set="why-infrastructure-becomes-code" />

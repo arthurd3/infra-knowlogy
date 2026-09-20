@@ -1,0 +1,66 @@
+---
+/** iac-05 — o provider é outro processo, e fala gRPC. */
+import Figure from "../Figure.astro";
+import type { Lang } from "../../i18n/ui";
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+const C = {
+  pt: {
+    core: "tofu (core)", coreNote: "grafo, estado, diff — não sabe o que é container",
+    prov: "provider (processo separado)", provNote: "kreuzwerker/docker 4.6.0",
+    api: "daemon do Docker", apiNote: "/var/run/docker.sock",
+    rpc: "gRPC por go-plugin",
+    verbs: "Schema · Plan · Apply · Read · Delete",
+    boot: "o core INICIA o binário do provider e conversa por stdio",
+    pin: "por isso o pin importa: é um binário que você baixa e executa",
+    caption:
+      "O core do OpenTofu não sabe o que é um container. Ele conhece grafo, estado e diff — e delega todo o resto a um <b>processo separado</b>, iniciado por ele e falando <b>gRPC</b>. Duas consequências práticas: o vocabulário de recursos vem do provider (por isso não existe <code>pids_limit</code> aqui), e o provider é um <b>binário baixado e executado</b> na sua máquina. É exatamente por isso que o <code>.terraform.lock.hcl</code> guarda hash, e não só versão.",
+    alt: "Core do tofu falando gRPC com o processo do provider, que por sua vez fala com o daemon do Docker.",
+  },
+  en: {
+    core: "tofu (core)", coreNote: "graph, state, diff — knows nothing about containers",
+    prov: "provider (separate process)", provNote: "kreuzwerker/docker 4.6.0",
+    api: "Docker daemon", apiNote: "/var/run/docker.sock",
+    rpc: "gRPC over go-plugin",
+    verbs: "Schema · Plan · Apply · Read · Delete",
+    boot: "the core STARTS the provider binary and talks to it over stdio",
+    pin: "this is why pinning matters: it is a binary you download and execute",
+    caption:
+      "The OpenTofu core knows nothing about containers. It knows graphs, state and diffs — and delegates everything else to a <b>separate process</b> it starts, speaking <b>gRPC</b>. Two practical consequences: the resource vocabulary comes from the provider (which is why there is no <code>pids_limit</code> here), and the provider is a <b>binary downloaded and executed</b> on your machine. That is exactly why <code>.terraform.lock.hcl</code> records hashes, not just a version.",
+    alt: "The tofu core speaking gRPC to the provider process, which in turn talks to the Docker daemon.",
+  },
+}[lang];
+---
+<Figure caption={C.caption} alt={C.alt}>
+  <svg viewBox="0 0 700 236" xmlns="http://www.w3.org/2000/svg" font-size="11">
+    <defs>
+      <marker id="pr-a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M0 0 L10 5 L0 10 z" class="dg-fill-accent" />
+      </marker>
+    </defs>
+
+    <rect x="14" y="30" width="196" height="62" rx="8" class="dg-box dg-box--accent" />
+    <text x="112" y="56" text-anchor="middle" class="dg-title" font-size="12">{C.core}</text>
+    <text x="112" y="74" text-anchor="middle" class="dg-faint" font-size="8.5">{C.coreNote}</text>
+
+    <rect x="252" y="30" width="196" height="62" rx="8" class="dg-box dg-box--raised" />
+    <text x="350" y="56" text-anchor="middle" class="dg-title" font-size="12">{C.prov}</text>
+    <text x="350" y="74" text-anchor="middle" class="dg-mono dg-faint" font-size="8.5">{C.provNote}</text>
+
+    <rect x="490" y="30" width="196" height="62" rx="8" class="dg-box dg-box--raised" />
+    <text x="588" y="56" text-anchor="middle" class="dg-title" font-size="12">{C.api}</text>
+    <text x="588" y="74" text-anchor="middle" class="dg-mono dg-faint" font-size="8.5">{C.apiNote}</text>
+
+    <path d="M210 61 L246 61" class="dg-line dg-line--accent" fill="none" marker-end="url(#pr-a)" marker-start="url(#pr-a)" />
+    <path d="M448 61 L484 61" class="dg-line dg-line--accent" fill="none" marker-end="url(#pr-a)" marker-start="url(#pr-a)" />
+
+    <text x="228" y="22" text-anchor="middle" class="dg-faint" font-size="8.5">{C.rpc}</text>
+    <text x="466" y="22" text-anchor="middle" class="dg-faint" font-size="8.5">HTTP</text>
+
+    <rect x="252" y="118" width="196" height="30" rx="6" class="dg-box dg-box--dashed" />
+    <text x="350" y="137" text-anchor="middle" class="dg-mono dg-faint" font-size="9">{C.verbs}</text>
+
+    <text x="14" y="184" class="dg-faint" font-size="9.5">{C.boot}</text>
+    <text x="14" y="204" class="dg-muted" font-size="9.5" font-weight="620">{C.pin}</text>
+  </svg>
+</Figure>

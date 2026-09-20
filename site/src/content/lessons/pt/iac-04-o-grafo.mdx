@@ -1,0 +1,184 @@
+---
+key: the-dependency-graph
+lang: pt
+track: iac
+order: 4
+title: O grafo, a ordem que ninguém escreveu
+summary: "A ordem de criação não está em lugar nenhum do código — ela é derivada de quem referencia quem. E depends_on é a exceção honesta, não o padrão."
+minutes: 14
+tags: [iac, dag, grafo, depends_on, paralelismo, for_each]
+sources:
+  - label: "Dentro do DAG do Terraform"
+    url: "https://stategraph.com/blog/terraform-dag-internals"
+    kind: blog
+    accessed: "2026-09-20"
+  - label: "OpenTofu — tofu graph"
+    url: "https://opentofu.org/docs/cli/commands/graph/"
+    kind: docs
+    accessed: "2026-09-20"
+  - label: "OpenTofu — expressões e referências a recursos"
+    url: "https://opentofu.org/docs/language/expressions/references/"
+    kind: docs
+    accessed: "2026-09-20"
+---
+
+import ResourceGraph from "../../../components/diagrams/ResourceGraph.astro";
+
+No `compose.yaml` a ordem está escrita: `depends_on` com `condition:
+service_healthy`, serviço por serviço. No `iac/containers.tf` quase não há
+`depends_on` — e a ordem sai certa mesmo assim.
+
+<ResourceGraph />
+
+## A aresta que nasce de uma referência
+
+```hcl
+env = [
+  "POSTGRES_HOST=${docker_container.db.name}",
+  "REDIS_HOST=${docker_container.cache.name}",
+]
+```
+
+Isto não é um jeito elegante de escrever `"iac-db"`. Referenciar
+`docker_container.db.name` significa que o valor **só é conhecido depois** de o
+`db` existir — então o grafo ganha uma aresta, e o `api` não pode ser criado
+antes.
+
+<RunIt>
+```bash
+cd iac && tofu graph | grep 'docker_container.api'
+```
+</RunIt>
+
+```
+"[root] docker_container.api (expand)" -> "[root] docker_container.db (expand)"
+"[root] docker_container.api (expand)" -> "[root] docker_container.cache (expand)"
+"[root] docker_container.api (expand)" -> "[root] docker_network.edge (expand)"
+```
+
+Três dependências, nenhuma escrita à mão. O portão verifica a primeira delas —
+é a checagem que prova que a ordem é **derivada** e não copiada do Compose.
+
+<Callout type="why" label="Por que isto é melhor que escrever o nome">
+Com `"iac-db"` literal, o container subiria igual — e no dia em que o nome
+mudasse, o `api` continuaria apontando para o nome antigo, sem nenhum erro de
+validação. O `tofu` não tem como saber que aquela string era um nome de recurso.
+
+Referência é um **vínculo verificado**: renomear o recurso quebra o build na
+hora, e renomear o `name` propaga sozinho.
+</Callout>
+
+## A aresta que precisa ser escrita
+
+```hcl
+depends_on = [
+  docker_container.api,
+  docker_container.web,
+]
+```
+
+O `edge` é a exceção, e a razão é concreta: quem nomeia a api é o **Caddyfile**,
+e o `tofu` não lê Caddyfile. Nenhum dado flui entre os dois recursos, então não
+há aresta a derivar — e sem ela os três subiriam em paralelo, com o Caddy
+tentando resolver `api` antes de o container existir.
+
+<Callout type="trap" label="depends_on demais é pior do que parece">
+Cada `depends_on` remove uma oportunidade de paralelismo e acrescenta uma
+afirmação que o `tofu` não tem como conferir. É fácil espalhá-los "por
+segurança" e transformar um grafo largo numa fila — com um apply duas vezes mais
+lento e nenhuma garantia a mais.
+
+A regra: `depends_on` só quando a dependência é **real e invisível ao código** —
+um arquivo de configuração que nomeia outro serviço, uma permissão que precisa
+existir antes, uma ordem imposta pelo sistema de fora.
+</Callout>
+
+<Tradeoff
+  a="Dependência implícita, por referência"
+  b="depends_on explícito"
+  whenA="Sempre que houver um dado fluindo de um recurso para o outro — nome, id, endereço. É verificado, propaga sozinho e preserva o paralelismo."
+  whenB="Quando a dependência existe no mundo e <b>não</b> aparece no código: um arquivo que nomeia outro serviço, uma permissão que precisa existir antes, uma ordem imposta por fora."
+  chose="a"
+  verdict="implícita em quase tudo. O único <code>depends_on</code> do módulo é o do <code>edge</code>, e o comentário ao lado dele explica exatamente por quê."
+  adr="0015-opentofu-e-o-provider-docker"
+/>
+
+## O grafo também rege o destroy
+
+Percorrido ao contrário. O `edge` sai primeiro, o `db` por último — e é o que
+impede o banco de morrer com a api ainda tentando escrever nele.
+
+<Term term="DAG" alt="DAG — directed acyclic graph">
+Grafo dirigido acíclico: as arestas têm direção e não existe caminho que volte
+ao ponto de partida.
+
+O "acíclico" não é detalhe formal, é o que torna a execução possível. Se `a`
+dependesse de `b` e `b` de `a`, não haveria por onde começar — e o `tofu` recusa
+o plano com *Cycle*, em vez de escolher um dos dois e rezar.
+
+Como as arestas são derivadas de referências, um ciclo costuma significar que
+duas coisas que você pensou como separadas são, na verdade, uma só.
+</Term>
+
+## O que o `for_each` faz com o grafo
+
+```hcl
+resource "docker_volume" "data" {
+  for_each = toset(["pgdata", "redisdata", "caddy_data", "caddy_config"])
+  name     = "iac-${each.key}"
+}
+```
+
+Quatro volumes, um bloco. E a chave do `for_each` vira parte do **endereço**:
+`docker_volume.data["pgdata"]`. É por isso que se prefere `for_each` a `count` —
+com `count`, o endereço é `[0]`, `[1]`, e remover o primeiro item da lista
+renumera todos os outros. O plano passa a pedir a destruição e recriação de
+recursos que ninguém tocou.
+
+<LabExercise check="aresta EXPLÍCITA edge -> api" file="iac/containers.tf">
+
+Apague o bloco `depends_on` do recurso `docker_container.edge` e rode
+`make iac-down && make iac-up`.
+
+Pergunta: o que acontece, e por que o resultado pode ser **diferente a cada
+execução**?
+
+<Fragment slot="hint">
+O `edge` tem `wait = true`. Pense no que o Caddy faz enquanto espera.
+</Fragment>
+
+<Fragment slot="answer">
+
+Sem a aresta, os três sobem em paralelo — e o resultado vira corrida.
+
+O Caddy inicia, tenta resolver `api` no DNS da rede `edge` e pode não achar
+nada ainda. Dependendo de quando o `iac-api` entra na rede, o `edge` responde
+502 por alguns segundos, ou fica assim até alguém reiniciá-lo.
+
+O que torna isto pior que um erro comum é a **intermitência**: numa máquina
+rápida, ou com as imagens em cache, a api quase sempre ganha a corrida e tudo
+parece bem. O defeito aparece na máquina lenta, no CI, no dia do incidente.
+
+```bash
+# a corrida, visível
+docker logs iac-edge 2>&1 | grep -i 'dial tcp\|no such host'
+```
+
+É o mesmo fenômeno da armadilha 13 do módulo 2: probe verde não prova
+alcançabilidade. Aqui, `wait = true` prova que o **Caddy** subiu — não que os
+upstreams dele existem.
+
+</Fragment>
+</LabExercise>
+
+## O que fica
+
+- A ordem não está escrita: é derivada de **quem referencia quem**.
+- Referência é vínculo verificado; string literal é uma esperança.
+- `depends_on` é a exceção — para dependência real que o código não enxerga.
+- `depends_on` demais vira fila: menos paralelismo, nenhuma garantia a mais.
+- O destroy percorre o grafo ao contrário, e é o que salva o banco.
+- `for_each` dá endereço por chave; `count` dá endereço por índice, e índice
+  renumera.
+
+<Quiz set="the-dependency-graph" />

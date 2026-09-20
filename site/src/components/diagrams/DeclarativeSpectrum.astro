@@ -1,0 +1,68 @@
+---
+/** iac-01 — o espectro entre o runbook e o estado declarado. */
+import Figure from "../Figure.astro";
+import type { Lang } from "../../i18n/ui";
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+const C = {
+  pt: {
+    q1: "o que existe?", q2: "o que mudaria?", q3: "desfazer?",
+    steps: [
+      { t: "runbook", s: "um documento, e humanos", a: ["não", "não", "não"], cls: "dg-box--danger" },
+      { t: "script", s: "bash que cria", a: ["não", "não", "não"], cls: "dg-box--warn" },
+      { t: "Compose", s: "desejado, só para Docker", a: ["sim", "quase", "sim"], cls: "dg-box--raised" },
+      { t: "OpenTofu", s: "desejado + estado", a: ["sim", "sim", "sim"], cls: "dg-box--accent" },
+    ],
+    note: "o eixo não é 'mais moderno': é quantas perguntas a ferramenta consegue responder",
+    caption:
+      "O que separa as quatro não é idade nem moda, e sim <b>quantas perguntas cada uma responde</b>. Um script cria; ele não sabe dizer o que existe, nem o que mudaria, nem como desfazer. O Compose responde as três para containers. O <code>plan</code> do OpenTofu é a resposta da segunda pergunta virada em comando — e é por isso que ele precisa de um <b>estado</b>, o assunto da lição seguinte.",
+    alt: "Quatro degraus — runbook, script, Compose e OpenTofu — e quais das três perguntas cada um responde.",
+  },
+  en: {
+    q1: "what exists?", q2: "what would change?", q3: "undo?",
+    steps: [
+      { t: "runbook", s: "a document, and humans", a: ["no", "no", "no"], cls: "dg-box--danger" },
+      { t: "script", s: "bash that creates", a: ["no", "no", "no"], cls: "dg-box--warn" },
+      { t: "Compose", s: "desired, Docker only", a: ["yes", "almost", "yes"], cls: "dg-box--raised" },
+      { t: "OpenTofu", s: "desired + state", a: ["yes", "yes", "yes"], cls: "dg-box--accent" },
+    ],
+    note: "the axis is not 'more modern': it is how many questions the tool can answer",
+    caption:
+      "What separates the four is not age or fashion, but <b>how many questions each one answers</b>. A script creates; it cannot tell you what exists, what would change, or how to undo it. Compose answers all three for containers. OpenTofu's <code>plan</code> is the second question turned into a command — which is exactly why it needs <b>state</b>, the subject of the next lesson.",
+    alt: "Four steps — runbook, script, Compose and OpenTofu — and which of the three questions each answers.",
+  },
+}[lang];
+
+const qs = [C.q1, C.q2, C.q3];
+const yes = (v: string) => v === "sim" || v === "yes";
+---
+<Figure caption={C.caption} alt={C.alt}>
+  <svg viewBox="0 0 700 262" xmlns="http://www.w3.org/2000/svg" font-size="11">
+    {qs.map((q, i) => (
+      <text x="690" y={118 + i * 34} text-anchor="end" class="dg-faint" font-size="9.5">{q}</text>
+    ))}
+
+    {C.steps.map((s, i) => {
+      const x = 14 + i * 124;
+      return (
+        <g>
+          <rect x={x} y={14} width={110} height={52} rx={8} class={`dg-box ${s.cls}`} />
+          <text x={x + 55} y={36} text-anchor="middle" class="dg-title" font-size="12">{s.t}</text>
+          <text x={x + 55} y={52} text-anchor="middle" class="dg-faint" font-size="9">{s.s}</text>
+
+          {s.a.map((v, j) => (
+            <g>
+              <rect x={x + 22} y={100 + j * 34} width={66} height={24} rx={5}
+                    class={`dg-box ${yes(v) ? "dg-box--accent" : "dg-box--dashed"}`} />
+              <text x={x + 55} y={116 + j * 34} text-anchor="middle" font-size="9.5"
+                    class={yes(v) ? "dg-on-accent" : "dg-faint"}>{v}</text>
+            </g>
+          ))}
+        </g>
+      );
+    })}
+
+    <path d="M14 82 L512 82" class="dg-line dg-line--dashed" fill="none" />
+    <text x="14" y="250" class="dg-faint" font-size="9.5">{C.note}</text>
+  </svg>
+</Figure>

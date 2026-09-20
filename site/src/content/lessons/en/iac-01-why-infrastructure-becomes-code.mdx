@@ -1,0 +1,211 @@
+---
+key: why-infrastructure-becomes-code
+lang: en
+track: iac
+order: 1
+title: Why infrastructure becomes code
+summary: "The problem was never typing commands: it is being unable to answer what exists, what would change and how to undo it. IaC is the tool that answers all three."
+minutes: 14
+tags: [iac, opentofu, terraform, declarative, idempotence, compose]
+sources:
+  - label: "OpenTofu — documentation"
+    url: "https://opentofu.org/docs/intro/whats-new/"
+    kind: docs
+    accessed: "2026-09-20"
+  - label: "What happens when you run Terraform commands"
+    url: "https://one2n.io/blog/terraform-under-the-hood"
+    kind: blog
+    accessed: "2026-09-20"
+  - label: "Compose Specification"
+    url: "https://github.com/compose-spec/compose-spec/blob/main/spec.md"
+    kind: spec
+  - label: "OpenTofu — FAQ"
+    url: "https://opentofu.org/faq/"
+    kind: docs
+    accessed: "2026-09-20"
+---
+
+import DeclarativeSpectrum from "../../../components/diagrams/DeclarativeSpectrum.astro";
+
+Before getting to HCL, it is worth looking at what came before — because most of
+what gets called "infrastructure as code" out there is still the earlier step.
+
+## The server nobody can rebuild
+
+A host configured by hand over two years has an unpleasant property: **it is not
+reproducible**. Somebody installed a package one night, somebody edited a
+`sysctl` to clear an incident, somebody opened a firewall port "just to test".
+None of it is written down anywhere, and the only copy of that knowledge lives
+on that machine's disk.
+
+<Term term="drift" alt="drift">
+The difference between what you think is running and what actually is.
+
+It is not born of bad faith: it is born of a 3 a.m. incident where somebody
+needed one extra `iptables` rule to bring the site back, and never recorded it.
+Six months later, building an "identical" server produces a different one — and
+what fails in production is precisely the difference nobody remembers.
+</Term>
+
+The industry's first answer was to write a **runbook**: a document with the
+sequence of commands. It helps very little. The document ages silently, and
+nobody can ask it what is running right now.
+
+The second was to turn the runbook into a **script**. That helps more, and
+creates a new problem: running the script twice does not give the same result as
+running it once.
+
+<Callout type="trap" label="A script creates; it does not converge">
+```bash
+# run once: creates the user. run again: error.
+useradd links
+# run once: appends the line. run again: appends ANOTHER one.
+echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
+```
+
+For the script to be safe to run twice, every command has to check first whether
+it already did what it was about to do. That is possible — and it is literally
+reimplementing, by hand and with bugs, what an IaC tool does by design.
+</Callout>
+
+## The three questions
+
+What separates these tools is not age or fashion. It is **how many questions
+they can answer**:
+
+<DeclarativeSpectrum />
+
+Notice where **Compose** lands on that ruler. It is already declarative:
+`stack/compose.yaml` describes the desired state, and `docker compose up -d`
+converges to it however many times you run it. Fundamentals lesson 8 measures
+exactly that.
+
+Compose answers two and a half questions well. What it lacks is a **plan** — a
+separate answer to "what would change if I applied this right now?", before
+anything changes.
+
+<Tradeoff
+  a="Compose"
+  b="OpenTofu"
+  whenA="When everything you orchestrate is Docker on a single host, and the speed of the edit–run loop matters more than knowing in advance what will change. There is no state to keep: Compose discovers what exists from the labels it puts on containers itself."
+  whenB="When there is more than one kind of resource, more than one person touching it, or when applying without reviewing what will change is too expensive. The price is a <b>recorded state</b> — one more file to keep, protect and not lose."
+  chose="none"
+  verdict="both, deliberately. Module 1 is Compose, module 4 is OpenTofu, and the SAME stack comes up under each — which is what makes the comparison honest."
+  adr="0015-opentofu-e-o-provider-docker"
+/>
+
+## The same stack, now in HCL
+
+Module 4 does not invent a new application. It provisions the same six services
+that `make up` brings up — and the gate proves they are the same thing by
+running the **same smoke test** as module 1, only against port 8082.
+
+```hcl
+resource "docker_container" "db" {
+  name  = "iac-db"
+  image = docker_image.base["postgres"].image_id
+
+  env = [
+    "POSTGRES_DB=${var.postgres_db}",
+    "POSTGRES_PASSWORD_FILE=/run/secrets/postgres_password",
+  ]
+
+  healthcheck {
+    test     = ["CMD-SHELL", "pg_isready -U links -d links -q"]
+    interval = "5s"
+    retries  = 10
+  }
+
+  wait = true
+}
+```
+
+Anyone who read `compose.yaml` recognises all of it. The `<VAR>_FILE` convention
+is the same, the healthcheck is the same, the digest is the same. What changes
+is what the tool can do **with** that description.
+
+<RunIt>
+```bash
+make iac-prereqs   # how tofu reaches the daemon on this machine
+make iac-up        # the same stack, at 127.0.0.1:8082
+make iac-verify    # 28 checks
+```
+</RunIt>
+
+<Callout type="why" label="Why OpenTofu and not Terraform">
+In August 2023 HashiCorp changed Terraform's licence from MPL 2.0 to BUSL 1.1,
+and the first release under the new licence was 1.6.0. BUSL is
+*source-available*, not open source. **OpenTofu** is the fork that stayed on
+MPL 2.0, under the Linux Foundation.
+
+The language is the same, and what you learn here carries to a Terraform with no
+translation. Lesson 8 tells the whole story — and shows the feature that exists
+on only one of the two sides.
+</Callout>
+
+## What the tool does not fix
+
+Worth saying now rather than at the end of the track: **IaC does not fix
+drift.** It makes drift *visible*. Someone who logs into the host and deletes a
+container still deletes the container; the difference is that `plan` now knows
+about it and says so. Fixing it is still a person running a command — and that
+is where Kubernetes behaves differently, which is lesson 6's subject.
+
+<FieldNote
+  source="OpenTofu — FAQ"
+  url="https://opentofu.org/faq/"
+  kind="docs"
+  accessed="2026-09-20"
+>
+OpenTofu is maintained by the Linux Foundation and remains under MPL 2.0, which
+is OSI approved. Providers and modules from the Terraform ecosystem keep
+working, and there is a registry of its own at `registry.opentofu.org`.
+</FieldNote>
+
+<LabExercise check="plan sai com 2 = há mudanças a aplicar" file="iac/containers.tf">
+
+With module 4's stack down, run `make iac-plan` and look at the last line.
+
+Question: why does the command finish with a **non-zero** exit code even though
+it worked perfectly?
+
+<Fragment slot="hint">
+Look for `-detailed-exitcode` in `tools/scripts/iac-verify.sh`.
+</Fragment>
+
+<Fragment slot="answer">
+
+Because with `-detailed-exitcode`, `plan` stops answering "did it work?" and
+starts answering **"are there changes?"**:
+
+| exit | meaning |
+|---|---|
+| `0` | nothing to do — this is the idempotence proof |
+| `1` | a real error: planning itself failed |
+| `2` | there are changes to apply, and this is **not an error** |
+
+That is what makes `plan` automatable. This module's gate uses both sides: it
+expects `2` in a world without the stack, and demands `0` right after `apply`.
+
+`make iac-plan` does not pass the flag, so it exits 0 — the flag belongs to the
+gate. Anyone writing automation needs to know it exists: a CI wrapper that
+treats any non-zero exit as failure destroys the very signal that matters.
+
+```bash
+tofu plan -detailed-exitcode; echo "exited $?"
+```
+
+</Fragment>
+</LabExercise>
+
+## What sticks
+
+- The problem was never typing commands: it was not knowing **what exists**.
+- A script creates; it does not converge, and making a script idempotent is
+  reimplementing IaC by hand.
+- Compose **already is** declarative. What it lacks is the **plan**.
+- Module 4 brings up the SAME application, and the gate proves it with the same
+  smoke test.
+- IaC does not fix drift — it makes it visible. Fixing is still somebody's act.
+
+<Quiz set="why-infrastructure-becomes-code" />

@@ -31,6 +31,7 @@
   --track-seg:     #a8532a;
   --track-k8s:     #1d63c2;
   --track-cicd:    #a82a63;
+  --track-iac:     #1f6f3f;
 
   --radius:        8px;
   --radius-lg:     14px;
@@ -93,6 +94,7 @@
     --track-seg:     #f0a074;
     --track-k8s:     #74a9f0;
     --track-cicd:    #ef92ba;
+    --track-iac:     #64c98a;
 
     --shadow:        0 1px 2px rgb(0 0 0 / 0.4), 0 4px 14px rgb(0 0 0 / 0.25);
 
@@ -123,6 +125,7 @@
   --track-seg:     #f0a074;
   --track-k8s:     #74a9f0;
   --track-cicd:    #ef92ba;
+  --track-iac:     #64c98a;
   --shadow:        0 1px 2px rgb(0 0 0 / 0.4), 0 4px 14px rgb(0 0 0 / 0.25);
   color-scheme: dark;
 }
@@ -346,6 +349,7 @@ blockquote {
 .badge--seg { color: var(--track-seg); border-color: color-mix(in srgb, var(--track-seg) 35%, transparent); }
 .badge--k8s { color: var(--track-k8s); border-color: color-mix(in srgb, var(--track-k8s) 35%, transparent); }
 .badge--cicd { color: var(--track-cicd); border-color: color-mix(in srgb, var(--track-cicd) 35%, transparent); }
+.badge--iac { color: var(--track-iac); border-color: color-mix(in srgb, var(--track-iac) 35%, transparent); }
 
 .card {
   display: block; text-decoration: none; color: inherit;
@@ -919,3 +923,63 @@ blockquote {
   padding: var(--space-sm);
 }
 .figure__canvas--plate img { background: transparent; }
+
+/* ─── Mapa de cobertura de mercado (ADR 0014) ───────────────────────────────
+   As cores de estado reaproveitam as três semânticas que os diagramas já
+   usam — sucesso, aviso e perigo — porque "coberto / parcial / ausente" é a
+   mesma escala de leitura, e inventar uma quarta paleta faria o leitor ter
+   que aprender duas. */
+
+.skills { margin-top: 1.5rem; }
+
+.skills__bars { list-style: none; margin: 0 0 2rem; padding: 0; display: grid; gap: 0.75rem; }
+
+.skills__head {
+  display: flex; align-items: center; gap: 0.75rem;
+  width: 100%; padding: 0.5rem 0; background: none; border: 0;
+  font: inherit; color: inherit; text-align: left; cursor: pointer;
+}
+.skills__head:hover .skills__label { color: var(--accent); }
+
+.skills__label { flex: 1; font-weight: 600; font-size: 0.95rem; }
+.skills__pct   { font-family: var(--font-mono); font-size: 1.05rem; font-weight: 650; }
+
+.skills__status { font-size: 0.7rem; }
+.skills__status--coberto { color: var(--accent);     border-color: color-mix(in srgb, var(--accent) 35%, transparent); }
+.skills__status--parcial { color: var(--warn);   border-color: color-mix(in srgb, var(--warn) 35%, transparent); }
+.skills__status--ausente { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 35%, transparent); }
+
+.skills__track {
+  height: 6px; border-radius: 3px; overflow: hidden;
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+}
+.skills__fill { display: block; height: 100%; border-radius: 3px; background: var(--accent); }
+.skills__row--coberto .skills__fill { background: var(--accent); }
+.skills__row--parcial .skills__fill { background: var(--warn); }
+.skills__row--ausente .skills__fill { background: var(--danger); }
+
+.skills__detail {
+  margin-top: 0.75rem; padding: 0.9rem 1rem; border-radius: 8px;
+  background: var(--bg-sunken); border: 1px solid var(--border);
+}
+.skills__gap { margin: 0 0 0.75rem; font-size: 0.9rem; line-height: 1.6; }
+.skills__evidence-title { margin: 0 0 0.35rem; font-size: 0.75rem; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--text-muted); }
+.skills__evidence { margin: 0; padding-left: 1.1rem; font-size: 0.85rem; line-height: 1.8; }
+.skills__evidence code { font-size: 0.8rem; }
+.skills__none { margin: 0; font-size: 0.85rem; color: var(--text-muted); font-style: italic; }
+
+.skills__quadrants { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+.skills__quadrant { padding: 0.9rem 1rem; border: 1px solid var(--border); border-radius: 10px; }
+.skills__quadrant h3 { margin: 0 0 0.6rem; font-size: 0.8rem; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--text-muted); }
+.skills__quadrant ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.35rem; }
+
+.skills__chip {
+  font-size: 0.75rem; padding: 0.18rem 0.5rem; border-radius: 999px;
+  border: 1px solid var(--border); color: var(--text-muted);
+}
+.skills__chip--coberto { color: var(--accent);     border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
+.skills__chip--parcial { color: var(--warn);   border-color: color-mix(in srgb, var(--warn) 40%, transparent); }
+.skills__chip--ausente { opacity: 0.75; }
+.skills__chip-note { display: none; }

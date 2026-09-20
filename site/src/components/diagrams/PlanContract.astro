@@ -1,0 +1,77 @@
+---
+/** iac-03 — o contrato do plan, e os três códigos de saída. */
+import Figure from "../Figure.astro";
+import type { Lang } from "../../i18n/ui";
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+const C = {
+  pt: {
+    steps: [
+      { t: "refresh", s: "pergunta ao daemon o que existe" },
+      { t: "diff", s: "compara configuração × estado" },
+      { t: "plano", s: "a lista de ações, em arquivo" },
+    ],
+    exits: [
+      { code: "0", t: "nada a fazer", s: "é a prova de idempotência", cls: "dg-box--accent" },
+      { code: "1", t: "erro", s: "não deu para planejar", cls: "dg-box--danger" },
+      { code: "2", t: "há mudanças", s: "e NÃO é erro", cls: "dg-box--warn" },
+    ],
+    flag: "-detailed-exitcode",
+    warn: "sem a flag, 'há mudanças' e 'nada a fazer' saem ambos como 0",
+    caption:
+      "Com <code>-detailed-exitcode</code> o <code>plan</code> vira um teste: <b>0</b> é \"nada a fazer\", <b>2</b> é \"há mudanças\" — e 2 <b>não é erro</b>. Um wrapper de CI que trate qualquer saída não-zero como falha destrói justamente o sinal que interessa. Sem a flag, os dois casos saem 0, e não há como automatizar nem a prova de idempotência nem a detecção de drift.",
+    alt: "Fluxo refresh, diff e plano, com os três códigos de saída do plan.",
+  },
+  en: {
+    steps: [
+      { t: "refresh", s: "asks the daemon what exists" },
+      { t: "diff", s: "compares configuration × state" },
+      { t: "plan", s: "the action list, in a file" },
+    ],
+    exits: [
+      { code: "0", t: "nothing to do", s: "this is the idempotence proof", cls: "dg-box--accent" },
+      { code: "1", t: "error", s: "planning itself failed", cls: "dg-box--danger" },
+      { code: "2", t: "there are changes", s: "and this is NOT an error", cls: "dg-box--warn" },
+    ],
+    flag: "-detailed-exitcode",
+    warn: "without the flag, 'there are changes' and 'nothing to do' both exit 0",
+    caption:
+      "With <code>-detailed-exitcode</code>, <code>plan</code> becomes a test: <b>0</b> means \"nothing to do\", <b>2</b> means \"there are changes\" — and 2 is <b>not an error</b>. A CI wrapper that treats any non-zero exit as failure destroys the very signal that matters. Without the flag both cases exit 0, and neither the idempotence proof nor drift detection can be automated.",
+    alt: "Flow of refresh, diff and plan, with the three exit codes of plan.",
+  },
+}[lang];
+---
+<Figure caption={C.caption} alt={C.alt}>
+  <svg viewBox="0 0 700 250" xmlns="http://www.w3.org/2000/svg" font-size="11">
+    <defs>
+      <marker id="pc-arrow" viewBox="0 0 10 10" refX="8" refY="5"
+              markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M0 0 L10 5 L0 10 z" class="dg-fill-accent" />
+      </marker>
+    </defs>
+
+    {C.steps.map((s, i) => (
+      <g>
+        <rect x={14 + i * 172} y={18} width={152} height={52} rx={8} class="dg-box dg-box--raised" />
+        <text x={90 + i * 172} y={40} text-anchor="middle" class="dg-title" font-size="12">{s.t}</text>
+        <text x={90 + i * 172} y={56} text-anchor="middle" class="dg-faint" font-size="9">{s.s}</text>
+      </g>
+    ))}
+    <path d="M166 44 L180 44" class="dg-line dg-line--accent" fill="none" marker-end="url(#pc-arrow)" />
+    <path d="M338 44 L352 44" class="dg-line dg-line--accent" fill="none" marker-end="url(#pc-arrow)" />
+    <path d="M510 44 L560 44 L560 98" class="dg-line dg-line--accent" fill="none" marker-end="url(#pc-arrow)" />
+
+    <text x="686" y="44" text-anchor="end" class="dg-mono dg-muted" font-size="10" font-weight="620">{C.flag}</text>
+
+    {C.exits.map((e, i) => (
+      <g>
+        <rect x={14 + i * 228} y={116} width={210} height={58} rx={8} class={`dg-box ${e.cls}`} />
+        <text x={38 + i * 228} y={146} class="dg-mono dg-title" font-size="20">{e.code}</text>
+        <text x={72 + i * 228} y={140} class="dg-title" font-size="11.5">{e.t}</text>
+        <text x={72 + i * 228} y={156} class="dg-faint" font-size="9">{e.s}</text>
+      </g>
+    ))}
+
+    <text x="14" y="214" class="dg-faint" font-size="9.5">{C.warn}</text>
+  </svg>
+</Figure>

@@ -1,0 +1,140 @@
+{
+  "note_pt": "Os códigos de saída, o plano salvo, e o diff que nunca converge.",
+  "note_en": "The exit codes, the saved plan, and the diff that never converges.",
+  "pt": [
+    {
+      "q": "Seu wrapper de CI roda `tofu plan -detailed-exitcode` e marca o build como falho quando o comando sai não-zero. Qual é o problema?",
+      "options": [
+        {
+          "text": "Ele quebra o build toda vez que HÁ mudanças, porque `2` significa 'há mudanças' e não 'erro'.",
+          "correct": true,
+          "why": "É o sinal que a flag existe para dar. O wrapper precisa distinguir os três: `0` segue sem aplicar, `2` segue para a aprovação, e só o `1` é falha. Tratar `2` como erro é desligar a detecção de drift e a prova de idempotência de uma vez."
+        },
+        {
+          "text": "Nenhum: não-zero é falha por convenção do shell.",
+          "why": "A convenção existe, e esta flag a quebra de propósito — está na documentação do comando. É o mesmo padrão do `diff`, que sai 1 quando há diferença, sem que isso seja erro."
+        },
+        {
+          "text": "O problema é o `-detailed-exitcode`, que deveria ser removido.",
+          "why": "Removendo a flag, `0` passa a significar as duas coisas, e não há mais como automatizar nem drift nem idempotência. O problema está no wrapper, não na flag."
+        },
+        {
+          "text": "Ele vai ignorar erros reais, porque `1` e `2` viram a mesma coisa.",
+          "why": "Invertido: ele trata os dois como falha, então não ignora nada — ele reprova demais. O custo é ruído até alguém desligar o portão inteiro."
+        }
+      ]
+    },
+    {
+      "q": "Por que `tofu apply` sem um arquivo de plano é diferente de `tofu apply tfplan.bin`?",
+      "options": [
+        {
+          "text": "Sem o arquivo, o apply REPLANEJA — o que vai ao ar pode não ser o que você revisou.",
+          "correct": true,
+          "why": "Entre a revisão e a execução o mundo pode ter mudado. Com o arquivo, o apply não recalcula nem pergunta: executa a lista aprovada. É por isso que o fluxo de CI sério é `plan -out`, aprovação, `apply <arquivo>`."
+        },
+        {
+          "text": "Com o arquivo o apply é mais rápido, e só isso muda.",
+          "why": "Ele é mesmo mais rápido, porque pula o refresh e o diff. Mas a razão de existir é outra: garantir que o executado é o aprovado."
+        },
+        {
+          "text": "Sem o arquivo, o apply não pede confirmação.",
+          "why": "É o contrário — sem o arquivo ele pergunta, e com o arquivo ele não pergunta (a decisão já foi tomada quando o plano foi salvo)."
+        },
+        {
+          "text": "O arquivo de plano é só um log legível do que aconteceu.",
+          "why": "Ele é uma entrada executável, não um log. E guarda todos os atributos com valores — inclusive os sensíveis, motivo de a cifragem do OpenTofu cobrir `plan` além de `state`."
+        }
+      ]
+    },
+    {
+      "q": "Depois de um `apply` bem-sucedido, todo `plan` pede `replace` dos mesmos quatro containers. O que isso indica?",
+      "options": [
+        {
+          "text": "Que o provider lê de volta um valor diferente do que escreveu — aqui, `CAP_CHOWN` contra `CHOWN`.",
+          "correct": true,
+          "why": "O Docker 29 normaliza o nome da capability para a forma canônica. O provider compara literalmente, conclui que mudou, e o atributo força substituição. Foi o defeito real deste módulo, e ele só aparece para quem roda `plan` DEPOIS do `apply`."
+        },
+        {
+          "text": "Que o `apply` falhou parcialmente e não terminou.",
+          "why": "O apply funcionou: a stack sobe e o smoke passa. É justamente o que esconde o problema de quem só edita e aplica."
+        },
+        {
+          "text": "Que alguém está mexendo nos containers por fora.",
+          "why": "Seria drift, e apareceria também no `plan -refresh-only` — mas como mudança REAL, não como a mesma substituição eterna. Um diff que se repete idêntico depois de cada apply é discordância de representação, não drift."
+        },
+        {
+          "text": "Que falta `depends_on` entre os quatro.",
+          "why": "Ordem não produz diff. `depends_on` muda quando cada recurso é tratado, nunca se o atributo lido bate com o escrito."
+        }
+      ]
+    }
+  ],
+  "en": [
+    {
+      "q": "Your CI wrapper runs `tofu plan -detailed-exitcode` and marks the build failed whenever the command exits non-zero. What is wrong with that?",
+      "options": [
+        {
+          "text": "It breaks the build every time there ARE changes, because `2` means 'there are changes', not 'error'.",
+          "correct": true,
+          "why": "That is the signal the flag exists to give. The wrapper must distinguish all three: `0` carries on without applying, `2` proceeds to approval, and only `1` is a failure. Treating `2` as an error turns off drift detection and the idempotence proof at once."
+        },
+        {
+          "text": "Nothing: non-zero means failure by shell convention.",
+          "why": "The convention exists, and this flag breaks it deliberately — it is in the command's documentation. It is the same pattern as `diff`, which exits 1 when there is a difference without that being an error."
+        },
+        {
+          "text": "The problem is `-detailed-exitcode` itself, which should be removed.",
+          "why": "Remove the flag and `0` means both things again, leaving no way to automate drift or idempotence. The problem is in the wrapper, not the flag."
+        },
+        {
+          "text": "It will ignore real errors, because `1` and `2` become the same thing.",
+          "why": "Inverted: it treats both as failure, so it ignores nothing — it over-fails. The cost is noise, until somebody switches the whole gate off."
+        }
+      ]
+    },
+    {
+      "q": "Why is `tofu apply` with no plan file different from `tofu apply tfplan.bin`?",
+      "options": [
+        {
+          "text": "Without the file, apply REPLANS — what goes live may not be what you reviewed.",
+          "correct": true,
+          "why": "Between review and execution the world may have changed. With the file, apply neither recalculates nor asks: it executes the approved list. That is why a serious CI flow is `plan -out`, approval, `apply <file>`."
+        },
+        {
+          "text": "With the file, apply is faster, and that is all that changes.",
+          "why": "It is indeed faster, because it skips refresh and diff. But its reason for existing is different: guaranteeing that what runs is what was approved."
+        },
+        {
+          "text": "Without the file, apply does not ask for confirmation.",
+          "why": "The other way round — without the file it asks, and with the file it does not (the decision was made when the plan was saved)."
+        },
+        {
+          "text": "A plan file is just a readable log of what happened.",
+          "why": "It is an executable input, not a log. And it holds every attribute with its values — including sensitive ones, which is why OpenTofu's encryption covers `plan` as well as `state`."
+        }
+      ]
+    },
+    {
+      "q": "After a successful `apply`, every `plan` asks to `replace` the same four containers. What does that indicate?",
+      "options": [
+        {
+          "text": "That the provider reads back a different value from the one it wrote — here, `CAP_CHOWN` against `CHOWN`.",
+          "correct": true,
+          "why": "Docker 29 normalises the capability name to its canonical form. The provider compares literally, concludes it changed, and the attribute forces replacement. That was this module's real defect, and it only shows up for whoever runs `plan` AFTER `apply`."
+        },
+        {
+          "text": "That `apply` partially failed and did not finish.",
+          "why": "The apply worked: the stack comes up and the smoke test passes. That is precisely what hides the problem from anyone who only edits and applies."
+        },
+        {
+          "text": "That somebody is changing the containers from outside.",
+          "why": "That would be drift, and it would also show in `plan -refresh-only` — but as a REAL change, not as the same eternal replacement. A diff that repeats identically after every apply is a representation disagreement, not drift."
+        },
+        {
+          "text": "That `depends_on` is missing between the four.",
+          "why": "Ordering does not produce a diff. `depends_on` changes when each resource is handled, never whether the value read back matches the one written."
+        }
+      ]
+    }
+  ]
+}

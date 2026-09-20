@@ -32,7 +32,7 @@ describe("dicionário de interface", () => {
       (k) => ui.pt[k as keyof typeof ui.pt] === ui.en[k as keyof typeof ui.en],
     );
     expect(mesmos.sort()).toEqual([
-      "site.title", "track.cicd", "track.kubernetes",
+      "site.title", "track.cicd", "track.iac", "track.kubernetes",
     ]);
   });
 

@@ -1,0 +1,140 @@
+{
+  "note_pt": "As três perguntas da lição, e a armadilha de confundir 'declarativo' com 'tem estado'.",
+  "note_en": "The lesson's three questions, and the trap of confusing 'declarative' with 'has state'.",
+  "pt": [
+    {
+      "q": "O `docker compose up -d` é declarativo ou imperativo?",
+      "options": [
+        {
+          "text": "Declarativo — o arquivo descreve o estado desejado e o comando converge para ele.",
+          "correct": true,
+          "why": "O `compose.yaml` não diz *como* criar: diz o que tem que existir. Rodar duas vezes dá o mesmo resultado que rodar uma. O que falta ao Compose não é ser declarativo — é ter um **plano**, uma resposta separada para 'o que mudaria?' antes de mudar."
+        },
+        {
+          "text": "Imperativo — é um comando que cria containers, um a um.",
+          "why": "É o que parece de fora, e é o erro mais comum da lição. O comando executa, mas o que ele executa é derivado de uma descrição de estado; ele não tem uma lista de passos escrita por você."
+        },
+        {
+          "text": "Declarativo só quando você usa `--wait`.",
+          "why": "`--wait` muda quando o comando retorna, não o que ele faz. A natureza declarativa está no arquivo, não na flag."
+        },
+        {
+          "text": "Nenhum dos dois: YAML não é uma linguagem.",
+          "why": "Declarativo × imperativo é sobre o que o arquivo *diz*, não sobre a sintaxe em que está escrito. Um YAML pode descrever estado; um script em Go também poderia."
+        }
+      ]
+    },
+    {
+      "q": "Por que tornar um script bash idempotente é considerado 'reimplementar IaC à mão'?",
+      "options": [
+        {
+          "text": "Porque cada comando passa a precisar checar antes se já fez o que ia fazer — que é exatamente o ciclo ler-comparar-agir de uma ferramenta de IaC.",
+          "correct": true,
+          "why": "`useradd links` roda uma vez e erra na segunda; para consertar, você escreve `id links || useradd links`. Multiplique por cada recurso e você terá escrito, com bugs próprios, o que o `plan`/`apply` faz por desenho."
+        },
+        {
+          "text": "Porque bash não tem tipos.",
+          "why": "Tipagem não tem nada a ver com idempotência. Um script fortemente tipado repete o mesmo erro se não checar o estado antes de agir."
+        },
+        {
+          "text": "Porque scripts não podem ser versionados em git.",
+          "why": "Podem, e devem. Estar no git é ortogonal a convergir: um script versionado continua criando o usuário duas vezes."
+        },
+        {
+          "text": "Porque bash não consegue falar com a API do Docker.",
+          "why": "Consegue — `curl --unix-socket /var/run/docker.sock` é exatamente isso, e a sonda do `iac-prereqs.sh` usa essa chamada. O problema não é alcance, é convergência."
+        }
+      ]
+    },
+    {
+      "q": "A trilha diz que IaC **não** resolve drift. O que ela faz, então?",
+      "options": [
+        {
+          "text": "Torna o drift visível e nomeável — `plan -refresh-only` acusa o que mudou por fora, mas quem corrige é alguém rodando `apply`.",
+          "correct": true,
+          "why": "É a diferença medida na lição 6: apagar um container à mão deixa o OpenTofu quieto até alguém rodar um comando. O Kubernetes recria sozinho porque tem um controller em laço; o OpenTofu não tem laço nenhum rodando."
+        },
+        {
+          "text": "Impede que alguém mude a infraestrutura por fora.",
+          "why": "Nada na ferramenta impede. Quem tem acesso ao daemon cria e apaga container quando quiser; o OpenTofu nem fica sabendo até o próximo refresh."
+        },
+        {
+          "text": "Reverte automaticamente qualquer mudança manual.",
+          "why": "Isso descreveria um controller contínuo, que é o modelo do Kubernetes (e do GitOps). O OpenTofu só age quando invocado."
+        },
+        {
+          "text": "Nada: drift é um problema de processo, não de ferramenta.",
+          "why": "Meio certo e por isso perigoso. O processo importa, mas a ferramenta contribui de forma concreta: sem o estado não haveria nem como *detectar* a diferença."
+        }
+      ]
+    }
+  ],
+  "en": [
+    {
+      "q": "Is `docker compose up -d` declarative or imperative?",
+      "options": [
+        {
+          "text": "Declarative — the file describes the desired state and the command converges to it.",
+          "correct": true,
+          "why": "`compose.yaml` does not say *how* to create: it says what must exist. Running it twice gives the same result as running it once. What Compose lacks is not being declarative — it is a **plan**, a separate answer to 'what would change?' before anything changes."
+        },
+        {
+          "text": "Imperative — it is a command that creates containers, one by one.",
+          "why": "That is what it looks like from outside, and it is the lesson's most common mistake. The command does execute, but what it executes is derived from a state description; there is no list of steps written by you."
+        },
+        {
+          "text": "Declarative only when you use `--wait`.",
+          "why": "`--wait` changes when the command returns, not what it does. The declarative nature lives in the file, not in the flag."
+        },
+        {
+          "text": "Neither: YAML is not a language.",
+          "why": "Declarative versus imperative is about what the file *says*, not about the syntax it is written in. YAML can describe state; so could a Go program."
+        }
+      ]
+    },
+    {
+      "q": "Why is making a bash script idempotent described as 'reimplementing IaC by hand'?",
+      "options": [
+        {
+          "text": "Because every command now has to check first whether it already did what it was about to do — which is exactly the read-compare-act cycle of an IaC tool.",
+          "correct": true,
+          "why": "`useradd links` works once and fails the second time; to fix it you write `id links || useradd links`. Multiply that by every resource and you will have written, with bugs of your own, what `plan`/`apply` does by design."
+        },
+        {
+          "text": "Because bash has no types.",
+          "why": "Typing has nothing to do with idempotence. A strongly typed script repeats the same mistake if it does not check state before acting."
+        },
+        {
+          "text": "Because scripts cannot be version controlled.",
+          "why": "They can, and should be. Living in git is orthogonal to converging: a versioned script still creates the user twice."
+        },
+        {
+          "text": "Because bash cannot talk to the Docker API.",
+          "why": "It can — `curl --unix-socket /var/run/docker.sock` is exactly that, and `iac-prereqs.sh` uses that call as its probe. The problem is not reach, it is convergence."
+        }
+      ]
+    },
+    {
+      "q": "The track says IaC does **not** fix drift. So what does it do?",
+      "options": [
+        {
+          "text": "It makes drift visible and nameable — `plan -refresh-only` reports what changed outside, but fixing it is somebody running `apply`.",
+          "correct": true,
+          "why": "That is the difference measured in lesson 6: deleting a container by hand leaves OpenTofu silent until someone runs a command. Kubernetes recreates it on its own because it has a controller in a loop; OpenTofu has no loop running at all."
+        },
+        {
+          "text": "It prevents anyone from changing infrastructure outside the tool.",
+          "why": "Nothing in the tool prevents that. Whoever has daemon access creates and deletes containers at will; OpenTofu does not even find out until the next refresh."
+        },
+        {
+          "text": "It automatically reverts any manual change.",
+          "why": "That would describe a continuous controller, which is the Kubernetes (and GitOps) model. OpenTofu only acts when invoked."
+        },
+        {
+          "text": "Nothing: drift is a process problem, not a tooling one.",
+          "why": "Half right, and dangerous for it. Process matters, but the tool contributes concretely: without state there would be no way even to *detect* the difference."
+        }
+      ]
+    }
+  ]
+}

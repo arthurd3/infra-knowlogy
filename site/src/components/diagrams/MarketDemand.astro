@@ -1,0 +1,94 @@
+---
+/**
+ * O cartaz de mercado, REDESENHADO.
+ *
+ * O original é um infográfico de terceiro e a licença não foi apurada. O
+ * ADR 0010 é explícito sobre o que fazer nesse caso: redesenhar em SVG e
+ * creditar com `redrawnFrom`, em vez de republicar o arquivo. O ganho não é só
+ * jurídico — um PNG de fundo escuro fica ilegível no tema claro, e este
+ * desenho pinta por classe como os outros 26 diagramas daqui.
+ *
+ * Os números NÃO estão escritos aqui: eles vêm de site/src/data/skills.json,
+ * o mesmo arquivo que o teste `skills.test.ts` guarda e que a ilha
+ * SkillCoverage apresenta. Número em dois lugares diverge; em um só, não.
+ */
+import Figure from "../Figure.astro";
+import type { Lang } from "../../i18n/ui";
+import skills from "../../data/skills.json";
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+const C = {
+  pt: {
+    title: "Stack SRE em 2026: o que 40 vagas pedem",
+    sub: "cada bloco é uma vaga · a cor diz o que este repositório prova",
+    legend: [
+      { k: "coberto", label: "coberto aqui" },
+      { k: "parcial", label: "parcial" },
+      { k: "ausente", label: "ausente" },
+    ],
+    caption:
+      "As sete exigências que apareceram em 40 vagas de SRE, DevOps e Tech Lead, redesenhadas a partir da análise de <b>Joel</b> — e pintadas pelo que este repositório <b>prova por comando</b>, não pelo que ele menciona. A barra mede a demanda; a cor mede a cobertura. Foi este cruzamento que escolheu o módulo 4: IaC era o único item acima de 80% com nada do lado de cá.",
+    alt: "Sete barras de demanda de mercado, cada uma colorida pelo grau de cobertura deste repositório.",
+  },
+  en: {
+    title: "The 2026 SRE stack: what 40 job posts ask for",
+    sub: "each block is one job post · the colour says what this repository proves",
+    legend: [
+      { k: "coberto", label: "covered here" },
+      { k: "parcial", label: "partial" },
+      { k: "ausente", label: "absent" },
+    ],
+    caption:
+      "The seven requirements that showed up across 40 SRE, DevOps and Tech Lead job posts, redrawn from <b>Joel</b>'s analysis — and coloured by what this repository <b>proves by command</b>, not by what it mentions. The bar measures demand; the colour measures coverage. It was this crossing that picked module 4: IaC was the only item above 80% with nothing on our side.",
+    alt: "Seven market-demand bars, each coloured by this repository's degree of coverage.",
+  },
+}[lang];
+
+const CLS: Record<string, string> = {
+  coberto: "dg-fill-accent",
+  parcial: "dg-fill-warn",
+  ausente: "dg-fill-danger",
+};
+
+// 20 blocos = 100%, como o cartaz original. Cada bloco vale duas vagas.
+const BLOCKS = 20;
+const rows = skills.demands.map((d) => ({
+  label: (d as any)[lang].label,
+  demand: d.demand,
+  status: d.status,
+  filled: Math.round((d.demand / 100) * BLOCKS),
+}));
+---
+<Figure
+  caption={C.caption}
+  alt={C.alt}
+  redrawnFrom="Joel — análise de 40 vagas de SRE/DevOps/Tech Lead, 2026"
+>
+  <svg viewBox="0 0 700 372" xmlns="http://www.w3.org/2000/svg" font-size="11">
+    <text x="14" y="22" class="dg-title" font-size="14">{C.title}</text>
+    <text x="14" y="38" class="dg-faint" font-size="9.5">{C.sub}</text>
+
+    {C.legend.map((l, i) => (
+      <g>
+        <rect x={430 + i * 92} y={12} width={10} height={10} rx={2} class={CLS[l.k]} />
+        <text x={446 + i * 92} y={21} class="dg-faint" font-size="9">{l.label}</text>
+      </g>
+    ))}
+
+    {rows.map((r, i) => {
+      const y = 64 + i * 43;
+      return (
+        <g>
+          <text x="14" y={y} class="dg-title" font-size="10.5">{r.label}</text>
+          <text x="686" y={y} text-anchor="end" class="dg-mono dg-title" font-size="13">{r.demand}%</text>
+          {Array.from({ length: BLOCKS }, (_, b) => (
+            <rect
+              x={14 + b * 28} y={y + 8} width={22} height={13} rx={2}
+              class={b < r.filled ? CLS[r.status] : "dg-box dg-box--dashed"}
+            />
+          ))}
+        </g>
+      );
+    })}
+  </svg>
+</Figure>

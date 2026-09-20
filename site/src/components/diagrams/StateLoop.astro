@@ -1,0 +1,70 @@
+---
+/** iac-02 — as três pontas que o estado amarra. */
+import Figure from "../Figure.astro";
+import type { Lang } from "../../i18n/ui";
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+const C = {
+  pt: {
+    cfg: "configuração", cfgNote: "o que você escreveu (.tf)",
+    real: "mundo real", realNote: "o que o daemon tem agora",
+    state: "estado", stateNote: "terraform.tfstate",
+    mapNote: "endereço do recurso  ↔  id do objeto",
+    refresh: "refresh: lê o real e atualiza o estado",
+    diff: "diff: compara configuração com estado",
+    lost: "sem o estado, o tofu não sabe que iac-db é DELE",
+    lost2: "resultado: ele tenta CRIAR de novo, e colide",
+    caption:
+      "O estado não é cache nem log: é o <b>mapa</b> entre um endereço que você escreveu (<code>docker_container.db</code>) e um objeto que existe no mundo (um id de 64 caracteres). É ele que permite responder \"o que mudaria?\" e \"o que é meu para destruir?\". Perdê-lo não perde a infraestrutura — perde a <b>posse</b> dela: o próximo <code>apply</code> tenta criar o que já existe.",
+    alt: "Triângulo entre configuração, estado e mundo real, com refresh e diff ligando as pontas.",
+  },
+  en: {
+    cfg: "configuration", cfgNote: "what you wrote (.tf)",
+    real: "the real world", realNote: "what the daemon has right now",
+    state: "state", stateNote: "terraform.tfstate",
+    mapNote: "resource address  ↔  object id",
+    refresh: "refresh: reads the real world, updates state",
+    diff: "diff: compares configuration against state",
+    lost: "with no state, tofu cannot know iac-db is ITS OWN",
+    lost2: "result: it tries to CREATE it again, and collides",
+    caption:
+      "State is neither a cache nor a log: it is the <b>map</b> between an address you wrote (<code>docker_container.db</code>) and an object that exists in the world (a 64-character id). It is what makes \"what would change?\" and \"what is mine to destroy?\" answerable. Losing it does not lose the infrastructure — it loses <b>ownership</b> of it: the next <code>apply</code> tries to create what already exists.",
+    alt: "Triangle between configuration, state and the real world, with refresh and diff linking them.",
+  },
+}[lang];
+---
+<Figure caption={C.caption} alt={C.alt}>
+  <svg viewBox="0 0 700 268" xmlns="http://www.w3.org/2000/svg" font-size="11">
+    <defs>
+      <marker id="sl-arrow" viewBox="0 0 10 10" refX="8" refY="5"
+              markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M0 0 L10 5 L0 10 z" class="dg-fill-accent" />
+      </marker>
+    </defs>
+
+    <rect x="14" y="16" width="200" height="54" rx="8" class="dg-box dg-box--raised" />
+    <text x="114" y="38" text-anchor="middle" class="dg-title" font-size="12">{C.cfg}</text>
+    <text x="114" y="54" text-anchor="middle" class="dg-faint" font-size="9.5">{C.cfgNote}</text>
+
+    <rect x="486" y="16" width="200" height="54" rx="8" class="dg-box dg-box--raised" />
+    <text x="586" y="38" text-anchor="middle" class="dg-title" font-size="12">{C.real}</text>
+    <text x="586" y="54" text-anchor="middle" class="dg-faint" font-size="9.5">{C.realNote}</text>
+
+    <rect x="240" y="126" width="220" height="62" rx="8" class="dg-box dg-box--accent" />
+    <text x="350" y="150" text-anchor="middle" class="dg-title" font-size="12">{C.state}</text>
+    <text x="350" y="166" text-anchor="middle" class="dg-mono dg-faint" font-size="9.5">{C.stateNote}</text>
+    <text x="350" y="180" text-anchor="middle" class="dg-faint" font-size="9">{C.mapNote}</text>
+
+    <path d="M160 74 L300 122" class="dg-line dg-line--accent" fill="none" marker-end="url(#sl-arrow)" />
+    <path d="M540 74 L400 122" class="dg-line dg-line--accent" fill="none" marker-start="url(#sl-arrow)" />
+
+    <text x="150" y="108" class="dg-faint" font-size="9.5">{C.diff}</text>
+    <text x="410" y="108" class="dg-faint" font-size="9.5">{C.refresh}</text>
+
+    <path d="M214 34 L486 34" class="dg-line dg-line--dashed" fill="none" />
+
+    <rect x="14" y="212" width="672" height="44" rx="8" class="dg-box dg-box--danger" />
+    <text x="30" y="232" class="dg-title" font-size="10.5">{C.lost}</text>
+    <text x="30" y="247" class="dg-faint" font-size="9.5">{C.lost2}</text>
+  </svg>
+</Figure>

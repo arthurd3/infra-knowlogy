@@ -1,0 +1,194 @@
+---
+key: drift-and-reconciliation
+lang: pt
+track: iac
+order: 6
+title: Drift, e as três reconciliações
+summary: "Apagar um container à mão separa as três vistas deste repositório na hora. Uma ressuscita sozinha, duas ficam quietas — e só uma delas sabe te contar."
+minutes: 16
+tags: [iac, drift, reconciliacao, compose, kubernetes, gitops, refresh-only]
+sources:
+  - label: "OpenTofu — refresh-only"
+    url: "https://opentofu.org/docs/cli/commands/plan/"
+    kind: docs
+    accessed: "2026-09-20"
+  - label: "OpenGitOps — os quatro princípios"
+    url: "https://opengitops.dev/"
+    kind: spec
+    accessed: "2026-09-20"
+  - label: "GitOps em 2025 — CNCF"
+    url: "https://www.cncf.io/blog/2025/06/09/gitops-in-2025-from-old-school-updates-to-the-modern-way/"
+    kind: blog
+    accessed: "2026-09-20"
+---
+
+import ThreeReconciliations from "../../../components/diagrams/ThreeReconciliations.astro";
+
+Esta é a lição que só existe porque o repositório tem os três módulos. A mesma
+aplicação está no ar em três portas, descrita de três jeitos — e uma única ação
+as separa.
+
+<RunIt>
+```bash
+make up        # Compose   :8080
+make k8s-up    # Kubernetes :8081
+make iac-up    # OpenTofu   :8082
+docker rm -f iac-worker
+```
+</RunIt>
+
+<ThreeReconciliations />
+
+## O que cada uma faz depois do `docker rm -f`
+
+**Kubernetes** recria em segundos. Ninguém pediu. Existe um controller
+comparando desejado com observado num laço que **nunca termina** — e a lição
+k8s-01 mede essa recriação.
+
+**Compose** não faz nada. O container fica morto até alguém rodar `up -d` de
+novo, e aí ele volta. O `up` é um comando que converge uma vez e sai.
+
+**OpenTofu** também não faz nada — mas, ao contrário do Compose, ele **sabe**:
+
+```bash
+cd iac && tofu plan -refresh-only -detailed-exitcode
+```
+
+```
+Note: Objects have changed outside of OpenTofu
+  # docker_container.worker has been deleted
+```
+
+Saída `2`, e o recurso **nomeado**. É a checagem do portão, e a diferença
+prática entre "está estranho" e "o `docker_container.worker` sumiu".
+
+<Callout type="why" label="Por que refresh-only e não plan normal">
+Um `plan` comum mistura duas coisas num diff só: o que **você** editou e ainda
+não aplicou, e o que mudou **no mundo** sem você.
+
+O `-refresh-only` isola a segunda. É o comando de quem quer responder "alguém
+mexeu aqui?" sem que as próprias edições pendentes poluam a resposta — e é por
+isso que ele é o comando certo para um job de detecção de drift agendado.
+</Callout>
+
+## Reconciliação contínua não é só vantagem
+
+É tentador ler a tabela como um ranking. Não é.
+
+<Tradeoff
+  a="Reconciliação sob demanda (Compose, OpenTofu)"
+  b="Reconciliação contínua (Kubernetes, GitOps)"
+  whenA="Quando a mudança precisa ser deliberada e revisável: um banco de dados, uma zona de DNS, um recurso caro. Você quer ver o plano ANTES, e quer que nada se mova enquanto você pensa."
+  whenB="Quando a carga é descartável e a disponibilidade vale mais que a deliberação: um pod pode morrer a qualquer momento, e ninguém quer ser acordado para recriá-lo."
+  chose="none"
+  verdict="as duas, em camadas diferentes — que é o arranjo mais comum na prática: o OpenTofu provisiona o cluster, e o cluster reconcilia o que roda dentro dele."
+  adr="0007-kind-e-o-porte-para-kubernetes"
+/>
+
+<Callout type="danger" label="O laço que corrige também é o laço que insiste">
+Um controller contínuo não sabe distinguir "alguém apagou por engano" de
+"alguém apagou de propósito para parar o sangramento".
+
+Durante um incidente, escalar um Deployment para zero à mão e ver o operador
+devolvê-lo para dez é uma experiência comum e ruim. A correção automática é a
+mesma função nos dois casos; o que muda é o contexto, e disso o laço não sabe
+nada.
+
+É o mesmo motivo pelo qual ninguém quer um controller contínuo aplicando
+mudança de esquema em banco de produção.
+</Callout>
+
+<Term term="GitOps" alt="GitOps">
+Levar a reconciliação contínua para o repositório: o estado desejado vive no
+git, e um agente **dentro** do cluster puxa e reconcilia para sempre.
+
+O termo é de 2017, de Alexis Richardson, e a definição que pegou é "operações
+por pull request". A iniciativa OpenGitOps, na CNCF, fixou quatro princípios:
+declarativo, versionado e imutável, **puxado** automaticamente, e continuamente
+reconciliado.
+
+O que mais muda não é a ferramenta, é a **fronteira de confiança**: no modelo
+push, o CI precisa de credencial de administrador do cluster; no modelo pull, o
+cluster busca sozinho e o CI não precisa de acesso nenhum.
+
+Este repositório **não** tem GitOps — e é uma das lacunas que o mapa de mercado
+registra, com nome e percentual.
+</Term>
+
+## Drift não é sempre culpa de alguém
+
+Vale desfazer a moralização. Drift acontece por:
+
+- **ação humana** — o `docker rm -f` do exemplo, ou o incidente das 3h;
+- **ação de outro sistema** — um autoscaler, um operador, uma política que
+  reetiqueta;
+- **default do outro lado** — o `memory_swap` da lição 3, que o daemon preenche
+  sozinho;
+- **mudança do próprio provedor** — um campo que passa a ser devolvido com outro
+  formato, como as capabilities com prefixo `CAP_`.
+
+Os dois últimos não têm culpado, e são os mais comuns em produção. Tratar todo
+diff como negligência é o jeito mais rápido de ensinar as pessoas a ignorar o
+relatório de drift.
+
+<FieldNote
+  source="CNCF — GitOps em 2025"
+  url="https://www.cncf.io/blog/2025/06/09/gitops-in-2025-from-old-school-updates-to-the-modern-way/"
+  kind="blog"
+  accessed="2026-09-20"
+>
+O custo operacional do modelo pull é que cada cluster vira um sistema a
+administrar: versão do agente, configuração e saúde dele, por cluster. A
+resposta comum em frota é um meta-padrão — um agente que gerencia os agentes —
+com a complexidade que isso sugere.
+</FieldNote>
+
+<LabExercise check="refresh-only detecta o worker apagado por fora e o NOMEIA" file="tools/scripts/iac-verify.sh">
+
+Com a stack do módulo 4 no ar, apague o container do worker à mão e rode as duas
+formas de plan.
+
+Pergunta: por que o portão usa `-refresh-only` e não o `plan` comum, se os dois
+sairiam `2` neste caso?
+
+<Fragment slot="hint">
+Imagine que você também editou o `containers.tf` e ainda não aplicou.
+</Fragment>
+
+<Fragment slot="answer">
+
+Porque os dois saem `2` **por motivos diferentes**, e o portão precisa saber
+qual.
+
+Um `plan` comum sai `2` se houver **qualquer** mudança pendente — inclusive uma
+edição sua que nunca foi aplicada. Se o portão aceitasse isso como prova de
+detecção de drift, ele passaria mesmo se o `refresh` estivesse quebrado: bastaria
+uma edição não aplicada no diretório.
+
+O `-refresh-only` ignora a configuração e compara só **estado × mundo**. Sair `2`
+ali significa exatamente uma coisa: algo mudou fora da ferramenta.
+
+```bash
+tofu plan -refresh-only -detailed-exitcode   # 2 => alguém mexeu
+tofu plan -detailed-exitcode                 # 2 => mexeu, OU você editou
+```
+
+É a mesma disciplina do `verify.sh`, que separa "o scanner quebrou" de "o
+scanner achou CVE". Um portão que junta duas causas numa checagem só passa a
+mentir nas duas.
+
+</Fragment>
+</LabExercise>
+
+## O que fica
+
+- Um `docker rm -f` separa as três: k8s recria, Compose e OpenTofu ficam quietos.
+- A diferença do OpenTofu é **saber contar** — e nomear o recurso.
+- `-refresh-only` isola drift das suas edições pendentes. É o comando do job
+  agendado.
+- Contínuo × sob demanda é tradeoff, não ranking: o laço que corrige é o laço
+  que insiste durante um incidente.
+- GitOps leva o laço para o git e muda a **fronteira de confiança** — e não
+  existe neste repositório ainda.
+
+<Quiz set="drift-and-reconciliation" />

@@ -35,6 +35,9 @@ export const ui = {
     "lesson.tags": "Assuntos",
     "lesson.backToTracks": "Todas as lições",
     "pager.otherTrack": "Começa a trilha",
+    "home.market.title": "O que o mercado pede, e o que aqui é provado",
+    "home.market.desc":
+      "As sete exigências que apareceram em 40 vagas de SRE, DevOps e Tech Lead, cruzadas com o que este repositório verifica por comando. Clique numa barra para ver a evidência — ou a lacuna, escrita com todas as letras.",
     "home.verify.title": "Verifique você mesmo, daqui",
     "home.verify.desc":
       "As mesmas checagens que o make verify roda no terminal, disparadas pelo navegador contra a stack em execução. Sem a stack no ar, cada passo mostra a resposta gravada do último portão que passou.",
@@ -50,6 +53,7 @@ export const ui = {
     "track.seguranca": "Segurança",
     "track.kubernetes": "Kubernetes",
     "track.cicd": "CI/CD",
+    "track.iac": "IaC",
     "track.fundamentos.desc":
       "O que um container realmente é, como uma imagem é montada e por que o cache de build se comporta assim.",
     "track.producao.desc":
@@ -60,6 +64,8 @@ export const ui = {
       "A mesma stack, portada para um cluster kind: o que um orquestrador acrescenta — auto-cura, probes, rolling — medido lado a lado com o Compose.",
     "track.cicd.desc":
       "O mesmo pipeline em dois mundos: o GitHub Actions que já existe e um Jenkins self-hosted construído do zero — comparados por medição, não por preferência.",
+    "track.iac.desc":
+      "A mesma stack declarada em HCL e provisionada por OpenTofu: estado, grafo de dependências, idempotência e drift — medidos aqui, sem conta em nuvem nenhuma.",
     "lesson.minutes": "min de leitura",
     "lesson.sources": "Fontes",
     "lesson.sources.docs": "Documentação e especificação",
@@ -138,6 +144,9 @@ export const ui = {
     "lesson.tags": "Topics",
     "lesson.backToTracks": "All lessons",
     "pager.otherTrack": "Starts the track",
+    "home.market.title": "What the market asks for, and what is proven here",
+    "home.market.desc":
+      "The seven requirements that showed up across 40 SRE, DevOps and Tech Lead job posts, crossed with what this repository verifies by command. Click a bar to see the evidence — or the gap, spelled out.",
     "home.verify.title": "Check it yourself, from here",
     "home.verify.desc":
       "The same checks make verify runs in the terminal, fired from the browser against the running stack. With no stack up, every step shows the recorded response from the last gate that passed.",
@@ -153,6 +162,7 @@ export const ui = {
     "track.seguranca": "Security",
     "track.kubernetes": "Kubernetes",
     "track.cicd": "CI/CD",
+    "track.iac": "IaC",
     "track.fundamentos.desc":
       "What a container actually is, how an image is assembled, and why the build cache behaves the way it does.",
     "track.producao.desc":
@@ -163,6 +173,8 @@ export const ui = {
       "The same stack, ported to a kind cluster: what an orchestrator adds — self-healing, probes, rolling updates — measured side by side with Compose.",
     "track.cicd.desc":
       "The same pipeline in two worlds: the GitHub Actions one that already exists, and a self-hosted Jenkins built from scratch — compared by measurement, not by preference.",
+    "track.iac.desc":
+      "The same stack declared in HCL and provisioned by OpenTofu: state, dependency graph, idempotence and drift — all measured here, with no cloud account at all.",
     "lesson.minutes": "min read",
     "lesson.sources": "Sources",
     "lesson.sources.docs": "Documentation and specification",
@@ -246,7 +258,7 @@ export function otherLang(lang: Lang): Lang {
  * mapa de badge da página da lição e os testes todos derivam daqui. Antes,
  * cada um repetia a lista à mão e acrescentar uma trilha era caçar literais.
  */
-export const TRACKS = ["fundamentos", "producao", "seguranca", "kubernetes", "cicd"] as const;
+export const TRACKS = ["fundamentos", "producao", "seguranca", "kubernetes", "cicd", "iac"] as const;
 export type Track = (typeof TRACKS)[number];
 
 /** Rótulo localizado de uma trilha. */
@@ -266,5 +278,6 @@ export function trackBadge(track: Track): string {
     seguranca: "badge--seg",
     kubernetes: "badge--k8s",
     cicd: "badge--cicd",
+    iac: "badge--iac",
   }[track];
 }

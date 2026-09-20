@@ -1,0 +1,140 @@
+{
+  "note_pt": "As três vistas do repositório depois de um docker rm, e por que contínuo não é sempre melhor.",
+  "note_en": "The repository's three views after a docker rm, and why continuous is not always better.",
+  "pt": [
+    {
+      "q": "Você apaga um container à mão nas três vistas. Qual volta sozinha, e por quê?",
+      "options": [
+        {
+          "text": "Só a do Kubernetes: existe um controller comparando desejado com observado num laço que nunca termina.",
+          "correct": true,
+          "why": "Compose e OpenTofu são comandos: convergem quando invocados e saem. O laço do Kubernetes não é uma configuração que se liga — é o que um Deployment É. A lição k8s-01 mede a recriação em segundos."
+        },
+        {
+          "text": "Kubernetes e OpenTofu, porque as duas guardam estado desejado.",
+          "why": "Guardar o desejado é necessário e não é suficiente. O OpenTofu tem o desejado no arquivo e no estado, e não tem nada rodando para agir sobre a diferença."
+        },
+        {
+          "text": "Compose, por causa do `restart: unless-stopped`.",
+          "why": "Essa política reinicia um container que MORREU; ela não recria um container que foi REMOVIDO — não há mais objeto para o daemon reiniciar."
+        },
+        {
+          "text": "Nenhuma: recriar container apagado exige ação humana em qualquer ferramenta.",
+          "why": "É a intuição de quem só usou Compose. O orquestrador muda exatamente isso, e é a razão de ele existir."
+        }
+      ]
+    },
+    {
+      "q": "Por que o portão usa `plan -refresh-only` em vez do `plan` comum para provar detecção de drift?",
+      "options": [
+        {
+          "text": "Porque o `plan` comum sai `2` por qualquer mudança pendente — inclusive uma edição sua não aplicada — e a checagem passaria mesmo com o refresh quebrado.",
+          "correct": true,
+          "why": "`-refresh-only` ignora a configuração e compara só estado × mundo. Sair `2` ali significa uma coisa só. É a mesma disciplina do `verify.sh`, que separa 'o scanner quebrou' de 'o scanner achou CVE'."
+        },
+        {
+          "text": "Porque o `plan` comum não detecta recurso apagado por fora.",
+          "why": "Detecta sim — o refresh acontece nos dois. A diferença é o que entra no diff junto."
+        },
+        {
+          "text": "Porque `-refresh-only` é mais rápido.",
+          "why": "Ele até é um pouco mais rápido por pular o diff de configuração, mas isso não tem relação com a correção da checagem."
+        },
+        {
+          "text": "Porque `-refresh-only` corrige o drift automaticamente.",
+          "why": "Ele não corrige nada — corrigir é do `apply`. `-refresh-only` é justamente o comando que olha sem tocar."
+        }
+      ]
+    },
+    {
+      "q": "Qual é o custo real da reconciliação contínua, que a tabela de vantagens costuma esconder?",
+      "options": [
+        {
+          "text": "O laço não distingue 'apagaram por engano' de 'apagaram de propósito para parar o sangramento' — durante um incidente, ele desfaz a sua intervenção.",
+          "correct": true,
+          "why": "Escalar um Deployment para zero à mão e ver o operador devolver para dez é uma experiência comum e ruim. A correção automática é a mesma função nos dois casos; o que muda é o contexto, e disso o laço não sabe nada."
+        },
+        {
+          "text": "Consumo de CPU do controller.",
+          "why": "É desprezível para qualquer cluster real. O custo que importa é de controle, não de recurso."
+        },
+        {
+          "text": "Ela exige estado remoto com lock.",
+          "why": "Confusão com o modelo do OpenTofu. Um controller de Kubernetes guarda o desejado na API do cluster e não usa arquivo de estado."
+        },
+        {
+          "text": "Ela impede mudanças manuais de emergência.",
+          "why": "Chega perto e erra o verbo: nada é impedido, tudo é DESFEITO — você consegue fazer a mudança, e ela dura até a próxima iteração do laço. É pior, porque parece ter funcionado."
+        }
+      ]
+    }
+  ],
+  "en": [
+    {
+      "q": "You delete a container by hand in all three views. Which one comes back on its own, and why?",
+      "options": [
+        {
+          "text": "Only Kubernetes: there is a controller comparing desired against observed in a loop that never ends.",
+          "correct": true,
+          "why": "Compose and OpenTofu are commands: they converge when invoked and exit. The Kubernetes loop is not a setting you enable — it is what a Deployment IS. Lesson k8s-01 measures the recreation in seconds."
+        },
+        {
+          "text": "Kubernetes and OpenTofu, because both keep desired state.",
+          "why": "Keeping desired state is necessary and not sufficient. OpenTofu has the desired state in the file and in the state file, and has nothing running to act on the difference."
+        },
+        {
+          "text": "Compose, because of `restart: unless-stopped`.",
+          "why": "That policy restarts a container that DIED; it does not recreate one that was REMOVED — there is no object left for the daemon to restart."
+        },
+        {
+          "text": "None: recreating a deleted container needs human action in any tool.",
+          "why": "That is the intuition of someone who has only used Compose. An orchestrator changes exactly this, and it is why one exists."
+        }
+      ]
+    },
+    {
+      "q": "Why does the gate use `plan -refresh-only` rather than a plain `plan` to prove drift detection?",
+      "options": [
+        {
+          "text": "Because a plain `plan` exits `2` for any pending change — including an unapplied edit of yours — so the check would pass even with refresh completely broken.",
+          "correct": true,
+          "why": "`-refresh-only` ignores the configuration and compares only state × world. Exiting `2` there means one thing. It is the same discipline as `verify.sh`, which separates 'the scanner broke' from 'the scanner found a CVE'."
+        },
+        {
+          "text": "Because a plain `plan` does not detect a resource deleted outside.",
+          "why": "It does — refresh happens in both. The difference is what else lands in the diff alongside."
+        },
+        {
+          "text": "Because `-refresh-only` is faster.",
+          "why": "It is slightly faster, since it skips the configuration diff, but that has nothing to do with the check's correctness."
+        },
+        {
+          "text": "Because `-refresh-only` fixes the drift automatically.",
+          "why": "It fixes nothing — fixing belongs to `apply`. `-refresh-only` is precisely the command that looks without touching."
+        }
+      ]
+    },
+    {
+      "q": "What is the real cost of continuous reconciliation that the benefits table usually hides?",
+      "options": [
+        {
+          "text": "The loop cannot tell 'deleted by mistake' from 'deleted deliberately to stop the bleeding' — during an incident it undoes your intervention.",
+          "correct": true,
+          "why": "Scaling a Deployment to zero by hand and watching the operator put it back to ten is a common and miserable experience. Automatic correction is the same function in both cases; what differs is context, and the loop knows nothing about that."
+        },
+        {
+          "text": "The controller's CPU usage.",
+          "why": "Negligible on any real cluster. The cost that matters is one of control, not of resources."
+        },
+        {
+          "text": "It requires remote state with locking.",
+          "why": "A confusion with the OpenTofu model. A Kubernetes controller keeps desired state in the cluster API and uses no state file at all."
+        },
+        {
+          "text": "It prevents emergency manual changes.",
+          "why": "Close, with the wrong verb: nothing is prevented, everything is UNDONE — you can make the change, and it lasts until the loop's next iteration. That is worse, because it looks like it worked."
+        }
+      ]
+    }
+  ]
+}

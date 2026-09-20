@@ -1,0 +1,140 @@
+{
+  "note_pt": "O que o estado é, o que acontece quando ele some, e por que o Compose não precisa de um.",
+  "note_en": "What state is, what happens when it disappears, and why Compose needs none.",
+  "pt": [
+    {
+      "q": "Você apaga `terraform.tfstate` com a stack no ar. O que acontece com os containers?",
+      "options": [
+        {
+          "text": "Nada — eles continuam servindo. O que se perde é a posse: o próximo `apply` tenta criar tudo de novo e colide nos nomes.",
+          "correct": true,
+          "why": "O estado é um mapa, não um processo. Apagá-lo não manda sinal para ninguém. O sintoma aparece no comando seguinte, quando o `tofu` não reconhece mais `iac-db` como dele e planeja um `create` que o daemon recusa por nome duplicado."
+        },
+        {
+          "text": "Os containers param, porque o estado é o que os mantém de pé.",
+          "why": "Nada no estado roda. Quem mantém container de pé é o daemon, com a política de restart — o `tofu` só falou com ele uma vez, no apply."
+        },
+        {
+          "text": "O `tofu` recria o estado sozinho no próximo comando, lendo os rótulos.",
+          "why": "Esse é o modelo do **Compose**, que descobre tudo pelos rótulos que ele mesmo põe. O OpenTofu não faz isso: reconstruir o vínculo é trabalho manual, com `tofu import`, um recurso por vez."
+        },
+        {
+          "text": "O `destroy` passa a apagar containers de outros projetos.",
+          "why": "O contrário: sem estado o `destroy` não apaga **nada**, porque ele só destrói o que o estado lista. Containers alheios nunca estiveram em risco."
+        }
+      ]
+    },
+    {
+      "q": "Por que o Compose funciona sem arquivo de estado e o OpenTofu não?",
+      "options": [
+        {
+          "text": "O Compose fala com um sistema só, que aceita rótulos arbitrários — e ele os usa para achar o que criou. Um provider genérico não pode contar com isso.",
+          "correct": true,
+          "why": "`com.docker.compose.project` é gravado em todo container, rede e volume. Um bucket S3 ou uma zona de DNS não têm campo equivalente, e mesmo onde há rótulo ele não diz a qual **endereço do código** o objeto corresponde."
+        },
+        {
+          "text": "Porque o Compose é imperativo e não precisa comparar nada.",
+          "why": "O Compose é declarativo e compara, sim. A diferença é de onde ele tira o 'o que existe hoje': de uma consulta rotulada, não de um arquivo."
+        },
+        {
+          "text": "Porque o Compose guarda estado escondido em `/var/lib/docker`.",
+          "why": "O que está lá é o estado do **daemon** — containers, imagens, volumes — e não um registro do Compose. Some o Compose do disco e o daemon nem nota."
+        },
+        {
+          "text": "Porque YAML não suporta guardar ids.",
+          "why": "Suportaria perfeitamente. A questão é de desenho, não de formato: o Compose optou por descobrir em vez de anotar."
+        }
+      ]
+    },
+    {
+      "q": "Duas pessoas rodam `apply` ao mesmo tempo, no mesmo estado remoto e sem lock. Qual é o pior resultado?",
+      "options": [
+        {
+          "text": "Recurso criado no mundo e ausente do estado — o último a escrever apaga o registro do que o outro criou.",
+          "correct": true,
+          "why": "É a pior combinação porque é silenciosa: nada falha na hora. O objeto existe, ninguém o gerencia, o `destroy` não o alcança e a conta continua chegando. É a razão de o lock vir antes de qualquer escrita."
+        },
+        {
+          "text": "Os dois applys falham e nada é criado.",
+          "why": "Seria o resultado seguro, e é o que o lock produz de propósito: o segundo espera ou desiste. Sem lock, os dois seguem em frente."
+        },
+        {
+          "text": "O arquivo de estado corrompe e fica ilegível.",
+          "why": "Acontece menos do que se imagina: cada escrita é um JSON completo. O problema não é o arquivo ficar quebrado, é ele ficar **plausível e errado**."
+        },
+        {
+          "text": "O segundo apply sobrescreve os recursos do primeiro no mundo.",
+          "why": "Ele pode até recriar alguns, mas o dano duradouro é o do registro. Recurso recriado você percebe; recurso órfão você descobre na fatura."
+        }
+      ]
+    }
+  ],
+  "en": [
+    {
+      "q": "You delete `terraform.tfstate` while the stack is running. What happens to the containers?",
+      "options": [
+        {
+          "text": "Nothing — they keep serving. What is lost is ownership: the next `apply` tries to create everything again and collides on names.",
+          "correct": true,
+          "why": "State is a map, not a process. Deleting it signals nobody. The symptom shows up on the next command, when `tofu` no longer recognises `iac-db` as its own and plans a `create` that the daemon refuses as a duplicate name."
+        },
+        {
+          "text": "The containers stop, because state is what keeps them up.",
+          "why": "Nothing in state runs. What keeps a container up is the daemon and its restart policy — `tofu` only spoke to it once, during apply."
+        },
+        {
+          "text": "`tofu` rebuilds state by itself on the next command, by reading labels.",
+          "why": "That is the **Compose** model, which discovers everything from the labels it applies itself. OpenTofu does not: rebuilding the link is manual work, with `tofu import`, one resource at a time."
+        },
+        {
+          "text": "`destroy` starts deleting containers from other projects.",
+          "why": "The opposite: with no state, `destroy` deletes **nothing**, because it only destroys what state lists. Other people's containers were never at risk."
+        }
+      ]
+    },
+    {
+      "q": "Why does Compose work without a state file when OpenTofu cannot?",
+      "options": [
+        {
+          "text": "Compose talks to a single system that accepts arbitrary labels — and it uses them to find what it created. A generic provider cannot count on that.",
+          "correct": true,
+          "why": "`com.docker.compose.project` is written onto every container, network and volume. An S3 bucket or a DNS zone has no equivalent field, and even where a label exists it does not say which **code address** the object corresponds to."
+        },
+        {
+          "text": "Because Compose is imperative and has nothing to compare.",
+          "why": "Compose is declarative and does compare. The difference is where it gets 'what exists today' from: a labelled query, not a file."
+        },
+        {
+          "text": "Because Compose hides state inside `/var/lib/docker`.",
+          "why": "What lives there is the **daemon's** state — containers, images, volumes — not a Compose ledger. Remove Compose from disk and the daemon does not notice."
+        },
+        {
+          "text": "Because YAML cannot store ids.",
+          "why": "It could store them perfectly well. This is a design question, not a format one: Compose chose to discover rather than to record."
+        }
+      ]
+    },
+    {
+      "q": "Two people run `apply` at the same time, against the same remote state and with no lock. What is the worst outcome?",
+      "options": [
+        {
+          "text": "A resource created in the world and absent from state — the last writer erases the record of what the other created.",
+          "correct": true,
+          "why": "It is the worst combination because it is silent: nothing fails at the time. The object exists, nobody manages it, `destroy` cannot reach it and the bill keeps arriving. That is why the lock comes before any write."
+        },
+        {
+          "text": "Both applies fail and nothing is created.",
+          "why": "That would be the safe outcome, and it is exactly what a lock produces on purpose: the second one waits or gives up. Without a lock, both go ahead."
+        },
+        {
+          "text": "The state file gets corrupted and becomes unreadable.",
+          "why": "That happens less often than people assume: each write is a complete JSON document. The problem is not a broken file, it is a **plausible and wrong** one."
+        },
+        {
+          "text": "The second apply overwrites the first one's resources in the world.",
+          "why": "It may recreate a few, but the lasting damage is to the ledger. A recreated resource you notice; an orphaned one you discover on the invoice."
+        }
+      ]
+    }
+  ]
+}

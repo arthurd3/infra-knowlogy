@@ -1,0 +1,191 @@
+---
+key: plan-and-apply
+lang: pt
+track: iac
+order: 3
+title: "plan e apply: o contrato"
+summary: "O plan não é um preview bonito: é um teste com três códigos de saída. E ele mente em dois casos — os dois foram medidos aqui."
+minutes: 16
+tags: [iac, plan, apply, idempotencia, exit-code, opentofu]
+sources:
+  - label: "OpenTofu — tofu plan"
+    url: "https://opentofu.org/docs/cli/commands/plan/"
+    kind: docs
+    accessed: "2026-09-20"
+  - label: "Usando plan -detailed-exitcode em CI"
+    url: "https://oneuptime.com/blog/post/2026-02-23-how-to-use-terraform-plan-detailed-exitcode-for-ci-testing/view"
+    kind: blog
+    accessed: "2026-09-20"
+  - label: "Docker Engine API — HostConfig"
+    url: "https://docs.docker.com/reference/api/engine/"
+    kind: spec
+---
+
+import PlanContract from "../../../components/diagrams/PlanContract.astro";
+
+Todo mundo aprende `plan` como "mostra o que vai acontecer". Está certo e é
+pouco: o que o torna útil de verdade é ele ser **um teste com resposta
+binária**.
+
+<PlanContract />
+
+## Os três códigos de saída
+
+```bash
+tofu plan -detailed-exitcode
+echo "saiu $?"
+```
+
+| saída | significado | como o portão usa |
+|---|---|---|
+| `0` | nada a fazer | exigido **depois** do apply — é a prova de idempotência |
+| `1` | erro: não deu nem para planejar | reprova a checagem |
+| `2` | há mudanças a aplicar | exigido **antes** do apply |
+
+<Callout type="trap" label="Sem a flag, os dois casos interessantes saem 0">
+O `plan` padrão sai `0` tanto quando não há nada a fazer quanto quando há vinte
+recursos para criar. Ele só sai não-zero em erro de verdade.
+
+E tem o outro lado: um wrapper de CI que trate "não-zero" como falha vai marcar
+o build como quebrado toda vez que houver mudança — que é justamente o caso em
+que você quer o pipeline seguindo em frente. O `2` **não é erro**.
+</Callout>
+
+## O plano salvo, e por que ele existe
+
+```bash
+tofu plan -out=tfplan.bin      # decide agora
+tofu apply tfplan.bin          # executa exatamente aquilo
+```
+
+Sem o arquivo, o `apply` **replaneja**. Entre a sua revisão e a execução o mundo
+pode ter mudado, e o que vai ao ar não é o que você aprovou. Com o arquivo, o
+`apply` não pergunta nada e não recalcula: ele executa a lista.
+
+É por isso que o fluxo de qualquer CI sério é `plan -out` num passo, aprovação
+humana no meio, e `apply <arquivo>` no outro. O portão deste módulo faz o mesmo.
+
+<Callout type="why" label="O plano salvo também guarda segredo">
+Ele não é um resumo: é a lista completa de atributos, com valores. Tudo o que
+estaria no estado está nele — por isso a cifragem do OpenTofu cobre `state` **e**
+`plan`, em blocos separados. Um plano salvo esquecido num artefato de CI é um
+vazamento tão real quanto um estado esquecido num bucket.
+</Callout>
+
+## Onde o plan mente
+
+Ele mente em dois lugares, e os dois apareceram construindo este módulo.
+
+**O primeiro é honesto:** valores `(known after apply)`. O `plan` não tem como
+saber o id de um container que ainda não existe. Quando um atributo depende de
+outro que será criado, o desenho todo pode mudar na hora do `apply` — e um
+`apply` que faz mais do que o plano mostrava é o comportamento normal, não um
+defeito.
+
+**O segundo é um defeito de verdade**, e é o motivo de a checagem de
+idempotência existir:
+
+<Callout type="danger" label="Quando o provider e a API discordam do nome de um valor">
+O `compose.prod.yaml` pede `cap_add: [CHOWN, …]`. Escrito assim aqui, o
+`apply` funciona — e **todo** `plan` seguinte pede `replace` dos quatro
+containers que usam `capabilities.add`.
+
+A causa: o Docker 29 normaliza o nome para a forma canônica e devolve
+`CAP_CHOWN` no inspect. O provider lê de volta um valor diferente do que
+escreveu, conclui que houve mudança, e o atributo força substituição.
+
+```
+- capabilities { # forces replacement
+    - add = ["CAP_CHOWN", "CAP_DAC_OVERRIDE", …] -> null
+  }
++ capabilities { # forces replacement
+    + add = ["CHOWN", "DAC_OVERRIDE", …]
+  }
+```
+
+O que escondia o defeito: a api e o worker, que só têm `drop = ["ALL"]`,
+ficavam estáveis. Quatro containers pedindo replace e dois quietos manda
+procurar no lugar errado.
+</Callout>
+
+O segundo caso da mesma família é mais sutil. O `iac/containers.tf` declara
+`memory_swap` explicitamente, e não por gosto: sem `--memory-swap`, o **daemon**
+grava `2 × memory` do lado dele. O provider lê 1024 de volta, a configuração não
+diz nada, e o plano pede `memory_swap = 1024 -> null` para sempre.
+
+<Callout type="trap" label="Atributo não declarado não é atributo sem valor">
+É a regra geral dos dois casos. Quando o outro lado tem um default, ou você o
+declara, ou o `plan` nunca converge — e o sintoma é um diff permanente que
+ninguém consegue explicar porque "não mexi em nada".
+</Callout>
+
+## Idempotência medida
+
+<RunIt>
+```bash
+make iac-up
+cd iac && tofu plan -detailed-exitcode; echo "saiu $?"   # tem que ser 0
+```
+</RunIt>
+
+É exatamente o que o portão faz. Os números desta máquina estão em
+`site/src/data/iac-measured.json`, regravados a cada execução: `apply` completo
+em ~24 s, `plan` com refresh dos 19 recursos em ~3 s, `destroy` em ~7 s.
+
+<FieldNote
+  source="OneUptime — plan -detailed-exitcode em CI"
+  url="https://oneuptime.com/blog/post/2026-02-23-how-to-use-terraform-plan-detailed-exitcode-for-ci-testing/view"
+  kind="blog"
+  accessed="2026-09-20"
+>
+Para detecção de drift especificamente, a recomendação é `plan -refresh-only
+-detailed-exitcode`: ele isola o que mudou **fora** da ferramenta, sem misturar
+com as edições que você ainda não aplicou. Um wrapper de CI precisa preservar o
+`2` como sinal, e não tratá-lo como falha genérica do comando.
+</FieldNote>
+
+<LabExercise check="plan logo após o apply sai 0 — idempotente" file="iac/containers.tf">
+
+Abra `iac/containers.tf` e troque `"CAP_CHOWN"` por `"CHOWN"` no bloco
+`capabilities` do `db`. Rode `make iac-up` e depois `make iac-plan`.
+
+Pergunta: quantos recursos o plano quer mudar, e por quê?
+
+<Fragment slot="hint">
+Rode o plan **duas** vezes seguidas, sem aplicar nada entre elas.
+</Fragment>
+
+<Fragment slot="answer">
+
+Um recurso — o `db` — e para **sempre**. O plano não converge: rodar de novo
+pede a mesma substituição, e rodar `apply` não resolve, porque a próxima leitura
+traz `CAP_CHOWN` outra vez.
+
+```
+# docker_container.db must be replaced
+- capabilities { # forces replacement
+    - add = ["CAP_CHOWN", …] -> null
+```
+
+O detalhe cruel é que `apply` **funciona**. Se o seu ciclo é editar e aplicar,
+nada parece errado: a stack sobe, o smoke passa, e você segue. O defeito só
+aparece para quem roda `plan` **depois** do `apply` e exige zero.
+
+Num Kubernetes o equivalente seria um Deployment em rollout infinito; num
+pipeline de GitOps, um `Application` eternamente `OutOfSync`. Não devolva a
+capability com o nome curto — devolva com o nome que o daemon usa.
+
+</Fragment>
+</LabExercise>
+
+## O que fica
+
+- Com `-detailed-exitcode`, `plan` vira teste: `0` nada, `1` erro, `2` mudanças.
+- `2` **não é erro**, e um wrapper que ache que é destrói o sinal.
+- `plan -out` + `apply <arquivo>` separa decidir de executar. Sem o arquivo, o
+  apply replaneja.
+- O plano salvo guarda segredo como o estado guarda. Cifre os dois.
+- `(known after apply)` é mentira honesta; diff permanente é defeito — e os dois
+  que existiam aqui foram achados pela checagem de idempotência.
+
+<Quiz set="plan-and-apply" />

@@ -1,0 +1,70 @@
+---
+/** iac-06 — três ferramentas, três momentos de reconciliar. */
+import Figure from "../Figure.astro";
+import type { Lang } from "../../i18n/ui";
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+const C = {
+  pt: {
+    cols: [
+      { t: "Compose", when: "quando você roda", how: "up -d converge e SAI", drift: "some sozinho? não", cls: "dg-box--raised", port: ":8080" },
+      { t: "Kubernetes", when: "o tempo todo", how: "um controller em laço", drift: "some sozinho? SIM", cls: "dg-box--accent", port: ":8081" },
+      { t: "OpenTofu", when: "quando você roda", how: "plan mostra, apply corrige", drift: "some sozinho? não", cls: "dg-box--warn", port: ":8082" },
+    ],
+    q: "quem reconcilia, e quando?",
+    kill: "mato um container à mão…",
+    r1: "fica morto até alguém rodar up",
+    r2: "volta em segundos, sem ninguém",
+    r3: "plan -refresh-only ACUSA; só o apply corrige",
+    punch: "a mesma aplicação, três respostas — e nenhuma é 'a certa'",
+    caption:
+      "A mesma stack, nas três vistas de deploy deste repositório. Matar um container à mão separa as três na hora: o Kubernetes recria sozinho porque o controller <b>nunca para</b>; Compose e OpenTofu ficam quietos até alguém rodar um comando. A diferença do OpenTofu é que ele sabe <b>dizer</b> o que mudou — <code>plan -refresh-only</code> acusa e nomeia o recurso — mas continua sem agir por conta própria. Reconciliação contínua é poder, e é também um laço que você não controla.",
+    alt: "Três colunas — Compose, Kubernetes e OpenTofu — comparando quem reconcilia e quando.",
+  },
+  en: {
+    cols: [
+      { t: "Compose", when: "when you run it", how: "up -d converges and EXITS", drift: "heals itself? no", cls: "dg-box--raised", port: ":8080" },
+      { t: "Kubernetes", when: "all the time", how: "a controller in a loop", drift: "heals itself? YES", cls: "dg-box--accent", port: ":8081" },
+      { t: "OpenTofu", when: "when you run it", how: "plan shows, apply fixes", drift: "heals itself? no", cls: "dg-box--warn", port: ":8082" },
+    ],
+    q: "who reconciles, and when?",
+    kill: "I kill a container by hand…",
+    r1: "stays dead until someone runs up",
+    r2: "back in seconds, with nobody involved",
+    r3: "plan -refresh-only REPORTS it; only apply fixes it",
+    punch: "same application, three answers — and none of them is 'the right one'",
+    caption:
+      "The same stack, in this repository's three deploy views. Killing a container by hand separates them instantly: Kubernetes recreates it on its own because the controller <b>never stops</b>; Compose and OpenTofu stay quiet until somebody runs a command. OpenTofu's difference is that it can <b>tell you</b> what changed — <code>plan -refresh-only</code> reports and names the resource — while still not acting on its own. Continuous reconciliation is power, and also a loop you do not control.",
+    alt: "Three columns — Compose, Kubernetes and OpenTofu — comparing who reconciles and when.",
+  },
+}[lang];
+
+const answers = [C.r1, C.r2, C.r3];
+---
+<Figure caption={C.caption} alt={C.alt}>
+  <svg viewBox="0 0 700 280" xmlns="http://www.w3.org/2000/svg" font-size="11">
+    <text x="14" y="20" class="dg-muted" font-size="10" font-weight="620">{C.q}</text>
+
+    {C.cols.map((c, i) => (
+      <g>
+        <rect x={14 + i * 228} y={32} width={210} height={92} rx={8} class={`dg-box ${c.cls}`} />
+        <text x={30 + i * 228} y={56} class="dg-title" font-size="13">{c.t}</text>
+        <text x={204 + i * 228} y={56} text-anchor="end" class="dg-mono dg-faint" font-size="9">{c.port}</text>
+        <text x={30 + i * 228} y={78} class="dg-faint" font-size="9.5">{c.when}</text>
+        <text x={30 + i * 228} y={94} class="dg-faint" font-size="9.5">{c.how}</text>
+        <text x={30 + i * 228} y={112} class="dg-muted" font-size="9.5" font-weight="620">{c.drift}</text>
+      </g>
+    ))}
+
+    <text x="14" y="158" class="dg-title" font-size="11">{C.kill}</text>
+
+    {answers.map((a, i) => (
+      <g>
+        <rect x={14 + i * 228} y={172} width={210} height={46} rx={7} class="dg-box dg-box--dashed" />
+        <text x={119 + i * 228} y={199} text-anchor="middle" class="dg-faint" font-size="9">{a}</text>
+      </g>
+    ))}
+
+    <text x="350" y="258" text-anchor="middle" class="dg-muted" font-size="10" font-weight="620">{C.punch}</text>
+  </svg>
+</Figure>

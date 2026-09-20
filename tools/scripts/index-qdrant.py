@@ -22,6 +22,7 @@ O que é indexado:
   quiz         site/src/data/quizzes/*.json         (a explicação de cada alternativa)
   port         site/src/data/ports.json             (o mecanismo de cada ataque por porta)
   attack       site/src/data/attack-lab.json        (o resultado de cada ataque do portão)
+  skill        site/src/data/skills.json            (o que o mercado pede × o que daqui prova)
 
 O formato do ponto imita o do mcp-server-qdrant de propósito — vetor nomeado
 `fast-all-minilm-l6-v2` e payload `{document, metadata}` — para que o MCP
@@ -308,6 +309,53 @@ def attack_points():
             )
 
 
+def skill_points():
+    """Transforma skills.json em prosa pesquisável, uma exigência por ponto.
+
+    A pergunta que isto responde é a mais frequente de quem chega: "este
+    repositório cobre X?". A resposta honesta tem duas metades — o que ele
+    prova e o que falta — e as duas estão no mesmo arquivo, guardadas por
+    `site/tests/skills.test.ts`. Ver ADR 0014.
+    """
+    f = ROOT / "site/src/data/skills.json"
+    if not f.is_file():
+        return
+    d = json.loads(f.read_text())
+    rotulo = {
+        "pt": {"coberto": "COBERTO", "parcial": "PARCIAL", "ausente": "AUSENTE"},
+        "en": {"coberto": "COVERED", "parcial": "PARTIAL", "ausente": "ABSENT"},
+    }
+    for dem in d["demands"]:
+        for lang in ("pt", "en"):
+            lado = dem[lang]
+            ev = dem["evidence"]
+            if lang == "pt":
+                cab = (f"{lado['label']} apareceu em {dem['demand']}% de "
+                       f"{d['poster']['sample']} vagas de SRE/DevOps. "
+                       f"Neste repositório: {rotulo[lang][dem['status']]}.")
+                falta, prova = "O que falta", "O que prova"
+            else:
+                cab = (f"{lado['label']} appeared in {dem['demand']}% of "
+                       f"{d['poster']['sample']} SRE/DevOps job posts. "
+                       f"In this repository: {rotulo[lang][dem['status']]}.")
+                falta, prova = "What is missing", "What proves it"
+            lines = [cab, "", f"{falta}: {lado['gap']}"]
+            partes = []
+            if ev["lessons"]:
+                partes.append(("lições" if lang == "pt" else "lessons") + ": " + ", ".join(ev["lessons"]))
+            if ev["checks"]:
+                partes.append(("checagens" if lang == "pt" else "gate checks") + ": " + "; ".join(ev["checks"]))
+            if ev["measurements"]:
+                partes.append(("medições" if lang == "pt" else "measurements") + ": " + ", ".join(ev["measurements"]))
+            if partes:
+                lines += ["", f"{prova} — " + " | ".join(partes)]
+            yield point(
+                "skill", f, f"mercado {dem['id']} [{lang}]", "\n".join(lines),
+                {"title": lado["label"], "lang": lang,
+                 "id": dem["id"], "status": dem["status"], "demand": dem["demand"]},
+            )
+
+
 def collect() -> list[models.PointStruct]:
     points: list[models.PointStruct] = []
 
@@ -338,6 +386,7 @@ def collect() -> list[models.PointStruct]:
     points += list(quiz_points())
     points += list(port_points())
     points += list(attack_points())
+    points += list(skill_points())
     return points
 
 

@@ -1,0 +1,199 @@
+---
+key: the-provider-plugin
+lang: en
+track: iac
+order: 5
+title: The provider, the plugin that talks to the world
+summary: "The tofu core knows nothing about containers. What knows is a separate binary you download and execute — and that is why the lock records hashes, not just a version."
+minutes: 15
+tags: [iac, provider, grpc, registry, lock, supply-chain, pin]
+sources:
+  - label: "The provider plugin system: gRPC, protocols and lifecycle"
+    url: "https://readoss.com/en/hashicorp/terraform/provider-plugin-system-grpc-protocols-lifecycle"
+    kind: docs
+    accessed: "2026-09-20"
+  - label: "OpenTofu — dependency lock file"
+    url: "https://opentofu.org/docs/language/files/dependency-lock/"
+    kind: docs
+    accessed: "2026-09-20"
+  - label: "Docker provider (kreuzwerker) — OpenTofu registry"
+    url: "https://search.opentofu.org/provider/kreuzwerker/docker/latest"
+    kind: docs
+    accessed: "2026-09-20"
+  - label: "OpenTofu — what's new in 1.12"
+    url: "https://opentofu.org/docs/intro/whats-new/"
+    kind: docs
+    accessed: "2026-09-20"
+---
+
+import ProviderRpc from "../../../components/diagrams/ProviderRpc.astro";
+
+OpenTofu knows nothing about containers. It knows graphs, state and diffs — and
+delegates **everything else**.
+
+<ProviderRpc />
+
+## A separate process, speaking gRPC
+
+`tofu init` downloads a binary. `tofu apply` **starts that binary** as a child
+process and talks to it over gRPC, using `go-plugin`. Every operation — reading
+the schema, planning a resource, applying it, destroying it — is an RPC call.
+
+That explains things that otherwise look arbitrary:
+
+- **why the vocabulary changes from provider to provider**: resource types and
+  their attributes come from the schema the plugin declares, not from the
+  language;
+- **why `init` is mandatory**: with no binary in place, there is nobody to talk
+  to;
+- **why pinning matters so much**: it is third-party code running on your
+  machine, with your credentials.
+
+<RunIt>
+```bash
+cd iac && tofu providers schema -json | head -40
+```
+</RunIt>
+
+## The schema is the authority — and it has holes
+
+`compose.prod.yaml` puts `deploy.resources.limits.pids: 200` on every service.
+`iac/containers.tf` does **not**, and that is not an oversight:
+
+```bash
+tofu providers schema -json \
+  | python3 -c "import json,sys; \
+      print('pids_limit' in json.load(sys.stdin)['provider_schemas'] \
+        ['registry.opentofu.org/kreuzwerker/docker']['resource_schemas'] \
+        ['docker_container']['block']['attributes'])"
+# False
+```
+
+<Callout type="trap" label="A provider is a PARTIAL mapping of an API">
+The Docker API has `PidsLimit` in `HostConfig`. The provider does not expose it.
+There is no flag, no workaround and no alternative block: that hardening line is
+**not expressible** here.
+
+This is the uncomfortable lesson of any IaC adoption. The tool is not a superset
+of what you did before — it is a translation, and every translation loses
+something. Finding out **what** is lost is the adopter's job, and finding out
+late is how security controls quietly disappear in a migration.
+</Callout>
+
+## Pinning: version and hash, and what the lock taught us
+
+`versions.tf` pins the version:
+
+```hcl
+docker = {
+  source  = "registry.opentofu.org/kreuzwerker/docker"
+  version = "4.6.0"
+}
+```
+
+And `.terraform.lock.hcl` pins the **content**. It is the exact cousin of ADR
+0004, which pins base images by digest for the same reason: a version is a
+label, a hash is the bytes.
+
+<Callout type="why" label="Two hash families, and one is enough">
+The lock records two kinds, and the difference is not cosmetic:
+
+- `zh:` — hash of the published **zip**, the one the registry signs;
+- `h1:` — hash of the **extracted directory**, computable after installation.
+
+Measured here: tampering with **all** the `h1:` entries and running `tofu init`…
+**passes**. The `zh:` ones still match, and one satisfied family is enough.
+
+That is how this module's first negative proof was born useless: it announced
+"pinning protects" having tested only half of it. The gate now tampers with
+both, and `init` fails with *checksums previously recorded in the dependency
+lock file*.
+</Callout>
+
+<RunIt>
+```bash
+grep -c '"h1:' iac/.terraform.lock.hcl   # 12 — one per platform
+grep -c '"zh:' iac/.terraform.lock.hcl   # 12
+```
+</RunIt>
+
+<Tradeoff
+  a="Version range (`~> 4.6`)"
+  b="Exact version + lock with hashes"
+  whenA="In a module published for other people to consume: pinning a transitive dependency to an exact version stops your consumers from upgrading for security."
+  whenB="At the root — the module you actually apply. There reproducibility beats convenience, and the lock is versioned alongside the code."
+  chose="b"
+  verdict="exact in <code>versions.tf</code> and hashes in the versioned lock — the same rule as ADR 0004 for base images, for the same reason."
+  adr="0004-pin-por-digest"
+/>
+
+<Term term="provider registry" alt="provider registry">
+The index that resolves `kreuzwerker/docker` into a download address.
+
+OpenTofu has its own (`registry.opentofu.org`) and Terraform has its own. The
+same provider is usually in both, published by the same maintainers —
+`kreuzwerker/docker` is.
+
+Declaring the host in `source` is not decoration: it makes explicit that this
+module does **not** depend on HashiCorp infrastructure to work.
+</Term>
+
+<FieldNote
+  source="OpenTofu — what's new in 1.12"
+  url="https://opentofu.org/docs/intro/whats-new/"
+  kind="docs"
+  accessed="2026-09-20"
+>
+From 1.12 on, the OpenTofu registry serves both hash families, and `tofu init`
+records the full set of checksums for all platforms automatically. Before that
+you had to run `tofu providers lock -platform=…` by hand for each operating
+system — and forgetting to broke `init` for anyone on another platform.
+</FieldNote>
+
+<LabExercise check="init REPROVA lock com os hashes adulterados" file="iac/.terraform.lock.hcl">
+
+Copy `iac/versions.tf` and `iac/.terraform.lock.hcl` into a fresh directory,
+replace **only** the `h1:` hashes with garbage, and run `tofu init` there.
+
+Question: does `init` fail? And what does that tell you about how pinning
+protects you?
+
+<Fragment slot="hint">
+Look at how many hash families the file holds, and how many have to match.
+</Fragment>
+
+<Fragment slot="answer">
+
+**It does not fail.** `init` installs normally, because the `zh:` entries are
+still valid — and OpenTofu is satisfied when **one** family matches.
+
+Tamper with both, and then:
+
+```
+Error: Failed to install provider
+Error while installing kreuzwerker/docker v4.6.0: the current package
+… checksums previously recorded in the dependency lock file
+```
+
+The practical conclusion has two halves. The good one: pinning really does
+protect, and the protection is redundant — one corrupted hash does not lock you
+out while the other is intact. The bad one, which is the one that teaches: **a
+badly written negative test is worse than no test**, because it passes and you
+believe it. This gate check was born that way, and was only caught because
+somebody insisted on seeing `init` actually fail.
+
+</Fragment>
+</LabExercise>
+
+## What sticks
+
+- The provider is **another process**, started by the core and speaking gRPC.
+- The resource vocabulary comes from its schema — and the schema is the
+  authority.
+- It has holes: there is no `pids_limit`, and the Compose line has no
+  translation.
+- Pinning is version **and** hash. The lock is versioned with the code.
+- The lock has two hash families and **one is enough** — tampering with half
+  proves nothing.
+
+<Quiz set="the-provider-plugin" />

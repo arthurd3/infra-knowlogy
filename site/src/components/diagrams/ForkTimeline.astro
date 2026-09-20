@@ -1,0 +1,66 @@
+---
+/** iac-08 — a linha do tempo da licença, do fork e da aquisição. */
+import Figure from "../Figure.astro";
+import type { Lang } from "../../i18n/ui";
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+const C = {
+  pt: {
+    events: [
+      { d: "2014", t: "Terraform 0.1", s: "MPL 2.0", cls: "dg-box--raised" },
+      { d: "10 ago 2023", t: "mudança de licença", s: "MPL 2.0 → BUSL 1.1", cls: "dg-box--danger" },
+      { d: "set 2023", t: "fork: OpenTF → OpenTofu", s: "Linux Foundation, MPL 2.0", cls: "dg-box--accent" },
+      { d: "4 out 2023", t: "Terraform 1.6.0", s: "1ª versão sob BUSL", cls: "dg-box--warn" },
+      { d: "abr 2024", t: "OpenTofu 1.7", s: "cifragem de estado", cls: "dg-box--accent" },
+      { d: "2025", t: "IBM conclui a compra", s: "da HashiCorp", cls: "dg-box--raised" },
+    ],
+    osi: "MPL 2.0 — aprovada pela OSI",
+    busl: "BUSL 1.1 — source-available, NÃO é open source",
+    now: "hoje: a linguagem é a mesma; divergem licença, governança e recursos",
+    caption:
+      "A cronologia importa porque a pergunta \"qual dos dois?\" costuma ser respondida por hábito. O Terraform é <b>source-available</b> desde a 1.6.0 — o arquivo <code>LICENSE</code> escopa a BUSL para \"1.6.0 ou posterior\", então toda versão atual está sob ela. O OpenTofu é o fork que ficou na MPL 2.0, sob a Linux Foundation. A linguagem é a mesma e o que se aprende num vale no outro; o que diverge é licença, governança — e recursos como a cifragem de estado, que existe só de um lado.",
+    alt: "Linha do tempo de 2014 a 2025 com a mudança de licença, o fork do OpenTofu e a aquisição da HashiCorp.",
+  },
+  en: {
+    events: [
+      { d: "2014", t: "Terraform 0.1", s: "MPL 2.0", cls: "dg-box--raised" },
+      { d: "10 Aug 2023", t: "licence change", s: "MPL 2.0 → BUSL 1.1", cls: "dg-box--danger" },
+      { d: "Sep 2023", t: "fork: OpenTF → OpenTofu", s: "Linux Foundation, MPL 2.0", cls: "dg-box--accent" },
+      { d: "4 Oct 2023", t: "Terraform 1.6.0", s: "first release under BUSL", cls: "dg-box--warn" },
+      { d: "Apr 2024", t: "OpenTofu 1.7", s: "state encryption", cls: "dg-box--accent" },
+      { d: "2025", t: "IBM closes the acquisition", s: "of HashiCorp", cls: "dg-box--raised" },
+    ],
+    osi: "MPL 2.0 — OSI approved",
+    busl: "BUSL 1.1 — source-available, NOT open source",
+    now: "today: same language; licence, governance and features diverge",
+    caption:
+      "The chronology matters because \"which of the two?\" is usually answered out of habit. Terraform has been <b>source-available</b> since 1.6.0 — its <code>LICENSE</code> scopes BUSL to \"1.6.0 or later\", so every current release falls under it. OpenTofu is the fork that stayed on MPL 2.0, under the Linux Foundation. The language is the same and what you learn in one carries to the other; what diverges is licence, governance — and features like state encryption, which exists on only one side.",
+    alt: "Timeline from 2014 to 2025 with the licence change, the OpenTofu fork and the HashiCorp acquisition.",
+  },
+}[lang];
+---
+<Figure caption={C.caption} alt={C.alt}>
+  <svg viewBox="0 0 700 260" xmlns="http://www.w3.org/2000/svg" font-size="11">
+    <path d="M24 132 L676 132" class="dg-line dg-line--dashed" fill="none" />
+
+    {C.events.map((e, i) => {
+      const x = 14 + i * 113;
+      const up = i % 2 === 0;
+      const y = up ? 36 : 152;
+      return (
+        <g>
+          <circle cx={x + 50} cy={132} r={4} class="dg-fill-accent" />
+          <path d={`M${x + 50} ${132} L${x + 50} ${up ? 96 : 168}`} class="dg-line" fill="none" />
+          <rect x={x} y={y} width={100} height={58} rx={7} class={`dg-box ${e.cls}`} />
+          <text x={x + 50} y={y + 18} text-anchor="middle" class="dg-mono dg-faint" font-size="8.5">{e.d}</text>
+          <text x={x + 50} y={y + 34} text-anchor="middle" class="dg-title" font-size="9.5">{e.t}</text>
+          <text x={x + 50} y={y + 48} text-anchor="middle" class="dg-faint" font-size="8.5">{e.s}</text>
+        </g>
+      );
+    })}
+
+    <text x="14" y="232" class="dg-faint" font-size="9.5">{C.osi}</text>
+    <text x="14" y="247" class="dg-muted" font-size="9.5" font-weight="620">{C.busl}</text>
+    <text x="686" y="240" text-anchor="end" class="dg-faint" font-size="9.5">{C.now}</text>
+  </svg>
+</Figure>

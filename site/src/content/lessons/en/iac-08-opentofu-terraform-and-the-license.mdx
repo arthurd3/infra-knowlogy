@@ -1,0 +1,194 @@
+---
+key: opentofu-terraform-and-the-license
+lang: en
+track: iac
+order: 8
+title: "OpenTofu, Terraform and the licence"
+summary: "The question 'which of the two?' is usually answered out of habit. The honest answer runs through a 2023 clause — and through what this module does NOT prove."
+minutes: 15
+tags: [iac, opentofu, terraform, licence, busl, mpl, cloud]
+sources:
+  - label: "OpenTofu announces the fork of Terraform"
+    url: "https://opentofu.org/blog/opentofu-announces-fork-of-terraform/"
+    kind: blog
+    accessed: "2026-09-20"
+  - label: "OpenTofu — FAQ"
+    url: "https://opentofu.org/faq/"
+    kind: docs
+    accessed: "2026-09-20"
+  - label: "Terraform and OpenTofu: a clause, a fork, a foundation, an acquisition"
+    url: "https://hidekazu-konishi.com/entry/terraform_and_opentofu_history_and_timeline.html"
+    kind: blog
+    accessed: "2026-09-20"
+  - label: "OpenTofu (Wikipedia)"
+    url: "https://en.wikipedia.org/wiki/OpenTofu"
+    kind: docs
+    accessed: "2026-09-20"
+  - label: "OpenTofu — what's new in 1.12"
+    url: "https://opentofu.org/docs/intro/whats-new/"
+    kind: docs
+    accessed: "2026-09-20"
+---
+
+import ForkTimeline from "../../../components/diagrams/ForkTimeline.astro";
+
+This lesson closes the track with two things no other one covers: **why the tool
+is called `tofu` here**, and **what this entire module does not prove**.
+
+<ForkTimeline />
+
+## The clause, and what it changed
+
+On **10 August 2023** HashiCorp announced that Terraform would move from MPL 2.0
+to **BUSL 1.1**. The first release published under the new licence was **1.6.0,
+on 4 October 2023**.
+
+<Term term="BUSL" alt="BUSL — Business Source License">
+A *source-available* licence: the code is there to read and modify, and there is
+a usage restriction — typically, not competing with whoever publishes it.
+
+It is not open source by the OSI definition, and the difference is not
+philosophical: it changes who may build a product on top, who may offer the
+managed service, and what your company's legal department will answer.
+
+Each version usually becomes open source after a delay (four years, in this
+case), which helps little for anyone who needs the current release.
+</Term>
+
+The community's answer was a fork: **OpenTF**, which became **OpenTofu** on
+20 September 2023 when the Linux Foundation accepted it. It remains under
+MPL 2.0 and OSI approved. In **2025**, IBM closed its acquisition of HashiCorp.
+
+<Callout type="why" label="Why this is not community gossip">
+Terraform's `LICENSE` scopes BUSL to "Terraform Version 1.6.0 or later". Since
+no current release predates that, **every version you would download today**
+falls under it.
+
+For most uses — provisioning your own infrastructure — that changes nothing in
+practice. But it is a sentence somebody will have to write on a form, and it is
+better to know it beforehand.
+</Callout>
+
+## What actually diverges
+
+| | Terraform | OpenTofu |
+|---|---|---|
+| licence | BUSL 1.1 (since 1.6.0) | MPL 2.0, OSI approved |
+| governance | IBM / HashiCorp | Linux Foundation |
+| language | HCL | HCL — the same |
+| providers | same | same, with a registry of its own |
+| state encryption | no, in the open CLI | **yes**, since 1.7 |
+| keeping secrets out of state | `ephemeral`, write-only | — |
+
+The first two rows are politics. The fifth and sixth are technical and opposite:
+**OpenTofu encrypts the file; Terraform keeps the secret from reaching it.**
+Lesson 7 measures the first and cites the second.
+
+<Tradeoff
+  a="Terraform"
+  b="OpenTofu"
+  whenA="When the team already operates it, there are internal modules written against it, or when the commercial ecosystem around it (Terraform Cloud, vendor integrations) is part of the design."
+  whenB="When the licence matters to whoever employs you, when you want the state-encryption feature, or when you prefer foundation governance to vendor governance."
+  chose="b"
+  verdict="OpenTofu, and the deciding reason is not ideological: state encryption is measured by the gate, and Terraform's open CLI does not have it."
+  adr="0015-opentofu-e-o-provider-docker"
+/>
+
+<Callout type="trap" label="The job post says 'Terraform' and that changes nothing">
+The language is the same, the providers are the same, the commands are the same.
+What you learned in this track works in a Terraform **without translation** —
+`tofu plan` and `terraform plan` take the same flags and produce the same output.
+
+Teaching the minority tool to make a point of taste would be a disservice. That
+is not the case here: the choice has a measured technical consequence.
+</Callout>
+
+## What this module does NOT prove
+
+The most important part of the lesson, and the reason it exists. Module 4
+provisions containers on a local daemon. That covers state, graph, plan, drift,
+provider and pinning — and does **not** cover:
+
+- **cloud primitives**: VPC, subnet, security group, IAM. That is most of the
+  HCL written in the industry, and none of it appears here;
+- **remote state with real locking**: the backend is a local file. Concurrency
+  and durability were never exercised;
+- **cost**: there is no invoice, so there is no most-expensive lesson of all —
+  the one about a `destroy` in the wrong directory;
+- **published modules and team workspaces**: those are team practices, and a
+  team of one does not exercise them.
+
+<FieldNote
+  source="OpenTofu — what's new in 1.12"
+  url="https://opentofu.org/docs/intro/whats-new/"
+  kind="docs"
+  accessed="2026-09-20"
+>
+The 1.12 series brought OCI registry support for providers and modules, native
+S3 state locking (with no DynamoDB table needed just for that) and experimental
+OpenTelemetry tracing. Native S3 locking is the most practical of the three: it
+removes an entire resource from the design of any remote backend on AWS.
+</FieldNote>
+
+<Callout type="danger" label="The `destroy` nobody forgets">
+In the cloud, `tofu destroy` in the wrong directory deletes real infrastructure,
+and the `-auto-approve` that is convenient in a lab is what removes the last
+question before it.
+
+The known defences — `prevent_destroy` in `lifecycle`, separate state per
+environment, read-only credentials by default — are exactly the ones a local
+module cannot exercise, because here deleting everything costs 24 seconds to
+rebuild.
+</Callout>
+
+<LabExercise check="zero containers, redes e volumes com o rótulo do módulo" file="tools/scripts/iac-verify.sh">
+
+The gate runs `tofu destroy` and then checks that nothing is left carrying the
+`infra-knowlogy.module=iac` label. But it does **not** check the images — and
+they stay on the host on purpose.
+
+Question: why do the images stay, and what does that teach about `destroy`?
+
+<Fragment slot="hint">
+Look for `keep_locally` in `iac/images.tf` and think about who else uses those
+digests.
+</Fragment>
+
+<Fragment slot="answer">
+
+Because the base images are **shared**. The `postgres:17-alpine` at that digest
+is the same one `compose.yaml` and the kind cluster use; deleting it during
+module 4's `destroy` would force the other two to download everything again.
+
+```hcl
+resource "docker_image" "base" {
+  # ...
+  keep_locally = true
+}
+```
+
+The general lesson is that **`destroy` deletes what state lists, and state lists
+what you declared** — including things somebody else also uses. With a cloud
+provider that has a name and a bill: a subnet declared in two different states is
+destroyed by whichever runs first, and the second finds out afterwards.
+
+The right boundary is not technical but one of ownership: every resource should
+belong to **one** state, and a shared resource enters by reference (`data`),
+never by declaration.
+
+</Fragment>
+</LabExercise>
+
+## What sticks
+
+- Terraform is BUSL since 1.6.0; OpenTofu is the MPL 2.0 fork at the Linux
+  Foundation.
+- The language is the same: what you learned here works in either.
+- The technical divergence that matters: state encryption on one side,
+  `ephemeral` and write-only on the other.
+- This module proves no cloud, no real locking, no cost and no team practice —
+  and saying so is part of teaching.
+- `destroy` deletes what state lists. A shared resource enters by reference, not
+  by declaration.
+
+<Quiz set="opentofu-terraform-and-the-license" />

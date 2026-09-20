@@ -1,0 +1,140 @@
+{
+  "note_pt": "A cláusula, a divergência técnica que importa, e o limite honesto deste módulo.",
+  "note_en": "The clause, the technical divergence that matters, and this module's honest limit.",
+  "pt": [
+    {
+      "q": "Qual é a diferença TÉCNICA entre Terraform e OpenTofu que este módulo mede?",
+      "options": [
+        {
+          "text": "A cifragem de estado: existe no OpenTofu desde a 1.7 e não existe no CLI open source do Terraform.",
+          "correct": true,
+          "why": "O portão prova as duas pontas: sem a chave, o `tofu` recusa ler o estado cifrado; com ela, o segredo some do arquivo. O Terraform foi por outro caminho — `ephemeral` e argumentos write-only, que impedem o segredo de CHEGAR ao estado em vez de cifrá-lo."
+        },
+        {
+          "text": "A linguagem: o OpenTofu usa uma variante incompatível de HCL.",
+          "why": "É a mesma HCL, e é justamente por isso que o que se aprende aqui vale num Terraform sem tradução. `tofu plan` e `terraform plan` aceitam as mesmas flags."
+        },
+        {
+          "text": "Os providers: o OpenTofu não consegue usar os do ecossistema Terraform.",
+          "why": "Consegue, e o `kreuzwerker/docker` deste módulo está publicado nos dois registries pelos mesmos mantenedores."
+        },
+        {
+          "text": "O formato do estado, que é incompatível entre os dois.",
+          "why": "O formato base é compatível. O que o OpenTofu acrescenta é o ENVELOPE de cifragem por cima — e um estado cifrado é, aí sim, ilegível para o Terraform, porque ele não conhece o recurso."
+        }
+      ]
+    },
+    {
+      "q": "Por que dizer que o Terraform é 'source-available' e não 'open source' é uma distinção prática, e não retórica?",
+      "options": [
+        {
+          "text": "Porque a BUSL traz restrição de uso — tipicamente competir com quem publica — e isso muda o que o jurídico da sua empresa responde.",
+          "correct": true,
+          "why": "Ler e modificar continua permitido; construir um produto concorrente, não. O `LICENSE` escopa a BUSL para '1.6.0 ou posterior', então toda versão atual está sob ela. Para provisionar a própria infra não muda nada — mas é uma frase que alguém vai ter que escrever num formulário."
+        },
+        {
+          "text": "Porque o código-fonte do Terraform deixou de ser público.",
+          "why": "Continua público e legível no GitHub. Source-available é exatamente isso: fonte disponível, uso restrito."
+        },
+        {
+          "text": "Porque versões sob BUSL não podem ser usadas comercialmente.",
+          "why": "Podem — a restrição é sobre oferecer um produto concorrente, não sobre uso interno. Exagerar a restrição é tão enganoso quanto ignorá-la."
+        },
+        {
+          "text": "Porque a BUSL impede forks.",
+          "why": "O OpenTofu é a prova viva de que não impede: ele partiu do último commit sob MPL 2.0, que continua sendo MPL 2.0 para sempre."
+        }
+      ]
+    },
+    {
+      "q": "O que este módulo deliberadamente NÃO prova?",
+      "options": [
+        {
+          "text": "Primitiva de nuvem, remote state com lock real, custo e prática de equipe — e as lições dizem isso em vez de fingir.",
+          "correct": true,
+          "why": "O provider Docker cobre estado, grafo, plano, drift e pin. VPC, IAM, concorrência e a fatura ficam de fora, e entram como FieldNote com fonte e data. Declarar o limite é parte de ensinar: uma lição que finge medir o que não mediu é pior que a lacuna."
+        },
+        {
+          "text": "Idempotência, porque isso só aparece com recursos de nuvem.",
+          "why": "É provada aqui, e foi ela que pegou dois defeitos reais — `CAP_CHOWN` e `memory_swap`. Idempotência não tem nada de específico de nuvem."
+        },
+        {
+          "text": "Detecção de drift, porque containers não sofrem drift.",
+          "why": "Sofrem, e o portão mede: `docker rm -f` seguido de `plan -refresh-only` sai 2 e nomeia o recurso."
+        },
+        {
+          "text": "O grafo de dependências, porque o provider Docker não tem dependências.",
+          "why": "Tem, e a checagem confere duas arestas: a implícita api → db e a explícita edge → api."
+        }
+      ]
+    }
+  ],
+  "en": [
+    {
+      "q": "What is the TECHNICAL difference between Terraform and OpenTofu that this module measures?",
+      "options": [
+        {
+          "text": "State encryption: it exists in OpenTofu since 1.7 and does not exist in Terraform's open source CLI.",
+          "correct": true,
+          "why": "The gate proves both ends: without the key, `tofu` refuses to read the encrypted state; with it, the secret disappears from the file. Terraform went another way — `ephemeral` and write-only arguments, which stop the secret from REACHING state rather than encrypting it."
+        },
+        {
+          "text": "The language: OpenTofu uses an incompatible variant of HCL.",
+          "why": "It is the same HCL, which is exactly why what you learn here works in a Terraform without translation. `tofu plan` and `terraform plan` take the same flags."
+        },
+        {
+          "text": "Providers: OpenTofu cannot use the Terraform ecosystem's.",
+          "why": "It can, and this module's `kreuzwerker/docker` is published in both registries by the same maintainers."
+        },
+        {
+          "text": "The state format, which is incompatible between the two.",
+          "why": "The base format is compatible. What OpenTofu adds is the encryption ENVELOPE on top — and an encrypted state is indeed unreadable to Terraform, because it does not know the feature."
+        }
+      ]
+    },
+    {
+      "q": "Why is calling Terraform 'source-available' rather than 'open source' a practical distinction, not a rhetorical one?",
+      "options": [
+        {
+          "text": "Because BUSL carries a usage restriction — typically competing with the publisher — and that changes what your company's legal team answers.",
+          "correct": true,
+          "why": "Reading and modifying remain allowed; building a competing product does not. The `LICENSE` scopes BUSL to '1.6.0 or later', so every current release falls under it. For provisioning your own infrastructure it changes nothing — but it is a sentence somebody will have to write on a form."
+        },
+        {
+          "text": "Because Terraform's source code stopped being public.",
+          "why": "It is still public and readable on GitHub. Source-available means exactly that: source available, usage restricted."
+        },
+        {
+          "text": "Because versions under BUSL cannot be used commercially.",
+          "why": "They can — the restriction is about offering a competing product, not about internal use. Overstating the restriction is as misleading as ignoring it."
+        },
+        {
+          "text": "Because BUSL prevents forks.",
+          "why": "OpenTofu is living proof that it does not: it started from the last commit under MPL 2.0, which stays MPL 2.0 forever."
+        }
+      ]
+    },
+    {
+      "q": "What does this module deliberately NOT prove?",
+      "options": [
+        {
+          "text": "Cloud primitives, remote state with real locking, cost and team practice — and the lessons say so instead of pretending.",
+          "correct": true,
+          "why": "The Docker provider covers state, graph, plan, drift and pinning. VPC, IAM, concurrency and the invoice stay out, and enter as FieldNotes with source and date. Declaring the limit is part of teaching: a lesson that pretends to measure what it did not is worse than the gap."
+        },
+        {
+          "text": "Idempotence, because that only shows up with cloud resources.",
+          "why": "It is proven here, and it caught two real defects — `CAP_CHOWN` and `memory_swap`. There is nothing cloud-specific about idempotence."
+        },
+        {
+          "text": "Drift detection, because containers do not drift.",
+          "why": "They do, and the gate measures it: `docker rm -f` followed by `plan -refresh-only` exits 2 and names the resource."
+        },
+        {
+          "text": "The dependency graph, because the Docker provider has no dependencies.",
+          "why": "It does, and the check verifies two edges: the implicit api → db and the explicit edge → api."
+        }
+      ]
+    }
+  ]
+}

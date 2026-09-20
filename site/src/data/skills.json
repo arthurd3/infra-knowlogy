@@ -1,0 +1,391 @@
+{
+  "note_pt": "O que 40 vagas de SRE, DevOps e Tech Lead pediam, cruzado com o que este repositório PROVA por comando. Cada item 'coberto' aponta para a lição que o ensina, a checagem de portão que o verifica ou o arquivo de medição que o mede — e um teste reprova quem se declarar coberto sem apontar para nada. O mapa é honesto nos dois sentidos: ele também mostra, com nome e percentual, tudo o que ainda falta.",
+  "note_en": "What 40 SRE, DevOps and Tech Lead job posts asked for, crossed with what this repository PROVES by command. Every item marked covered points at the lesson that teaches it, the gate check that verifies it or the measurement file that measures it — and a test fails anything claiming coverage while pointing at nothing. The map is honest both ways: it also names, with percentages, everything still missing.",
+  "poster": {
+    "title_pt": "Stack SRE em 2026: o que 40 vagas pedem",
+    "title_en": "The 2026 SRE stack: what 40 job posts ask for",
+    "author": "Joel",
+    "role_pt": "Especialista / Team Leader SRE",
+    "role_en": "Specialist / SRE Team Leader",
+    "sample": 40,
+    "accessed": "2026-09-20",
+    "redrawn": true,
+    "note_pt": "O cartaz original é um infográfico de terceiro, sem licença apurada. O ADR 0010 manda redesenhar em vez de republicar: o diagrama do site é SVG escrito aqui, pinta por classe e segue o tema — e credita a autoria da ANÁLISE, que é o que tem valor.",
+    "note_en": "The original poster is a third-party infographic with no licence established. ADR 0010 requires redrawing rather than republishing: the site diagram is hand-written SVG, painted by class, theme-aware — and credits the authorship of the ANALYSIS, which is what carries value."
+  },
+  "legend": {
+    "status": {
+      "coberto": {
+        "pt": "coberto — há lição, checagem ou medição que prova",
+        "en": "covered — a lesson, gate check or measurement proves it"
+      },
+      "parcial": {
+        "pt": "parcial — parte está provada, parte não",
+        "en": "partial — some of it is proven, some is not"
+      },
+      "ausente": {
+        "pt": "ausente — o repositório não prova nada disto ainda",
+        "en": "absent — the repository proves none of this yet"
+      }
+    }
+  },
+  "demands": [
+    {
+      "id": "kubernetes",
+      "demand": 88,
+      "quadrant": "orquestracao",
+      "status": "parcial",
+      "pt": {
+        "label": "Kubernetes / EKS / GKE",
+        "gap": "O módulo 2 porta a stack inteira para um cluster kind e o portão prova auto-cura, probes e rolling update. Faltam as lições 4+ da trilha, e falta tudo o que é de cluster gerenciado: nó, control plane, IAM e custo. Falta também a Gateway API — o ingress-nginx foi APOSENTADO em março de 2026 e não tem substituto no projeto."
+      },
+      "en": {
+        "label": "Kubernetes / EKS / GKE",
+        "gap": "Module 2 ports the whole stack to a kind cluster and the gate proves self-healing, probes and rolling updates. Lessons 4+ of the track are missing, and so is everything specific to managed clusters: nodes, control plane, IAM and cost. Gateway API is missing too — ingress-nginx was RETIRED in March 2026 with no in-project replacement."
+      },
+      "evidence": {
+        "lessons": [
+          "why-an-orchestrator",
+          "from-compose-to-deployment",
+          "liveness-and-readiness"
+        ],
+        "checks": [
+          "auto-cura: pod deletado",
+          "rolling restart com"
+        ],
+        "measurements": [
+          "k8s-measured.json"
+        ]
+      }
+    },
+    {
+      "id": "iac",
+      "demand": 82,
+      "quadrant": "automacao",
+      "status": "coberto",
+      "pt": {
+        "label": "Terraform (IaC)",
+        "gap": "O módulo 4 provisiona a MESMA stack com OpenTofu e o portão prova idempotência, drift, grafo, pin por hash e cifragem de estado. O que fica de fora é declarado: primitiva de nuvem (VPC, IAM), remote state com lock e custo — tudo em FieldNote, nunca como prosa que finge ter sido medida."
+      },
+      "en": {
+        "label": "Terraform (IaC)",
+        "gap": "Module 4 provisions the SAME stack with OpenTofu and the gate proves idempotence, drift, the graph, hash pinning and state encryption. What is left out is declared: cloud primitives (VPC, IAM), remote state with locking and cost — all as FieldNotes, never as prose pretending to have been measured."
+      },
+      "evidence": {
+        "lessons": [
+          "why-infrastructure-becomes-code",
+          "the-state-file",
+          "plan-and-apply",
+          "the-dependency-graph",
+          "the-provider-plugin",
+          "drift-and-reconciliation",
+          "secrets-in-state",
+          "opentofu-terraform-and-the-license"
+        ],
+        "checks": [
+          "plan logo após o apply sai 0 — idempotente",
+          "refresh-only detecta o worker apagado por fora e o NOMEIA",
+          "init REPROVA lock com os hashes adulterados"
+        ],
+        "measurements": [
+          "iac-measured.json"
+        ]
+      }
+    },
+    {
+      "id": "observabilidade",
+      "demand": 80,
+      "quadrant": "observabilidade",
+      "status": "parcial",
+      "pt": {
+        "label": "Observabilidade (Prometheus, Grafana, Datadog)",
+        "gap": "É a maior desproporção do repositório: o profile `obs` sobe Prometheus, Grafana, Loki, Alloy e quatro exporters, tudo endurecido e com o socket atrás de um proxy de allowlist (ADR 0003) — e NÃO existe uma única lição sobre isso. Falta também o que nenhuma infra sozinha dá: SLI, SLO, error budget e alerta por burn rate."
+      },
+      "en": {
+        "label": "Observability (Prometheus, Grafana, Datadog)",
+        "gap": "The biggest mismatch in the repository: the `obs` profile brings up Prometheus, Grafana, Loki, Alloy and four exporters, all hardened and with the socket behind an allowlist proxy (ADR 0003) — and there is not a single lesson about any of it. Also missing is what no infrastructure gives you by itself: SLIs, SLOs, error budgets and burn-rate alerting."
+      },
+      "evidence": {
+        "lessons": [],
+        "checks": [
+          "todos os alvos do prometheus estão up",
+          "stack de observabilidade saudável"
+        ],
+        "measurements": []
+      }
+    },
+    {
+      "id": "cicd",
+      "demand": 75,
+      "quadrant": "automacao",
+      "status": "parcial",
+      "pt": {
+        "label": "CI/CD (GitHub Actions, ArgoCD, GitLab CI)",
+        "gap": "O ponto mais forte: oito lições com um Jenkins self-hosted e o GitHub Actions medidos lado a lado, build sem daemon, credenciais e assinatura. O buraco é GitOps: ArgoCD e Flux não existem aqui, e o modelo pull — o cluster puxando o estado desejado em vez de o CI empurrar — é justamente o que muda a fronteira de confiança."
+      },
+      "en": {
+        "label": "CI/CD (GitHub Actions, ArgoCD, GitLab CI)",
+        "gap": "The strongest area: eight lessons with a self-hosted Jenkins and GitHub Actions measured side by side, daemonless builds, credentials and signing. The hole is GitOps: ArgoCD and Flux are absent, and the pull model — the cluster pulling desired state instead of CI pushing it — is precisely what redraws the trust boundary."
+      },
+      "evidence": {
+        "lessons": [
+          "what-a-pipeline-proves",
+          "jenkins-without-clicking",
+          "controller-and-agent",
+          "building-without-a-daemon",
+          "pipeline-as-code",
+          "secrets-in-ci",
+          "signing-what-you-ship",
+          "jenkins-vs-github-actions"
+        ],
+        "checks": [
+          "estágios na ordem esperada",
+          "o agente não enxerga o socket do Docker"
+        ],
+        "measurements": [
+          "cicd-measured.json"
+        ]
+      }
+    },
+    {
+      "id": "linux",
+      "demand": 70,
+      "quadrant": "resiliencia",
+      "status": "parcial",
+      "pt": {
+        "label": "Linux & troubleshooting avançado",
+        "gap": "Namespaces, cgroups, PID 1 e o tratamento de sinais estão medidos nas lições 1, 3 e 5 — inclusive a correção da explicação difundida sobre a shell form do CMD. Falta o troubleshooting de verdade: /proc, strace, perf, eBPF, pressure stall information, o OOM killer e o que fazer com um processo travado em produção."
+      },
+      "en": {
+        "label": "Linux & advanced troubleshooting",
+        "gap": "Namespaces, cgroups, PID 1 and signal handling are measured in lessons 1, 3 and 5 — including the correction of the widespread explanation about CMD shell form. Real troubleshooting is missing: /proc, strace, perf, eBPF, pressure stall information, the OOM killer and what to do with a stuck process in production."
+      },
+      "evidence": {
+        "lessons": [
+          "what-is-a-container",
+          "dockerfile-instruction-by-instruction",
+          "container-lifecycle"
+        ],
+        "checks": [
+          "todos os serviços param em menos de 3s"
+        ],
+        "measurements": []
+      }
+    },
+    {
+      "id": "scripting",
+      "demand": 65,
+      "quadrant": "automacao",
+      "status": "parcial",
+      "pt": {
+        "label": "Scripting (Python, Shell, Go)",
+        "gap": "As três linguagens são código de produção aqui, de propósito (ADR 0005): a api em Go, o worker em Python, o site em Node, e cada uma produz um idioma de Dockerfile diferente. O que não existe é lição SOBRE escrever o script — e os portões deste repositório, que são mil linhas de bash com armadilhas medidas, seriam bom material."
+      },
+      "en": {
+        "label": "Scripting (Python, Shell, Go)",
+        "gap": "All three languages are production code here on purpose (ADR 0005): the API in Go, the worker in Python, the site in Node, each producing a different Dockerfile idiom. What does not exist is a lesson ABOUT writing the script — and this repository's gates, a thousand lines of bash with measured traps, would make good material."
+      },
+      "evidence": {
+        "lessons": [],
+        "checks": [],
+        "measurements": [
+          "measured.json"
+        ]
+      }
+    },
+    {
+      "id": "dados-redes",
+      "demand": 55,
+      "quadrant": "resiliencia",
+      "status": "parcial",
+      "pt": {
+        "label": "Bancos de dados & redes (PostgreSQL, DNS, Ingress)",
+        "gap": "Rede de container, DNS embutido e segmentação estão provados (a lição 7 e a checagem de que o edge não alcança o db); o ataque a banco tem lição e laboratório. Falta a operação do banco: shared_buffers, work_mem, autovacuum, wraparound de transação, pg_stat_statements e pool de conexão — e falta DNS a fundo, onde mora a armadilha mais cara do Kubernetes."
+      },
+      "en": {
+        "label": "Databases & networking (PostgreSQL, DNS, Ingress)",
+        "gap": "Container networking, embedded DNS and segmentation are proven (lesson 7 and the check that edge cannot reach db); attacking a database has a lesson and a lab. Operating the database is missing: shared_buffers, work_mem, autovacuum, transaction wraparound, pg_stat_statements and connection pooling — and so is DNS in depth, where Kubernetes' most expensive trap lives."
+      },
+      "evidence": {
+        "lessons": [
+          "networking-and-dns",
+          "attacking-a-database"
+        ],
+        "checks": [
+          "segmentação de rede: o edge não alcança o db"
+        ],
+        "measurements": []
+      }
+    }
+  ],
+  "quadrants": [
+    {
+      "id": "orquestracao",
+      "pt": "Container & orquestração",
+      "en": "Container & orchestration",
+      "items": [
+        {
+          "name": "Kubernetes em produção",
+          "status": "parcial"
+        },
+        {
+          "name": "EKS · GKE · AKS",
+          "status": "ausente"
+        },
+        {
+          "name": "Docker",
+          "status": "coberto"
+        },
+        {
+          "name": "Helm",
+          "status": "ausente"
+        },
+        {
+          "name": "Ingress NGINX",
+          "status": "ausente",
+          "note_pt": "aposentado em março de 2026; o caminho hoje é a Gateway API",
+          "note_en": "retired in March 2026; the path today is Gateway API"
+        },
+        {
+          "name": "Service Mesh",
+          "status": "ausente"
+        },
+        {
+          "name": "HPA / VPA",
+          "status": "ausente"
+        },
+        {
+          "name": "RBAC",
+          "status": "ausente"
+        }
+      ]
+    },
+    {
+      "id": "automacao",
+      "pt": "Automação & plataforma",
+      "en": "Automation & platform",
+      "items": [
+        {
+          "name": "Terraform / OpenTofu",
+          "status": "coberto"
+        },
+        {
+          "name": "GitOps",
+          "status": "ausente"
+        },
+        {
+          "name": "ArgoCD",
+          "status": "ausente"
+        },
+        {
+          "name": "FluxCD",
+          "status": "ausente"
+        },
+        {
+          "name": "GitHub Actions",
+          "status": "coberto"
+        },
+        {
+          "name": "GitLab CI",
+          "status": "ausente"
+        },
+        {
+          "name": "Python",
+          "status": "parcial"
+        },
+        {
+          "name": "Bash",
+          "status": "parcial"
+        },
+        {
+          "name": "Go",
+          "status": "parcial"
+        }
+      ]
+    },
+    {
+      "id": "observabilidade",
+      "pt": "Observabilidade & telemetria",
+      "en": "Observability & telemetry",
+      "items": [
+        {
+          "name": "Prometheus",
+          "status": "parcial",
+          "note_pt": "roda na stack, sem lição",
+          "note_en": "runs in the stack, no lesson"
+        },
+        {
+          "name": "Grafana",
+          "status": "parcial",
+          "note_pt": "roda na stack, sem lição",
+          "note_en": "runs in the stack, no lesson"
+        },
+        {
+          "name": "Loki",
+          "status": "parcial",
+          "note_pt": "roda na stack, sem lição",
+          "note_en": "runs in the stack, no lesson"
+        },
+        {
+          "name": "OpenTelemetry",
+          "status": "ausente"
+        },
+        {
+          "name": "Datadog",
+          "status": "ausente"
+        },
+        {
+          "name": "New Relic",
+          "status": "ausente"
+        },
+        {
+          "name": "Dynatrace",
+          "status": "ausente"
+        },
+        {
+          "name": "SLIs · SLOs",
+          "status": "ausente"
+        },
+        {
+          "name": "Error budgets",
+          "status": "ausente"
+        }
+      ]
+    },
+    {
+      "id": "resiliencia",
+      "pt": "Resiliência & operação",
+      "en": "Resilience & operations",
+      "items": [
+        {
+          "name": "Linux deep dive",
+          "status": "parcial"
+        },
+        {
+          "name": "Redes",
+          "status": "parcial"
+        },
+        {
+          "name": "PostgreSQL tuning",
+          "status": "ausente"
+        },
+        {
+          "name": "RCA · Postmortem",
+          "status": "ausente"
+        },
+        {
+          "name": "On-call",
+          "status": "ausente"
+        },
+        {
+          "name": "FinOps",
+          "status": "ausente"
+        },
+        {
+          "name": "IAM",
+          "status": "ausente"
+        }
+      ]
+    }
+  ]
+}

@@ -8,6 +8,8 @@ stack/.env
 # Build output
 site/dist/
 site/.astro/
+# Cache do vitest quando se roda com --reporter=json.
+site/.vitest/
 site/node_modules/
 node_modules/
 stack/services/api-go/bin/

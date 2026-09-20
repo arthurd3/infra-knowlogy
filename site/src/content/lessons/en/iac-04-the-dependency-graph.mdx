@@ -1,0 +1,185 @@
+---
+key: the-dependency-graph
+lang: en
+track: iac
+order: 4
+title: The graph, the order nobody wrote
+summary: "The creation order is nowhere in the code — it is derived from who references whom. And depends_on is the honest exception, not the default."
+minutes: 14
+tags: [iac, dag, graph, depends_on, parallelism, for_each]
+sources:
+  - label: "Inside Terraform's DAG"
+    url: "https://stategraph.com/blog/terraform-dag-internals"
+    kind: blog
+    accessed: "2026-09-20"
+  - label: "OpenTofu — tofu graph"
+    url: "https://opentofu.org/docs/cli/commands/graph/"
+    kind: docs
+    accessed: "2026-09-20"
+  - label: "OpenTofu — expressions and resource references"
+    url: "https://opentofu.org/docs/language/expressions/references/"
+    kind: docs
+    accessed: "2026-09-20"
+---
+
+import ResourceGraph from "../../../components/diagrams/ResourceGraph.astro";
+
+In `compose.yaml` the order is written down: `depends_on` with `condition:
+service_healthy`, service by service. In `iac/containers.tf` there is almost no
+`depends_on` — and the order still comes out right.
+
+<ResourceGraph />
+
+## The edge born from a reference
+
+```hcl
+env = [
+  "POSTGRES_HOST=${docker_container.db.name}",
+  "REDIS_HOST=${docker_container.cache.name}",
+]
+```
+
+This is not an elegant way of writing `"iac-db"`. Referencing
+`docker_container.db.name` means the value is **only known after** `db` exists —
+so the graph gains an edge, and `api` cannot be created first.
+
+<RunIt>
+```bash
+cd iac && tofu graph | grep 'docker_container.api'
+```
+</RunIt>
+
+```
+"[root] docker_container.api (expand)" -> "[root] docker_container.db (expand)"
+"[root] docker_container.api (expand)" -> "[root] docker_container.cache (expand)"
+"[root] docker_container.api (expand)" -> "[root] docker_network.edge (expand)"
+```
+
+Three dependencies, none written by hand. The gate verifies the first of them —
+it is the check that proves the order is **derived** rather than copied over
+from Compose.
+
+<Callout type="why" label="Why this beats writing the name">
+With a literal `"iac-db"` the container would come up just the same — and the
+day the name changed, `api` would keep pointing at the old one with no
+validation error at all. `tofu` has no way to know that string was a resource
+name.
+
+A reference is a **checked link**: renaming the resource breaks the build
+immediately, and changing `name` propagates on its own.
+</Callout>
+
+## The edge that has to be written
+
+```hcl
+depends_on = [
+  docker_container.api,
+  docker_container.web,
+]
+```
+
+`edge` is the exception, and the reason is concrete: the one that names the api
+is the **Caddyfile**, and `tofu` does not read Caddyfiles. No data flows between
+the two resources, so there is no edge to derive — and without it all three
+would come up in parallel, with Caddy trying to resolve `api` before the
+container exists.
+
+<Callout type="trap" label="Too much depends_on is worse than it looks">
+Every `depends_on` removes an opportunity for parallelism and adds an assertion
+`tofu` has no way to check. It is easy to scatter them "to be safe" and turn a
+wide graph into a queue — with an apply twice as slow and not one extra
+guarantee.
+
+The rule: `depends_on` only when the dependency is **real and invisible to the
+code** — a config file naming another service, a permission that must exist
+first, an order imposed from outside.
+</Callout>
+
+<Tradeoff
+  a="Implicit dependency, by reference"
+  b="Explicit depends_on"
+  whenA="Whenever data flows from one resource into another — a name, an id, an address. It is checked, it propagates on its own and it preserves parallelism."
+  whenB="When the dependency exists in the world and does <b>not</b> appear in the code: a file naming another service, a permission that must exist first, an order imposed from outside."
+  chose="a"
+  verdict="implicit almost everywhere. The module's only <code>depends_on</code> is the one on <code>edge</code>, and the comment beside it explains exactly why."
+  adr="0015-opentofu-e-o-provider-docker"
+/>
+
+## The graph governs destroy too
+
+Walked backwards. `edge` goes first, `db` last — and that is what stops the
+database from dying while the api is still writing to it.
+
+<Term term="DAG" alt="DAG — directed acyclic graph">
+Directed acyclic graph: the edges have direction and no path leads back to where
+it started.
+
+"Acyclic" is not a formality, it is what makes execution possible at all. If `a`
+depended on `b` and `b` on `a`, there would be nowhere to start — and `tofu`
+refuses the plan with *Cycle*, rather than picking one and hoping.
+
+Since edges are derived from references, a cycle usually means two things you
+thought of as separate are in fact one.
+</Term>
+
+## What `for_each` does to the graph
+
+```hcl
+resource "docker_volume" "data" {
+  for_each = toset(["pgdata", "redisdata", "caddy_data", "caddy_config"])
+  name     = "iac-${each.key}"
+}
+```
+
+Four volumes, one block. And the `for_each` key becomes part of the **address**:
+`docker_volume.data["pgdata"]`. That is why `for_each` is preferred over
+`count` — with `count`, the address is `[0]`, `[1]`, and removing the first item
+renumbers every other one. The plan then asks to destroy and recreate resources
+nobody touched.
+
+<LabExercise check="aresta EXPLÍCITA edge -> api" file="iac/containers.tf">
+
+Delete the `depends_on` block from the `docker_container.edge` resource and run
+`make iac-down && make iac-up`.
+
+Question: what happens, and why can the result be **different on every run**?
+
+<Fragment slot="hint">
+`edge` has `wait = true`. Think about what Caddy does while it waits.
+</Fragment>
+
+<Fragment slot="answer">
+
+Without the edge, all three come up in parallel — and the result becomes a race.
+
+Caddy starts, tries to resolve `api` on the `edge` network's DNS and may find
+nothing yet. Depending on when `iac-api` joins the network, `edge` answers 502
+for a few seconds, or stays that way until someone restarts it.
+
+What makes this worse than an ordinary error is the **intermittency**: on a fast
+machine, or with images cached, the api almost always wins the race and
+everything looks fine. The defect surfaces on the slow machine, in CI, on the
+day of the incident.
+
+```bash
+# the race, made visible
+docker logs iac-edge 2>&1 | grep -i 'dial tcp\|no such host'
+```
+
+It is the same phenomenon as module 2's trap 13: a green probe does not prove
+reachability. Here, `wait = true` proves **Caddy** came up — not that its
+upstreams exist.
+
+</Fragment>
+</LabExercise>
+
+## What sticks
+
+- The order is not written: it is derived from **who references whom**.
+- A reference is a checked link; a literal string is a hope.
+- `depends_on` is the exception — for a real dependency the code cannot see.
+- Too much `depends_on` becomes a queue: less parallelism, no extra guarantee.
+- Destroy walks the graph backwards, and that is what saves the database.
+- `for_each` addresses by key; `count` addresses by index, and indexes renumber.
+
+<Quiz set="the-dependency-graph" />

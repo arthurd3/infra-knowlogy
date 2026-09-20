@@ -1,0 +1,51 @@
+---
+/**
+ * O mapa de mercado, resolvido em tempo de build.
+ *
+ * Mesmo padrão do PortExplorer.astro: `skills.json` tem os dois idiomas no
+ * mesmo arquivo, e só o desta página atravessa para o navegador.
+ *
+ * O título de cada lição citada como evidência NÃO está no JSON — ele é lido
+ * da coleção aqui. Duplicá-lo no dado seria criar um segundo lugar para o
+ * título envelhecer, e o teste de evidência já garante que a chave existe.
+ */
+import { getCollection } from "astro:content";
+import SkillCoverageIsland from "./islands/SkillCoverage.tsx";
+import type { Lang } from "../i18n/ui";
+import data from "../data/skills.json";
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+
+const lessons = await getCollection("lessons", (e) => e.data.lang === lang);
+const byKey = new Map(lessons.map((l) => [l.data.key, l.data.title]));
+
+const demands = data.demands.map((d) => {
+  const side = (d as Record<string, any>)[lang];
+  return {
+    id: d.id,
+    label: side.label,
+    demand: d.demand,
+    status: d.status as "coberto" | "parcial" | "ausente",
+    gap: side.gap,
+    quadrant: d.quadrant,
+    evidence: {
+      lessons: d.evidence.lessons
+        .filter((k) => byKey.has(k))
+        .map((k) => ({ key: k, title: byKey.get(k)!, href: `/${lang}/lessons/${k}/` })),
+      checks: d.evidence.checks,
+      measurements: d.evidence.measurements,
+    },
+  };
+});
+
+const quadrants = data.quadrants.map((q) => ({
+  id: q.id,
+  label: (q as Record<string, any>)[lang] as string,
+  items: q.items.map((i) => ({
+    name: i.name,
+    status: i.status as "coberto" | "parcial" | "ausente",
+    note: (i as Record<string, any>)[`note_${lang}`] as string | undefined,
+  })),
+}));
+---
+<SkillCoverageIsland client:visible lang={lang} demands={demands} quadrants={quadrants} />

@@ -1,0 +1,140 @@
+{
+  "note_pt": "Como a aresta nasce, quando ela precisa ser escrita, e o que o índice do count causa.",
+  "note_en": "How an edge is born, when it has to be written, and what count's index causes.",
+  "pt": [
+    {
+      "q": "Trocar `POSTGRES_HOST=${docker_container.db.name}` por `POSTGRES_HOST=iac-db` muda o quê?",
+      "options": [
+        {
+          "text": "Some a aresta do grafo: o `api` pode ser criado antes do `db`, e renomear o db deixa de propagar.",
+          "correct": true,
+          "why": "O valor literal é conhecido sem precisar de ninguém, então não há dependência a derivar. Pior: `tofu` não tem como saber que aquela string era um nome de recurso, então renomear o `db` não gera erro nenhum — só um container apontando para um host que não existe mais."
+        },
+        {
+          "text": "Nada: o container sobe igual nos dois casos.",
+          "why": "Nesta execução, provavelmente sim — e é isso que torna o erro perigoso. O que muda é a ordem garantida e a verificação do vínculo, e as duas só cobram na mudança seguinte."
+        },
+        {
+          "text": "Fica mais rápido, porque o tofu não precisa resolver a referência.",
+          "why": "A resolução é de microssegundos em tempo de plano. O custo real está do outro lado: perder ordenação e verificação para economizar nada."
+        },
+        {
+          "text": "O `tofu` passa a exigir um `depends_on` explícito, senão recusa o plano.",
+          "why": "Ele não exige nada — e é justamente esse o problema. O plano é aceito, aplica em paralelo, e a falha aparece como corrida intermitente."
+        }
+      ]
+    },
+    {
+      "q": "Por que o `edge` precisa de `depends_on` quando quase nenhum outro recurso precisa?",
+      "options": [
+        {
+          "text": "Porque quem nomeia a api é o Caddyfile, e o `tofu` não lê esse arquivo — não há dado fluindo entre os recursos para virar aresta.",
+          "correct": true,
+          "why": "A dependência é real e invisível ao código. É exatamente o caso em que `depends_on` se justifica: a ferramenta não tem como derivar o que está escrito num arquivo de configuração de outro programa."
+        },
+        {
+          "text": "Porque o `edge` é o único com porta publicada.",
+          "why": "Publicar porta não cria dependência de nada. O `edge` poderia publicar porta e não depender de ninguém, se ele não fizesse proxy."
+        },
+        {
+          "text": "Porque `wait = true` exige `depends_on`.",
+          "why": "São independentes. `wait` espera o healthcheck do próprio container; `depends_on` decide a ordem entre recursos. O `db` tem `wait` e nenhum `depends_on`."
+        },
+        {
+          "text": "Porque o Caddy precisa da rede `edge`, que é um recurso separado.",
+          "why": "Essa dependência existe e já é implícita: o `networks_advanced` referencia `docker_network.edge.name`. A aresta que faltava era para a api e para o web, não para a rede."
+        }
+      ]
+    },
+    {
+      "q": "Por que `for_each` é preferido a `count` para uma lista de recursos?",
+      "options": [
+        {
+          "text": "Porque o endereço passa a ser a chave (`[\"pgdata\"]`) e não o índice (`[0]`) — remover um item do meio não renumera os outros.",
+          "correct": true,
+          "why": "Com `count`, apagar o primeiro item faz o segundo virar `[0]`, o terceiro virar `[1]`, e o plano pede destruição e recriação de recursos que ninguém tocou. Com volume de banco de dados no meio, isso é perda de dados por renumeração."
+        },
+        {
+          "text": "Porque `count` foi removido do OpenTofu.",
+          "why": "Continua existindo e tem usos legítimos — o mais claro é ligar/desligar um recurso com `count = var.ativo ? 1 : 0`."
+        },
+        {
+          "text": "Porque `for_each` cria os recursos em paralelo e `count` em série.",
+          "why": "Os dois produzem recursos independentes que o grafo pode paralelizar igualmente. A diferença é de endereçamento, não de execução."
+        },
+        {
+          "text": "Porque `for_each` aceita mapa e `count` só aceita número.",
+          "why": "É verdade e não é a razão. O ponto é a estabilidade do endereço quando a coleção muda — e ela é o que evita destruição acidental."
+        }
+      ]
+    }
+  ],
+  "en": [
+    {
+      "q": "Replacing `POSTGRES_HOST=${docker_container.db.name}` with `POSTGRES_HOST=iac-db` changes what?",
+      "options": [
+        {
+          "text": "The graph edge disappears: `api` can be created before `db`, and renaming db stops propagating.",
+          "correct": true,
+          "why": "A literal value is known without anyone's help, so there is no dependency to derive. Worse: `tofu` cannot know that string was a resource name, so renaming `db` produces no error at all — just a container pointing at a host that no longer exists."
+        },
+        {
+          "text": "Nothing: the container comes up the same either way.",
+          "why": "On this run, probably yes — and that is what makes the mistake dangerous. What changes is the guaranteed ordering and the checked link, and both only bill you on the next change."
+        },
+        {
+          "text": "It gets faster, because tofu does not have to resolve the reference.",
+          "why": "Resolution takes microseconds at plan time. The real cost is on the other side: losing ordering and checking to save nothing."
+        },
+        {
+          "text": "`tofu` now demands an explicit `depends_on` or refuses the plan.",
+          "why": "It demands nothing — and that is exactly the problem. The plan is accepted, applies in parallel, and the failure shows up as an intermittent race."
+        }
+      ]
+    },
+    {
+      "q": "Why does `edge` need `depends_on` when almost no other resource does?",
+      "options": [
+        {
+          "text": "Because the Caddyfile is what names the api, and `tofu` does not read that file — no data flows between the resources to become an edge.",
+          "correct": true,
+          "why": "The dependency is real and invisible to the code. That is exactly when `depends_on` is justified: the tool has no way to derive what is written inside another program's config file."
+        },
+        {
+          "text": "Because `edge` is the only one with a published port.",
+          "why": "Publishing a port creates no dependency on anything. `edge` could publish a port and depend on nobody, if it were not proxying."
+        },
+        {
+          "text": "Because `wait = true` requires `depends_on`.",
+          "why": "They are independent. `wait` waits on the container's own healthcheck; `depends_on` decides ordering between resources. `db` has `wait` and no `depends_on` at all."
+        },
+        {
+          "text": "Because Caddy needs the `edge` network, which is a separate resource.",
+          "why": "That dependency exists and is already implicit: `networks_advanced` references `docker_network.edge.name`. The missing edge was to api and web, not to the network."
+        }
+      ]
+    },
+    {
+      "q": "Why is `for_each` preferred over `count` for a list of resources?",
+      "options": [
+        {
+          "text": "Because the address becomes the key (`[\"pgdata\"]`) rather than the index (`[0]`) — removing a middle item does not renumber the rest.",
+          "correct": true,
+          "why": "With `count`, deleting the first item makes the second become `[0]`, the third `[1]`, and the plan asks to destroy and recreate resources nobody touched. With a database volume in the middle, that is data loss by renumbering."
+        },
+        {
+          "text": "Because `count` was removed from OpenTofu.",
+          "why": "It still exists and has legitimate uses — the clearest being toggling a resource with `count = var.enabled ? 1 : 0`."
+        },
+        {
+          "text": "Because `for_each` creates resources in parallel and `count` in series.",
+          "why": "Both produce independent resources the graph can parallelise equally. The difference is addressing, not execution."
+        },
+        {
+          "text": "Because `for_each` accepts a map and `count` only a number.",
+          "why": "True, and not the reason. The point is address stability when the collection changes — and that is what prevents accidental destruction."
+        }
+      ]
+    }
+  ]
+}

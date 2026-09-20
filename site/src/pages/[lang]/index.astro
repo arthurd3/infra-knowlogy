@@ -2,6 +2,8 @@
 import { getCollection } from "astro:content";
 import Base from "../../layouts/Base.astro";
 import GateRunner from "../../components/islands/GateRunner.tsx";
+import SkillCoverage from "../../components/SkillCoverage.astro";
+import MarketDemand from "../../components/diagrams/MarketDemand.astro";
 import { useTranslations, otherLang, repoUrl, TRACKS, trackBadge, type Lang, type Track } from "../../i18n/ui";
 import measured from "../../data/measured.json";
 
@@ -113,6 +115,17 @@ const stats = [
       )}
     </section>
   ))}
+
+  <!-- O mapa de mercado. Ele fica na home, e não numa lição, porque é uma
+       afirmação sobre o REPOSITÓRIO INTEIRO — e porque um roadmap escondido
+       dentro de uma trilha é um roadmap que ninguém lê. A honestidade dele é
+       guardada por site/tests/skills.test.ts (ADR 0014). -->
+  <section class="track-section" id="market">
+    <h2 class="track-section__head">{t("home.market.title")}</h2>
+    <p class="track-section__desc">{t("home.market.desc")}</p>
+    <MarketDemand />
+    <SkillCoverage />
+  </section>
 
   <!-- As checagens do portão, disparadas pelo navegador. Com a stack no ar
        elas são requisições de verdade; sem ela, a gravação do último portão. -->

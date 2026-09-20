@@ -1,0 +1,223 @@
+---
+key: secrets-in-state
+lang: pt
+track: iac
+order: 7
+title: Segredo no estado
+summary: "sensitive = true esconde da tela e não do arquivo. O portão mede os dois casos — e mostra a convenção desta casa que evita o problema na origem."
+minutes: 16
+tags: [iac, segredos, estado, cifragem, opentofu, sensitive, ephemeral]
+sources:
+  - label: "Cifragem de estado e de plano — OpenTofu"
+    url: "https://opentofu.org/docs/language/state/encryption/"
+    kind: docs
+    accessed: "2026-09-20"
+  - label: "Segredos no estado: valores efêmeros e argumentos write-only"
+    url: "https://scalr.com/learning-center/secrets-in-terraform-state"
+    kind: blog
+    accessed: "2026-09-20"
+  - label: "OpenTofu — o que há de novo"
+    url: "https://opentofu.org/docs/intro/whats-new/"
+    kind: docs
+    accessed: "2026-09-20"
+---
+
+import SecretPaths from "../../../components/diagrams/SecretPaths.astro";
+
+A frase que mais causa dano nesta área é curta: *"marquei como sensitive, então
+está protegido"*. Ela é falsa, e o portão deste módulo mede exatamente onde.
+
+<SecretPaths />
+
+## O que `sensitive` faz, e o que não faz
+
+Ele muda **a saída da linha de comando**. Onde apareceria o valor, aparece
+`(sensitive value)`. Isso tem utilidade real: evita que a senha vá para o log do
+CI, para a captura de tela, para o canal do Slack onde o plano foi colado.
+
+E não muda **uma vírgula** do que é gravado no estado ou num plano salvo.
+
+<Callout type="danger" label="Os dois arquivos que ninguém lembra">
+O estado é o primeiro. O **plano salvo** é o segundo, e é o mais esquecido: ele
+é a lista completa de atributos com valores, e costuma virar artefato de build —
+guardado por 90 dias, baixável por quem tiver acesso ao pipeline.
+
+É por isso que a cifragem do OpenTofu tem blocos separados para `state` e para
+`plan`. Cifrar só um dos dois resolve metade.
+</Callout>
+
+## O caminho que este repositório usa
+
+No módulo 4, a senha do Postgres **não está** no estado. O portão prova, e a
+razão não é nenhuma configuração de segurança: é a convenção `<VAR>_FILE`.
+
+```hcl
+env = ["POSTGRES_PASSWORD_FILE=/run/secrets/postgres_password"]
+
+volumes {
+  host_path      = "${var.host_repo_root}/stack/secrets/postgres_password"
+  container_path = "/run/secrets/postgres_password"
+  read_only      = true
+}
+```
+
+O `tofu` passa um caminho. Quem abre o arquivo é o entrypoint do Postgres, já
+dentro do container. **O valor nunca atravessa a ferramenta** — e o que não é
+lido não pode ser gravado.
+
+<Callout type="why" label="Por que isto é melhor que cifrar">
+Cifragem protege o arquivo. A convenção `<VAR>_FILE` faz o segredo **não entrar**
+no arquivo.
+
+São defesas de camadas diferentes e a segunda é mais barata: não há chave para
+rotacionar, não há key provider para configurar, não há um jeito de errar a
+configuração e descobrir depois. O melhor jeito de não vazar um segredo pelo
+estado continua sendo o segredo nunca ter estado lá.
+</Callout>
+
+## E quando o segredo precisa entrar?
+
+Acontece, e é legítimo: um `random_password` gerado pela própria ferramenta, um
+token que um recurso devolve na criação, uma chave que só existe depois do
+`apply`. Aí não há convenção que salve — o valor é atributo de recurso.
+
+A pasta `iac/demo-secret/` existe para medir esse caso, de propósito:
+
+```hcl
+resource "terraform_data" "leaked" {
+  # o jeito ERRADO, deliberadamente
+  input = file(var.password_file)
+}
+```
+
+<RunIt>
+```bash
+cd iac/demo-secret && tofu init && tofu apply -auto-approve
+grep -c "$(cat ../../stack/secrets/postgres_password)" terraform.tfstate
+# 2
+```
+</RunIt>
+
+Duas ocorrências, em texto puro. É o número que o portão confere.
+
+## A cifragem de estado do OpenTofu
+
+Chegou na 1.7 (abril de 2024) e **não existe** no CLI open source do Terraform —
+é a diferença mais concreta entre os dois, e a razão prática de este módulo usar
+o OpenTofu.
+
+```hcl
+terraform {
+  encryption {
+    key_provider "pbkdf2" "k" {
+      passphrase = var.passphrase
+    }
+    method "aes_gcm" "m" {
+      keys = key_provider.pbkdf2.k
+    }
+    state { method = method.aes_gcm.m }
+    plan  { method = method.aes_gcm.m }
+  }
+}
+```
+
+Com ela ligada, o mesmo `grep` do exemplo acima devolve **zero**, e o arquivo
+deixa de ser JSON de recursos:
+
+```json
+{
+  "serial": 1,
+  "lineage": "430fce…",
+  "meta": { "key_provider.pbkdf2.k": "eyJzYWx0Ijoi…" },
+  "encrypted_data": "…",
+  "encryption_version": "v0"
+}
+```
+
+<Callout type="trap" label="Migrar estado em claro exige o fallback">
+Ligar a cifragem num diretório que já tem estado **não cifrado** falha: o
+OpenTofu não consegue ler o que já existe. A migração precisa de um método
+`unencrypted` como `fallback`, que é descartado depois da primeira escrita.
+
+Sem isso o erro fala em *lock* e em *backup file*, e manda procurar em
+concorrência quando o problema é formato.
+</Callout>
+
+E a prova que fecha: sem a chave, o `tofu` **recusa** ler.
+
+```
+Error: Unsupported state file format: This state file is encrypted
+and can not be read without an encryption configuration
+```
+
+<Tradeoff
+  a="Cifrar o estado"
+  b="Impedir o segredo de chegar nele"
+  whenA="Quando o valor é gerado pela própria ferramenta ou devolvido por um recurso na criação — não há como não passar por ali. Custa uma chave para gerenciar e rotacionar."
+  whenB="Quando o segredo já existe fora e só precisa ser <b>entregue</b>: caminho de arquivo, referência a um cofre, argumento write-only. Custo zero de chave, e nada a rotacionar."
+  chose="b"
+  verdict="a convenção <code>&lt;VAR&gt;_FILE</code> em toda a stack, e a cifragem demonstrada e medida ao lado — porque o caso em que ela é necessária existe."
+  adr="0015-opentofu-e-o-provider-docker"
+/>
+
+<FieldNote
+  source="Scalr — segredos no estado do Terraform"
+  url="https://scalr.com/learning-center/secrets-in-terraform-state"
+  kind="blog"
+  accessed="2026-09-20"
+>
+O caminho do Terraform foi outro: `ephemeral` (1.10, novembro de 2024) e
+argumentos *write-only* (1.11, fevereiro de 2025) permitem que um provider
+**use** um segredo durante a operação sem que ele seja gravado. É a mesma
+filosofia da convenção `<VAR>_FILE`, só que dentro da linguagem — e resolve
+casos que um caminho de arquivo não resolve.
+</FieldNote>
+
+<LabExercise check="com TF_ENCRYPTION o estado vira envelope" file="tools/scripts/iac-verify.sh">
+
+O portão liga a cifragem por variável de ambiente (`TF_ENCRYPTION`) em vez de
+escrever o bloco `encryption` num arquivo `.tf`.
+
+Pergunta: por quê? O bloco no arquivo não seria mais claro?
+
+<Fragment slot="hint">
+Pense no que precisaria estar escrito dentro do bloco para ele funcionar.
+</Fragment>
+
+<Fragment slot="answer">
+
+Porque o bloco precisa da **frase secreta**, e um arquivo `.tf` é versionado.
+
+Escrever a passphrase ali seria commitar a chave ao lado do que ela protege —
+a versão IaC de deixar a senha num post-it colado no monitor. Dá para usar
+`var.passphrase`, mas aí o valor tem que vir de algum lugar em tempo de
+execução, que é exatamente o que a variável de ambiente já faz.
+
+Há um segundo motivo, específico do portão: ele precisa medir os **dois**
+estados — o mesmo diretório, a mesma configuração, cifrado e não cifrado. Com
+a cifragem no arquivo, comparar exigiria editar `.tf` no meio da execução.
+Com a variável, a única coisa que muda entre as duas medições é ela:
+
+```bash
+tofu apply -auto-approve                    # estado em claro
+TF_ENCRYPTION="$ENC" tofu apply -auto-approve   # mesmo diretório, cifrado
+```
+
+Em produção nenhuma das duas formas é a resposta final: a frase viraria um key
+provider de KMS — AWS, GCP, Azure Vault ou OpenBao — e aí não haveria
+passphrase nenhuma para guardar.
+
+</Fragment>
+</LabExercise>
+
+## O que fica
+
+- `sensitive = true` muda a **tela**, não o arquivo.
+- São **dois** arquivos: o estado e o plano salvo. Cifre os dois, ou nenhum.
+- A convenção `<VAR>_FILE` faz o segredo não entrar — e é mais barata que cifrar.
+- Quando o valor nasce na ferramenta, não há como evitar: aí cifre.
+- Cifragem de estado existe no OpenTofu (1.7) e não no Terraform CLI. O caminho
+  do Terraform foi `ephemeral` e write-only.
+- Migrar estado em claro exige um `fallback` `unencrypted`.
+
+<Quiz set="secrets-in-state" />

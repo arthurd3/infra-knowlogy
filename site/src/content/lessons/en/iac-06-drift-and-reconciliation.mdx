@@ -1,0 +1,195 @@
+---
+key: drift-and-reconciliation
+lang: en
+track: iac
+order: 6
+title: Drift, and the three reconciliations
+summary: "Deleting a container by hand separates this repository's three views instantly. One resurrects itself, two stay quiet — and only one of them can tell you."
+minutes: 16
+tags: [iac, drift, reconciliation, compose, kubernetes, gitops, refresh-only]
+sources:
+  - label: "OpenTofu — refresh-only"
+    url: "https://opentofu.org/docs/cli/commands/plan/"
+    kind: docs
+    accessed: "2026-09-20"
+  - label: "OpenGitOps — the four principles"
+    url: "https://opengitops.dev/"
+    kind: spec
+    accessed: "2026-09-20"
+  - label: "GitOps in 2025 — CNCF"
+    url: "https://www.cncf.io/blog/2025/06/09/gitops-in-2025-from-old-school-updates-to-the-modern-way/"
+    kind: blog
+    accessed: "2026-09-20"
+---
+
+import ThreeReconciliations from "../../../components/diagrams/ThreeReconciliations.astro";
+
+This is the lesson that only exists because the repository has all three
+modules. The same application is up on three ports, described in three ways —
+and a single action separates them.
+
+<RunIt>
+```bash
+make up        # Compose    :8080
+make k8s-up    # Kubernetes :8081
+make iac-up    # OpenTofu   :8082
+docker rm -f iac-worker
+```
+</RunIt>
+
+<ThreeReconciliations />
+
+## What each one does after `docker rm -f`
+
+**Kubernetes** recreates it in seconds. Nobody asked. There is a controller
+comparing desired against observed in a loop that **never ends** — and lesson
+k8s-01 measures that recreation.
+
+**Compose** does nothing. The container stays dead until somebody runs `up -d`
+again, and then it comes back. `up` is a command that converges once and exits.
+
+**OpenTofu** also does nothing — but unlike Compose, it **knows**:
+
+```bash
+cd iac && tofu plan -refresh-only -detailed-exitcode
+```
+
+```
+Note: Objects have changed outside of OpenTofu
+  # docker_container.worker has been deleted
+```
+
+Exit `2`, and the resource **named**. That is the gate's check, and the
+practical difference between "something looks off" and "`docker_container.worker`
+is gone".
+
+<Callout type="why" label="Why refresh-only and not a plain plan">
+A plain `plan` mixes two things into one diff: what **you** edited and have not
+applied, and what changed **in the world** without you.
+
+`-refresh-only` isolates the second. It is the command for answering "did
+somebody touch this?" without your own pending edits polluting the answer — and
+that is why it is the right command for a scheduled drift-detection job.
+</Callout>
+
+## Continuous reconciliation is not pure upside
+
+It is tempting to read the table as a ranking. It is not.
+
+<Tradeoff
+  a="On-demand reconciliation (Compose, OpenTofu)"
+  b="Continuous reconciliation (Kubernetes, GitOps)"
+  whenA="When the change has to be deliberate and reviewable: a database, a DNS zone, an expensive resource. You want to see the plan FIRST, and you want nothing moving while you think."
+  whenB="When the workload is disposable and availability beats deliberation: a pod may die at any moment, and nobody wants to be paged to recreate it."
+  chose="none"
+  verdict="both, at different layers — which is the most common arrangement in practice: OpenTofu provisions the cluster, and the cluster reconciles what runs inside it."
+  adr="0007-kind-e-o-porte-para-kubernetes"
+/>
+
+<Callout type="danger" label="The loop that fixes is the loop that insists">
+A continuous controller cannot tell "somebody deleted this by mistake" from
+"somebody deleted it deliberately to stop the bleeding".
+
+During an incident, scaling a Deployment to zero by hand and watching the
+operator put it back to ten is a common and miserable experience. Automatic
+correction is the same function in both cases; what differs is the context, and
+the loop knows nothing about that.
+
+It is the same reason nobody wants a continuous controller applying schema
+changes to a production database.
+</Callout>
+
+<Term term="GitOps" alt="GitOps">
+Taking continuous reconciliation to the repository: the desired state lives in
+git, and an agent **inside** the cluster pulls and reconciles forever.
+
+The term is from 2017, coined by Alexis Richardson, and the definition that
+stuck is "operations by pull request". The OpenGitOps initiative, under the
+CNCF, fixed four principles: declarative, versioned and immutable, **pulled**
+automatically, and continuously reconciled.
+
+What changes most is not the tooling, it is the **trust boundary**: in the push
+model, CI needs cluster-admin credentials; in the pull model, the cluster fetches
+on its own and CI needs no access at all.
+
+This repository has **no** GitOps — and that is one of the gaps the market map
+records, with a name and a percentage.
+</Term>
+
+## Drift is not always somebody's fault
+
+Worth undoing the moralising. Drift happens because of:
+
+- **human action** — the `docker rm -f` above, or the 3 a.m. incident;
+- **another system acting** — an autoscaler, an operator, a policy that relabels;
+- **a default on the other side** — lesson 3's `memory_swap`, which the daemon
+  fills in by itself;
+- **the provider changing** — a field that starts coming back in a different
+  shape, like capabilities with the `CAP_` prefix.
+
+The last two have no culprit, and they are the most common in production.
+Treating every diff as negligence is the fastest way to teach people to ignore
+the drift report.
+
+<FieldNote
+  source="CNCF — GitOps in 2025"
+  url="https://www.cncf.io/blog/2025/06/09/gitops-in-2025-from-old-school-updates-to-the-modern-way/"
+  kind="blog"
+  accessed="2026-09-20"
+>
+The operational cost of the pull model is that every cluster becomes a system to
+administer: the agent's version, configuration and health, per cluster. The
+common answer at fleet scale is a meta-pattern — an agent managing the agents —
+with all the complexity that implies.
+</FieldNote>
+
+<LabExercise check="refresh-only detecta o worker apagado por fora e o NOMEIA" file="tools/scripts/iac-verify.sh">
+
+With module 4's stack up, delete the worker container by hand and run both forms
+of plan.
+
+Question: why does the gate use `-refresh-only` rather than a plain `plan`, if
+both would exit `2` in this case?
+
+<Fragment slot="hint">
+Imagine you had also edited `containers.tf` and not applied it yet.
+</Fragment>
+
+<Fragment slot="answer">
+
+Because both exit `2` **for different reasons**, and the gate needs to know
+which.
+
+A plain `plan` exits `2` if there is **any** pending change — including an edit
+of yours that was never applied. If the gate accepted that as proof of drift
+detection, it would pass even with `refresh` completely broken: one unapplied
+edit in the directory would be enough.
+
+`-refresh-only` ignores the configuration and compares only **state × world**.
+Exiting `2` there means exactly one thing: something changed outside the tool.
+
+```bash
+tofu plan -refresh-only -detailed-exitcode   # 2 => somebody touched it
+tofu plan -detailed-exitcode                 # 2 => touched, OR you edited
+```
+
+It is the same discipline as `verify.sh`, which separates "the scanner broke"
+from "the scanner found a CVE". A gate that merges two causes into one check
+starts lying about both.
+
+</Fragment>
+</LabExercise>
+
+## What sticks
+
+- One `docker rm -f` separates the three: k8s recreates, Compose and OpenTofu
+  stay quiet.
+- OpenTofu's difference is **being able to tell you** — and to name the resource.
+- `-refresh-only` isolates drift from your pending edits. It is the scheduled
+  job's command.
+- Continuous versus on-demand is a tradeoff, not a ranking: the loop that fixes
+  is the loop that insists during an incident.
+- GitOps takes the loop to git and shifts the **trust boundary** — and does not
+  exist in this repository yet.
+
+<Quiz set="drift-and-reconciliation" />
