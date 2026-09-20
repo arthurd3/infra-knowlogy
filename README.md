@@ -88,7 +88,7 @@ make site-verify # the site alone — types, tests, build, generated HTML (no Do
 
 make k8s-up     # module 2: the SAME stack in a kind cluster, at 127.0.0.1:8081
 make k8s-gateway # add the Gateway API (Envoy Gateway); the same stack at :8083
-make k8s-verify # its own gate — 58 checks, from scratch, cluster destroyed after
+make k8s-verify # its own gate — 65 checks, from scratch, cluster destroyed after
 
 make iac-up     # module 4: the SAME stack again, declared in HCL, at 127.0.0.1:8082
 make iac-verify # its own gate — 28 checks, including idempotence and drift
@@ -264,7 +264,7 @@ Current state: **32 passed · 0 failed**.
 For faster local iteration: `SKIP_SCAN=1 SKIP_OBS=1 make verify` (**27 passed**).
 For the site alone, with no Docker at all: `make site-verify`.
 
-Module 2 has its own independent gate, `make k8s-verify` (**58 passed · 0
+Module 2 has its own independent gate, `make k8s-verify` (**65 passed · 0
 failed**): it creates a kind cluster from scratch, loads the same images,
 applies the manifests, reruns the same smoke test through port 8081, proves the
 NetworkPolicies mirror the Compose networks (edge cannot reach db; db has no

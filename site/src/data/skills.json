@@ -43,11 +43,11 @@
       "status": "coberto",
       "pt": {
         "label": "Kubernetes / EKS / GKE",
-        "gap": "A trilha tem 10 lições e o portão, 58 checagens: Gateway API com rota provada, RBAC com prova negativa por token real, HPA medido em três rodadas, StatefulSet, PDB pela API de eviction e Helm comparado ao Kustomize campo a campo. O que falta é o que um nó só não dá: topologySpreadConstraints, Cluster Autoscaler, VPA, service mesh e falha real de plano de controle. Cluster gerenciado está citado com preço conferido, nunca medido."
+        "gap": "A trilha tem 10 lições e o portão, 65 checagens: Gateway API com rota provada, RBAC com prova negativa por token real, HPA medido em três rodadas, StatefulSet, PDB pela API de eviction e Helm comparado ao Kustomize campo a campo. O que falta é o que um nó só não dá: topologySpreadConstraints, Cluster Autoscaler, VPA, service mesh e falha real de plano de controle. Cluster gerenciado está citado com preço conferido, nunca medido."
       },
       "en": {
         "label": "Kubernetes / EKS / GKE",
-        "gap": "The track has 10 lessons and the gate 58 checks: Gateway API with routing proven, RBAC with a negative proof via a real token, HPA measured over three runs, StatefulSet, PDB through the eviction API, and Helm compared to Kustomize field by field. What is missing is what a single node cannot give: topologySpreadConstraints, Cluster Autoscaler, VPA, service mesh and a real control-plane failure. Managed clusters are cited with verified pricing, never measured."
+        "gap": "The track has 10 lessons and the gate 65 checks: Gateway API with routing proven, RBAC with a negative proof via a real token, HPA measured over three runs, StatefulSet, PDB through the eviction API, and Helm compared to Kustomize field by field. What is missing is what a single node cannot give: topologySpreadConstraints, Cluster Autoscaler, VPA, service mesh and a real control-plane failure. Managed clusters are cited with verified pricing, never measured."
       },
       "evidence": {
         "lessons": [

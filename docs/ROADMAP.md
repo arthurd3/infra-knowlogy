@@ -12,7 +12,7 @@ lado a lado só é honesta porque a aplicação é a mesma.
 | # | Módulo | Diretório | Portão | Estado |
 |---|---|---|---|---|
 | 1 | **Docker** — imagens, Compose, hardening OWASP, observabilidade | `stack/` | `make verify` (37 checagens) | **feito** · trilhas Fundamentos (8) e Produção (6) escritas |
-| 2 | **Kubernetes** — a mesma stack portada para um cluster kind, agora com Gateway API, RBAC, HPA e PDB | `k8s/` | `make k8s-verify` (58 checagens) | **feito** · [ADR 0007](adr/0007-kind-e-o-porte-para-kubernetes.md) e [0021](adr/0021-gateway-api-e-o-envoy-gateway.md) · **10 lições bilíngues** · pendências: multi-nó (topologySpread, Cluster Autoscaler), VPA, service mesh, job de kind no CI |
+| 2 | **Kubernetes** — a mesma stack portada para um cluster kind, agora com Gateway API, RBAC, HPA e PDB | `k8s/` | `make k8s-verify` (65 checagens) | **feito** · [ADR 0007](adr/0007-kind-e-o-porte-para-kubernetes.md) e [0021](adr/0021-gateway-api-e-o-envoy-gateway.md) · **10 lições bilíngues** · pendências: multi-nó (topologySpread, Cluster Autoscaler), VPA, service mesh, job de kind no CI |
 | 3 | **CI/CD self-hosted (Jenkins)** — o mesmo pipeline do GitHub Actions rodando num Jenkins que é seu, sobre a mesma stack | `cicd/` | `make cicd-verify` (35 checagens) | **feito (v1)** · [ADR 0011](adr/0011-como-o-agente-de-build-constroi-imagens.md) e [0012](adr/0012-jenkins-conteinerizado.md) · 8 lições bilíngues · pendência: GitOps |
 | 4 | **IaC (OpenTofu)** — a mesma stack declarada em HCL e provisionada contra o daemon local | `iac/` | `make iac-verify` (28 checagens) | **feito (v1)** · [ADR 0015](adr/0015-opentofu-e-o-provider-docker.md) e [0016](adr/0016-como-o-tofu-alcanca-o-daemon.md) · 8 lições bilíngues na trilha `iac` |
 | 5 | **Configuração (Ansible)** — preparar um host Fedora real: Docker, SELinux, firewall, usuários — as coisas que o módulo 1 encontrou na marra | `config/` | a definir | reservado |
@@ -128,7 +128,7 @@ trabalho declarado, não esquecido.
   ensinam existe: **Gateway API** (Envoy Gateway v1.9.1, [ADR 0021](adr/0021-gateway-api-e-o-envoy-gateway.md)),
   **RBAC** com sonda de token real, **HPA** com metrics-server, **PDB** provado
   pela API de eviction e um **chart Helm** comparado ao overlay Kustomize campo
-  a campo. O portão foi de 33 para **58 checagens**.
+  a campo. O portão foi de 33 para **65 checagens**.
 
   Ficou para depois, e quase tudo pela mesma razão — **este cluster tem um nó
   só**: `topologySpreadConstraints`, Cluster Autoscaler, VPA, service mesh,
