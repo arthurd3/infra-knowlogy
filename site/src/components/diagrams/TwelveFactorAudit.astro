@@ -1,0 +1,90 @@
+---
+/**
+ * prod-05 — os doze fatores conferidos contra ESTA stack.
+ *
+ * Cada veredito foi apurado por comando, não de memória: go.sum/uv.lock/
+ * package-lock para dependências, `read_only` no compose.prod, o shutdown-test
+ * do portão para descartabilidade, e um grep que não achou nenhuma aplicação
+ * escrevendo log em arquivo.
+ */
+import Figure from "../Figure.astro";
+import type { Lang } from "../../i18n/ui";
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+const C = {
+  pt: {
+    head: "os doze fatores × o que esta stack faz",
+    legend: [["cumpre", "ok"], ["desvio declarado", "warn"], ["não cumpre", "bad"]],
+    rows: [
+      ["I", "Base de código", "ok", "um repo, quatro vistas de deploy: stack, k8s, iac, cicd"],
+      ["II", "Dependências", "ok", "go.sum, uv.lock, package-lock — e imagem base pinada por digest"],
+      ["III", "Configuração", "warn", "env sim, mas segredo entra por CAMINHO (_FILE), não por valor"],
+      ["IV", "Serviços de apoio", "ok", "Postgres e Redis alcançados por nome, vindo do ambiente"],
+      ["V", "Build, release, run", "ok", "todo Dockerfile tem stage `dist`; a imagem é o release"],
+      ["VI", "Processos", "ok", "read_only nos sete serviços; estado em volume, banco e cache"],
+      ["VII", "Vínculo de porta", "ok", "a api escuta sozinha em :8080, sem servidor web injetado"],
+      ["VIII", "Concorrência", "bad", "ZERO `replicas:` em qualquer compose — é o que o módulo 2 responde"],
+      ["IX", "Descartabilidade", "ok", "o portão MEDE: todos param em menos de 3s"],
+      ["X", "Paridade dev/prod", "warn", "o overlay dev roda `astro dev` e `target: debug` — quebra deliberada"],
+      ["XI", "Logs", "ok", "stdout; nenhuma aplicação escreve arquivo — o Alloy coleta"],
+      ["XII", "Processos de admin", "ok", "`exec api /api-go healthcheck` e os scripts de init do banco"],
+    ],
+    score: "dez cumpre · dois com desvio declarado · um não cumpre",
+    punch: "o fator que esta stack NÃO cumpre é justamente a pergunta que fez o módulo 2 existir",
+    caption:
+      "Auditoria, não adesão. Dez fatores esta stack cumpre, e dá para conferir cada um por comando. Dois são <b>desvios declarados</b>: o segredo entra por caminho de arquivo em vez de variável — o que é mais seguro do que o fator pede —, e o overlay de desenvolvimento roda <code>astro dev</code>, quebrando a paridade de propósito. E um ela <b>não cumpre</b>: não há <code>replicas:</code> em compose nenhum. Escalar horizontalmente é exatamente a pergunta que o módulo 2 respondeu com um orquestrador.",
+    alt: "Os doze fatores avaliados contra esta stack, com veredito e evidência de cada um.",
+  },
+  en: {
+    head: "the twelve factors × what this stack does",
+    legend: [["complies", "ok"], ["declared deviation", "warn"], ["does not comply", "bad"]],
+    rows: [
+      ["I", "Codebase", "ok", "one repo, four deploy views: stack, k8s, iac, cicd"],
+      ["II", "Dependencies", "ok", "go.sum, uv.lock, package-lock — and base images pinned by digest"],
+      ["III", "Config", "warn", "env yes, but secrets arrive by PATH (_FILE), not by value"],
+      ["IV", "Backing services", "ok", "Postgres and Redis reached by name, coming from the environment"],
+      ["V", "Build, release, run", "ok", "every Dockerfile has a `dist` stage; the image is the release"],
+      ["VI", "Processes", "ok", "read_only on all seven services; state in volumes, database and cache"],
+      ["VII", "Port binding", "ok", "the api listens on :8080 itself, with no web server injected"],
+      ["VIII", "Concurrency", "bad", "ZERO `replicas:` in any compose file — this is what module 2 answers"],
+      ["IX", "Disposability", "ok", "the gate MEASURES it: everything stops in under 3s"],
+      ["X", "Dev/prod parity", "warn", "the dev overlay runs `astro dev` and `target: debug` — a deliberate break"],
+      ["XI", "Logs", "ok", "stdout; no application writes files — Alloy collects them"],
+      ["XII", "Admin processes", "ok", "`exec api /api-go healthcheck` and the database init scripts"],
+    ],
+    score: "ten comply · two with declared deviations · one does not",
+    punch: "the factor this stack does NOT meet is precisely the question that made module 2 exist",
+    caption:
+      "An audit, not an endorsement. Ten factors this stack meets, and each one can be checked by command. Two are <b>declared deviations</b>: secrets arrive as a file path rather than a variable — which is safer than the factor asks for — and the development overlay runs <code>astro dev</code>, breaking parity on purpose. And one it <b>does not meet</b>: there is no <code>replicas:</code> in any compose file. Scaling horizontally is exactly the question module 2 answered with an orchestrator.",
+    alt: "The twelve factors assessed against this stack, with a verdict and evidence for each.",
+  },
+}[lang];
+
+const cor: Record<string, string> = { ok: "dg-fill-accent", warn: "dg-fill-warn", bad: "dg-fill-danger" };
+---
+<Figure caption={C.caption} alt={C.alt}>
+  <svg viewBox="0 0 700 300" xmlns="http://www.w3.org/2000/svg" font-size="11">
+    <text x="14" y="16" class="dg-faint" font-size="9">{C.head}</text>
+    {C.legend.map(([t, k], i) => (
+      <g>
+        <rect x={400 + i * 100} y={8} width={9} height={9} rx={2} class={cor[k]} />
+        <text x={414 + i * 100} y={16} class="dg-faint" font-size="8">{t}</text>
+      </g>
+    ))}
+
+    {C.rows.map(([num, nome, veredito, prova], i) => {
+      const y = 28 + i * 21;
+      return (
+        <g>
+          <rect x="14" y={y} width="8" height="15" rx="2" class={cor[veredito as string]} />
+          <text x="30" y={y + 12} class="dg-mono dg-faint" font-size="8">{num}</text>
+          <text x="56" y={y + 12} class="dg-title" font-size="9">{nome}</text>
+          <text x="186" y={y + 12} class="dg-faint" font-size="8">{prova}</text>
+        </g>
+      );
+    })}
+
+    <text x="14" y="288" class="dg-muted" font-size="9.5" font-weight="620">{C.score}</text>
+    <text x="686" y="288" text-anchor="end" class="dg-title" font-size="9">{C.punch}</text>
+  </svg>
+</Figure>

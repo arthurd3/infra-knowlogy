@@ -1,0 +1,116 @@
+{
+  "note_pt": "A capability gravada no binário, e a checagem que escreve em vez de ler.",
+  "note_en": "The capability written into the binary, and the check that writes instead of reads.",
+  "pt": [
+    {
+      "q": "O Caddy publica em 8080 e ainda assim precisa de `NET_BIND_SERVICE`. Por quê?",
+      "options": [
+        {
+          "text": "Porque a capability está GRAVADA no binário como file capability, e o kernel recusa o `exec()` se ela não estiver no bounding set.",
+          "correct": true,
+          "why": "A checagem acontece ANTES de o programa rodar uma instrução — por isso a porta não importa. O erro é `exec /usr/bin/caddy: operation not permitted`, que não menciona capability nem Caddy. É a armadilha 6 do CLAUDE.md."
+        },
+        {
+          "text": "Porque o Caddy tenta abrir a 80 internamente antes de cair para a 8080.",
+          "why": "Ele escuta no que o SITE_ADDRESS mandar, e aqui é :8080. Se fosse isso, o erro seria de bind recusado, não de exec."
+        },
+        {
+          "text": "Porque o Docker exige essa capability para publicar qualquer porta.",
+          "why": "Quem publica porta é o daemon no host, não o processo dentro do container. A api publica sem nenhuma capability."
+        }
+      ]
+    },
+    {
+      "q": "Por que o portão TENTA escrever em `/` em vez de conferir `read_only: true` no YAML?",
+      "options": [
+        {
+          "text": "Porque ler a configuração testa o autor; exercitar o comportamento testa o sistema — e só o segundo pega regressão vinda de outro arquivo.",
+          "correct": true,
+          "why": "Um bind mount sobre um caminho, um tmpfs mal colocado ou um overlay posterior deixam a linha no arquivo e o sistema gravável. É o mesmo princípio da prova negativa do módulo 4 e do attack-lab inteiro."
+        },
+        {
+          "text": "Porque o YAML pode ter erro de sintaxe e o portão não saberia.",
+          "why": "Erro de sintaxe faz o `compose config` reprovar, e isso já é checado no passo 1. O risco aqui é outro: YAML válido com comportamento diferente."
+        },
+        {
+          "text": "Porque o compose.prod.yaml é um overlay e pode não estar sendo aplicado.",
+          "why": "Chega perto e é um caso particular. A regra é mais geral: o que vale é o estado do container, venha ele de onde vier."
+        }
+      ]
+    },
+    {
+      "q": "O que o `tmpfs` com `noexec` acrescenta ao `read_only: true`?",
+      "options": [
+        {
+          "text": "Fecha o círculo: o read_only impede gravar no rootfs, e o noexec impede executar o que foi gravado no /tmp que sobrou gravável.",
+          "correct": true,
+          "why": "Sem o tmpfs, muitos processos nem sobem — eles precisam de /tmp. Com tmpfs sem noexec, o invasor ganha de volta exatamente o lugar para depositar a ferramenta que o read_only tinha tirado."
+        },
+        {
+          "text": "Acelera a escrita, porque tmpfs é memória.",
+          "why": "Acelera mesmo, e não é o motivo de estar ali. A decisão é de segurança; o desempenho é efeito colateral."
+        },
+        {
+          "text": "Garante que o /tmp seja limpo entre reinícios.",
+          "why": "Também acontece, e é consequência de tmpfs viver em memória. O que a lição destaca é o noexec, que é uma escolha explícita no mesmo campo."
+        }
+      ]
+    }
+  ],
+  "en": [
+    {
+      "q": "Caddy publishes on 8080 and still needs `NET_BIND_SERVICE`. Why?",
+      "options": [
+        {
+          "text": "Because the capability is WRITTEN into the binary as a file capability, and the kernel refuses the `exec()` if it is not in the bounding set.",
+          "correct": true,
+          "why": "The check happens BEFORE the program runs a single instruction — which is why the port is irrelevant. The error is `exec /usr/bin/caddy: operation not permitted`, mentioning neither capability nor Caddy. It is trap 6 in CLAUDE.md."
+        },
+        {
+          "text": "Because Caddy tries port 80 internally before falling back to 8080.",
+          "why": "It listens on whatever SITE_ADDRESS says, and here that is :8080. If this were it, the error would be a refused bind, not a refused exec."
+        },
+        {
+          "text": "Because Docker requires that capability to publish any port.",
+          "why": "Port publishing is done by the daemon on the host, not by the process inside the container. The api publishes with no capabilities at all."
+        }
+      ]
+    },
+    {
+      "q": "Why does the gate TRY to write to `/` instead of checking `read_only: true` in the YAML?",
+      "options": [
+        {
+          "text": "Because reading configuration tests the author; exercising behaviour tests the system — and only the second catches a regression arriving from another file.",
+          "correct": true,
+          "why": "A bind mount over a path, a misplaced tmpfs or a later overlay leave the line in the file and the filesystem writable. It is the same principle as module 4's negative proof and the whole attack-lab."
+        },
+        {
+          "text": "Because the YAML might have a syntax error and the gate would not know.",
+          "why": "A syntax error makes `compose config` fail, and that is already checked in step 1. The risk here is different: valid YAML with different behaviour."
+        },
+        {
+          "text": "Because compose.prod.yaml is an overlay and might not be applied.",
+          "why": "Close, and it is one particular case. The rule is more general: what counts is the container's state, wherever it came from."
+        }
+      ]
+    },
+    {
+      "q": "What does a `tmpfs` with `noexec` add to `read_only: true`?",
+      "options": [
+        {
+          "text": "It closes the circle: read_only prevents writing to the rootfs, and noexec prevents executing whatever was written to the /tmp that stayed writable.",
+          "correct": true,
+          "why": "Without the tmpfs, many processes will not even start — they need /tmp. With a tmpfs and no noexec, the attacker gets back exactly the place to drop the tool that read_only had taken away."
+        },
+        {
+          "text": "It speeds up writes, because tmpfs is memory.",
+          "why": "It does speed them up, and that is not why it is there. The decision is about security; performance is a side effect."
+        },
+        {
+          "text": "It guarantees /tmp is cleared between restarts.",
+          "why": "That also happens, as a consequence of tmpfs living in memory. What the lesson highlights is noexec, an explicit choice in the same field."
+        }
+      ]
+    }
+  ]
+}

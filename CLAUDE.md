@@ -264,6 +264,13 @@ justamente por isso.
     incompleto. Corrigido com `stage.template` + `ToLower`; `warn` × `warning`
     continua declarado como limite.
 
+47. **`\"` NÃO é escape válido em atributo de componente MDX.** Ele funciona no
+    frontmatter YAML e dentro de bloco de código, e por isso parece que
+    funciona em todo lugar. Num `whenA="… \"assim\" …"` a string termina na
+    primeira aspa e o build falha com *"Unexpected character after `<`, expected
+    a valid JSX tag"* — apontando para a LINHA DO COMPONENTE, não para o escape.
+    Use aspas tipográficas (`“ ”`) no texto do atributo.
+
 ## Ao mexer na stack
 
 - Rode `make verify` antes de considerar qualquer coisa pronta. Para iterar

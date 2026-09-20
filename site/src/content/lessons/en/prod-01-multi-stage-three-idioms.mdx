@@ -1,0 +1,204 @@
+---
+key: multi-stage-three-idioms
+lang: en
+track: producao
+order: 1
+title: Three multi-stage idioms, one principle
+summary: "The api has four stages, the worker three, the site four. The numbers are not style: they follow what each build chain needs to isolate."
+minutes: 14
+tags: [production, multi-stage, dockerfile, go, python, node]
+sources:
+  - label: "Docker — multi-stage builds"
+    url: "https://docs.docker.com/build/building/multi-stage/"
+    kind: docs
+    accessed: "2026-09-20"
+  - label: "Dockerfile reference"
+    url: "https://docs.docker.com/reference/dockerfile/"
+    kind: docs
+    accessed: "2026-09-20"
+  - label: "uv — the Python package manager used by the worker"
+    url: "https://docs.astral.sh/uv/"
+    kind: docs
+    accessed: "2026-09-20"
+---
+
+import ThreeIdioms from "../../../components/diagrams/ThreeIdioms.astro";
+
+This stack is polyglot on purpose (ADR 0005), and the reason shows up here:
+**the three languages produce Dockerfiles with different shapes**, and comparing
+all three teaches more than mastering one.
+
+<ThreeIdioms />
+
+## The principle, of which there is one
+
+What compiles does not travel with what runs. Compiler, package manager,
+development headers, dependency cache — none of it needs to exist in the image
+that goes to production, and all of it is attack surface if it does.
+
+What differs between the three is **what is left after compiling**.
+
+## Go: what is left is a file
+
+```dockerfile
+FROM golang:1.25-alpine AS build
+# ... compiles statically ...
+
+FROM gcr.io/distroless/static-debian12:nonroot AS dist
+COPY --from=build /out/api-go /api-go
+USER 65532:65532
+ENTRYPOINT ["/api-go"]
+```
+
+A static binary depends on nothing from the system — not even libc. The final
+stage can be literally empty, and this api's `minimal` is `FROM scratch`.
+
+<Callout type="trap" label="Scratch has nothing, and 'nothing' includes what you forgot">
+Look at what the `minimal` stage has to copy by hand:
+
+```dockerfile
+FROM scratch AS minimal
+COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+COPY --from=build /etc/passwd /etc/passwd
+COPY --from=build /out/api-go /api-go
+USER 65534:65534
+```
+
+Without the **root certificates**, every outbound HTTPS call fails — and the
+error talks about an unknown certificate, not a missing file. Without
+`/etc/passwd`, a `USER` given by name does not resolve.
+
+Two lines nobody writes on the first attempt, and both only hurt at runtime.
+</Callout>
+
+## Python: what is left is a directory
+
+```dockerfile
+FROM ghcr.io/astral-sh/uv:0.9-python3.13-bookworm-slim AS build
+# ... uv sync: resolves and installs into a venv ...
+
+FROM python:3.13-slim-bookworm AS dist
+COPY --from=build --chown=65532:65532 /app /app
+USER 65532:65532
+ENTRYPOINT ["python", "-m", "worker.main"]
+```
+
+Python does not compile to a binary: what you carry is the **interpreter plus
+the venv**. The final stage cannot be `scratch` because it needs Python — which
+is why the worker weighs ten times the api, measured in `measured.json`.
+
+<Term word="virtual environment" alt="virtual environment" open>
+A directory holding a project's packages, isolated from the system's packages.
+
+Inside a container the natural question is "why isolate, when the container
+already isolates?". The answer is practical: a venv is **a copyable directory**.
+`COPY --from=build /app /app` carries an entire dependency resolution from one
+stage to another without reinstalling anything — and without carrying `uv`, the
+compiler and the cache along with it.
+</Term>
+
+<Callout type="why" label="Why the `--chown` is on the COPY">
+`COPY --from=build --chown=65532:65532 /app /app` sets the right owner **during
+the copy**. The alternative would be to copy and then `RUN chown -R`, which
+creates a new layer the size of everything copied — the image would carry the
+files twice.
+
+It is the same reason as the trap in Fundamentals lesson 2: a new layer does not
+erase what the previous one wrote.
+</Callout>
+
+## Node: what is left has no Node
+
+```dockerfile
+FROM node:22-alpine AS deps    # npm ci only
+FROM node:22-alpine AS build   # COPY --from=deps node_modules, then compile
+FROM caddy:2-alpine AS dist    # COPY --from=build /app/dist /srv
+FROM node:22-alpine AS dev     # npm run dev
+```
+
+Astro compiles to static HTML. The final image is **a web server with files
+inside** — no Node, no `node_modules`, no npm.
+
+The separate `deps` stage exists for the cache: `npm ci` depends only on
+`package.json` and `package-lock.json`, and isolating it means a code change
+does not invalidate the dependency install. It is Fundamentals lesson 4 applied.
+
+<Callout type="danger" label="And `dev` is the LAST stage in the file">
+A `build:` without `target:` builds the **last** stage of the Dockerfile. Here
+that means shipping the site with `npm run dev` to production — a development
+server, unoptimised, listening on 0.0.0.0.
+
+It happened in this repository. It is trap 9 in `CLAUDE.md`, and the fix is one
+line:
+
+```yaml
+build:
+  context: ../site
+  target: dist
+```
+</Callout>
+
+<Tradeoff
+  a="Few stages, one Dockerfile per service"
+  b="Many stages, with variants in the same file"
+  whenA="When the image has a single use and the team is small. Less to read, less to maintain, and `target` never becomes a trap."
+  whenB="When you need variants that share the build: the api has <code>dist</code> for production, <code>minimal</code> to measure the floor and <code>debug</code> with a shell for investigation. All three come from the SAME compilation."
+  chose="b"
+  verdict="many stages, with an explicit <code>target</code> at every invocation — in compose, in the Jenkinsfile and in module 4's HCL."
+  adr="0005-stack-poliglota"
+/>
+
+<LabExercise check="docker compose build" file="stack/services/api-go/Dockerfile">
+
+The api's `debug` stage copies the same binary as `dist`, but starts from
+`alpine:3.22` instead of distroless.
+
+Question: why does it exist, if it is larger and has more attack surface?
+
+<Fragment slot="hint">
+Try `docker exec` on a container running the `dist` image.
+</Fragment>
+
+<Fragment slot="answer">
+
+Because in the distroless image **there is nothing to execute**:
+
+```
+$ podman run --rm --entrypoint sh infra-knowlogy/api-go:dev -c 'id -u'
+Error: crun: executable file `sh` not found in $PATH
+```
+
+No shell, no `ls`, no `cat`. Excellent against an attacker and terrible when you
+need to look inside at three in the morning.
+
+`debug` solves that while keeping what matters identical: **the same binary,
+from the same compilation**. Only the base changes. You investigate in an
+environment running the artifact identical to production's, instead of rebuilding
+something similar.
+
+```bash
+docker build --target debug -t api-debug stack/services/api-go
+docker run --rm -it --entrypoint sh api-debug
+```
+
+What it does **not** solve: the production container still has no shell, and
+swapping the image in production to investigate means swapping the artifact under
+investigation. The serious answer to that is an ephemeral debug container sharing
+the troubled container's namespaces — `docker run --pid=container:<id>` — and
+Kubernetes' `kubectl debug` does exactly that.
+
+</Fragment>
+</LabExercise>
+
+## What sticks
+
+- One principle: what compiles does not travel with what runs.
+- Go leaves **a file** — the final stage can be `scratch`, and then you copy
+  certificates and `/etc/passwd` by hand.
+- Python leaves **a directory** — the venv, copied with `--chown` on the `COPY`
+  itself so the layer is not duplicated.
+- Node leaves **nothing**: the final image is a web server with HTML inside.
+- A separate `deps` is cache; `debug` is the same binary with a shell; `dev`
+  being the last stage is trap 9.
+
+<Quiz set="multi-stage-three-idioms" />

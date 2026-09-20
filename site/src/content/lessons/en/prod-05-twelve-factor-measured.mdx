@@ -1,0 +1,203 @@
+---
+key: twelve-factor-measured
+lang: en
+track: producao
+order: 5
+title: The twelve factors, audited against this stack
+summary: "Ten comply, two are declared deviations, one does not. And the one that does not is exactly the question that made module 2 exist."
+minutes: 14
+tags: [production, 12-factor, config, parity, disposability]
+sources:
+  - label: "The Twelve-Factor App"
+    url: "https://12factor.net/"
+    kind: spec
+    accessed: "2026-09-20"
+  - label: "The Twelve-Factor App — Portuguese translation"
+    url: "https://12factor.net/pt_br/"
+    kind: spec
+    accessed: "2026-09-20"
+  - label: "Compose Specification"
+    url: "https://github.com/compose-spec/compose-spec/blob/main/spec.md"
+    kind: spec
+---
+
+import TwelveFactorAudit from "../../../components/diagrams/TwelveFactorAudit.astro";
+
+The twelve factors are from 2011 and have aged well — but they became a slide
+checklist, recited without being checked. This lesson does the opposite: it
+**audits**, item by item, with commands.
+
+<TwelveFactorAudit />
+
+## What the stack meets effortlessly
+
+Four factors came for free, because containers already impose them:
+
+- **II. Dependencies** — `go.sum`, `uv.lock`, `package-lock.json` and base
+  images pinned by digest. There is no "install this first"; the Dockerfile is
+  the declaration.
+- **V. Build, release, run** — every Dockerfile has a `dist` stage, and the
+  **image is the release**. Running is `docker run`, and you cannot edit code in
+  between.
+- **VII. Port binding** — the api listens on `:8080` by itself, with no Apache
+  or Nginx injected from outside.
+- **XI. Logs** — a `grep` found no application writing a log file. All of them
+  write to stdout, and Alloy collects.
+
+<Callout type="why" label="Factor XI is not about format, it is about who writes">
+The factor says: the application **does not manage** log files. It writes to the
+output stream and that is it — rotation, retention and shipping are the
+environment's problem.
+
+In this stack, that is what lets `config.alloy` exist without touching any
+application. If the api wrote to `/var/log/api.log`, the collector would need a
+shared volume, and rotation would become its responsibility.
+
+The proof is an absence: none of the three applications has a single line of log
+file configuration.
+</Callout>
+
+## The two deviations, declared
+
+**III. Config.** The factor says put everything in the environment. This stack
+puts almost everything — and **secrets arrive as a file path**:
+
+```yaml
+POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+```
+
+<Callout type="trap" label="Here the factor is out of date, and deviating is right">
+An environment variable leaks through routes 2011 did not anticipate:
+`docker inspect` shows it, `/proc/<pid>/environ` shows it, child processes
+inherit it, and crash reports routinely capture the whole environment.
+
+The `<VAR>_FILE` convention passes the **path**, and the application opens the
+file. It is safer than the factor asks for — which is why the deviation is
+declared rather than hidden.
+
+Worth noting that the factor already admits part of this: it speaks of "config
+in the environment" to distinguish it from config in a **versioned** file, which
+is the real problem it attacks.
+</Callout>
+
+**X. Dev/prod parity.** The development overlay breaks parity on purpose:
+
+```yaml
+web:
+  build: {target: dev}
+  command: ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
+api:
+  build: {target: debug}
+```
+
+The site runs `astro dev` with hot reload, and the api uses the `debug` stage
+with a shell. It is a real break, and the gain — a cycle of seconds instead of
+minutes — is why it exists. What keeps the break under control is the **same
+origin**: both stages come from the same Dockerfile and the same code.
+
+<Term word="dev/prod parity" alt="dev/prod parity" open>
+Keeping development, staging and production as similar as possible — in time, in
+personnel and in tooling.
+
+The factor was written against a world where the developer used SQLite and
+production used Postgres. Containers solved most of that by themselves: here the
+development api and the production api run the **same binary**, against the
+**same Postgres**, at the **same digest-pinned version**.
+
+What remains of the break is the development tooling layer — and it is
+conscious, localised and documented.
+</Term>
+
+## What the stack does NOT meet
+
+**VIII. Concurrency.** There is no `replicas:` in any of the four compose files.
+The stack brings up one instance of each service, full stop.
+
+<Callout type="danger" label="And that is the factor that created module 2">
+The factor says scale via the process model — more instances, no shared state.
+Compose does have `deploy.replicas`, and it is half an answer: it starts N
+containers and solves neither load balancing, nor discovery, nor rolling
+updates, nor rescheduling when a node dies.
+
+Real scaling is what an orchestrator does, and it is literally the Kubernetes
+track's subject. The factor this stack fails is not a design flaw: it is **the
+boundary where Compose stops being enough**, measured.
+</Callout>
+
+<Tradeoff
+  a="Treating the twelve factors as a compliance checklist"
+  b="Treating them as audit questions"
+  whenA="When there is an organisational standard to meet and somebody will audit the list. It is verifiable and ends the argument — and it produces compliance by the letter, with deviations hidden instead of declared."
+  whenB="When the goal is understanding the design. The question stops being “does it comply?” and becomes “what happens here, and why?” — which is how the factor III deviation turned out better than the factor."
+  chose="b"
+  verdict="an audit. Ten comply, two deviate for a written reason, and one does not — and that one points at the next module instead of becoming a red row on a spreadsheet."
+  adr="0001-compose-em-vez-de-kubernetes"
+/>
+
+<RunIt>
+```bash
+# XI: does any application write a log file?
+grep -rniE 'FileHandler|/var/log|access_log.*\.log' stack/services/ || echo "none"
+
+# IX: the gate measures disposability
+make shutdown-test
+
+# VIII: how many replicas does compose declare?
+grep -c 'replicas:' stack/compose*.yaml
+```
+</RunIt>
+
+<LabExercise check="todos os serviços param em menos de 3s" file="tools/scripts/shutdown-test.sh">
+
+Factor IX asks for "fast startup and graceful shutdown". This is the only part of
+the audit the gate **measures in seconds**, rather than checking by inspection.
+
+Question: why does graceful shutdown need measurement and fast startup not?
+
+<Fragment slot="hint">
+Think about what happens when a service takes too long to stop.
+</Fragment>
+
+<Fragment slot="answer">
+
+Because the two fail in different ways, and only one fails silently.
+
+**Slow startup** is visible: `up --wait` drags, the healthcheck takes longer,
+somebody notices on the first run. It is annoying and obvious.
+
+**Slow shutdown** is invisible day to day and expensive on the wrong day.
+`docker stop` sends SIGTERM, waits out the `stop_grace_period` and then sends
+SIGKILL. If the process does not handle SIGTERM, it is killed outright — and you
+only find out when a request vanishes mid-flight, or a transaction stays open.
+
+```bash
+$ make shutdown-test
+   todos os serviços param em menos de 3s
+```
+
+The gate times every service. Three seconds is the chosen threshold; what
+matters is not the number but that it is **measured**, because a process that
+started ignoring SIGTERM still comes up normally.
+
+It is the same family as Fundamentals lesson 5: the kernel does not apply
+default signal actions to PID 1, so "handling SIGTERM" is code somebody wrote —
+and code somebody wrote is code somebody can break.
+
+</Fragment>
+</LabExercise>
+
+## What sticks
+
+- Containers deliver factors II, V, VII and XI for free — the design already
+  forces them.
+- Factor III is **out of date** on secrets: a file path beats a variable, and
+  the deviation is declared.
+- Dev/prod parity is broken on purpose in the development overlay, and the break
+  is localised.
+- Factor VIII is the only one unmet — and it is the boundary where Compose stops
+  being enough.
+- Disposability is the only factor the gate measures in seconds.
+- Auditing teaches more than complying: the well-justified deviation is the
+  interesting part.
+
+<Quiz set="twelve-factor-measured" />

@@ -1,0 +1,79 @@
+---
+/**
+ * prod-03 — o razão de capabilities: quem recebe o quê, e por quê.
+ *
+ * Os valores são o que está no compose.prod.yaml. Não vêm de JSON porque a
+ * fonte É o arquivo de composição — e o `make verify` prova que o
+ * endurecimento continua aplicado, com a checagem de rootfs read-only e a de
+ * que nenhum container roda privilegiado.
+ */
+import Figure from "../Figure.astro";
+import type { Lang } from "../../i18n/ui";
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+const C = {
+  pt: {
+    head: ["serviço", "capabilities devolvidas", "por que essas"],
+    rows: [
+      { s: "api", caps: [], why: "binário estático, distroless, USER 65532 — não precisa de nenhuma", cls: "dg-box--accent" },
+      { s: "worker", caps: [], why: "mesma coisa: processo comum, sem porta privilegiada", cls: "dg-box--accent" },
+      { s: "edge", caps: ["NET_BIND_SERVICE", "CHOWN", "DAC_OVERRIDE", "SETGID", "SETUID"], why: "o binário do Caddy tem cap_net_bind_service GRAVADA nele — sem ela o kernel recusa o exec()", cls: "dg-box--warn" },
+      { s: "web", caps: ["NET_BIND_SERVICE", "CHOWN", "DAC_OVERRIDE", "SETGID", "SETUID"], why: "mesma imagem Caddy, mesma exigência", cls: "dg-box--warn" },
+      { s: "db", caps: ["CHOWN", "DAC_OVERRIDE", "FOWNER", "SETGID", "SETUID"], why: "o entrypoint começa root, acerta o dono do datadir e só então faz setuid", cls: "dg-box--warn" },
+      { s: "cache", caps: ["SETGID", "SETUID"], why: "o Redis larga privilégio depois de subir", cls: "dg-box--raised" },
+    ],
+    start: "todos partem de cap_drop: [ALL]",
+    rule: "a regra não é \"derrube tudo\": é derrube tudo e devolva UMA a UMA, só quando o serviço não sobe sem",
+    measured: "dois dos seis não precisaram de nenhuma — e descobrir isso exige tentar",
+    caption:
+      "Todo serviço começa em <code>cap_drop: [ALL]</code>. O que diferencia não é a política, é <b>o que cada imagem exige para sequer executar</b>. A api e o worker sobem com zero capabilities. O Caddy exige <code>NET_BIND_SERVICE</code> mesmo publicando em porta alta — porque a capability está gravada no binário como <i>file capability</i>, e o kernel recusa o <code>exec()</code> se ela não estiver no bounding set. O erro que ele dá não menciona capability nenhuma.",
+    alt: "Tabela de capabilities devolvidas por serviço, e o motivo de cada uma.",
+  },
+  en: {
+    head: ["service", "capabilities handed back", "why those"],
+    rows: [
+      { s: "api", caps: [], why: "static binary, distroless, USER 65532 — needs none at all", cls: "dg-box--accent" },
+      { s: "worker", caps: [], why: "same: an ordinary process, no privileged port", cls: "dg-box--accent" },
+      { s: "edge", caps: ["NET_BIND_SERVICE", "CHOWN", "DAC_OVERRIDE", "SETGID", "SETUID"], why: "the Caddy binary has cap_net_bind_service WRITTEN into it — without it the kernel refuses the exec()", cls: "dg-box--warn" },
+      { s: "web", caps: ["NET_BIND_SERVICE", "CHOWN", "DAC_OVERRIDE", "SETGID", "SETUID"], why: "same Caddy image, same requirement", cls: "dg-box--warn" },
+      { s: "db", caps: ["CHOWN", "DAC_OVERRIDE", "FOWNER", "SETGID", "SETUID"], why: "the entrypoint starts as root, fixes the datadir owner and only then setuids", cls: "dg-box--warn" },
+      { s: "cache", caps: ["SETGID", "SETUID"], why: "Redis drops privilege after starting", cls: "dg-box--raised" },
+    ],
+    start: "every one starts from cap_drop: [ALL]",
+    rule: "the rule is not \"drop everything\": it is drop everything and hand back ONE at a time, only when the service will not start without it",
+    measured: "two of the six needed none — and finding that out requires trying",
+    caption:
+      "Every service starts at <code>cap_drop: [ALL]</code>. What differs is not the policy but <b>what each image requires in order to execute at all</b>. The api and the worker start with zero capabilities. Caddy requires <code>NET_BIND_SERVICE</code> even when publishing on a high port — because the capability is written into the binary as a <i>file capability</i>, and the kernel refuses the <code>exec()</code> if it is not in the bounding set. The error it gives mentions no capability at all.",
+    alt: "Table of capabilities handed back per service, and the reason for each.",
+  },
+}[lang];
+---
+<Figure caption={C.caption} alt={C.alt}>
+  <svg viewBox="0 0 700 272" xmlns="http://www.w3.org/2000/svg" font-size="11">
+    <text x="14" y="16" class="dg-muted" font-size="9.5" font-weight="620">{C.start}</text>
+    {C.head.map((h, i) => (
+      <text x={[16, 96, 330][i]} y="32" class="dg-faint" font-size="8.5">{h}</text>
+    ))}
+
+    {C.rows.map((r, i) => {
+      const y = 38 + i * 34;
+      return (
+        <g>
+          <rect x="14" y={y} width="672" height="28" rx="5" class={`dg-box ${r.cls}`} />
+          <text x="26" y={y + 18} class="dg-mono dg-title" font-size="9.5">{r.s}</text>
+          {r.caps.length === 0 ? (
+            <text x="96" y={y + 18} class="dg-mono dg-on-accent" font-size="8.5">— nenhuma —</text>
+          ) : (
+            r.caps.map((c, j) => (
+              <text x={96 + j * 46} y={y + 18} class="dg-mono dg-faint" font-size="6.5">{c.slice(0, 7)}</text>
+            ))
+          )}
+          <text x="330" y={y + 18} class="dg-faint" font-size="8">{r.why}</text>
+        </g>
+      );
+    })}
+
+    <text x="14" y="256" class="dg-title" font-size="9.5">{C.rule}</text>
+    <text x="14" y="268" class="dg-faint" font-size="8.5">{C.measured}</text>
+  </svg>
+</Figure>

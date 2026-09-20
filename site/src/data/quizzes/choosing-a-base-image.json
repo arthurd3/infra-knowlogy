@@ -1,0 +1,116 @@
+{
+  "note_pt": "O que some junto com os megabytes, e por que camada não é tamanho.",
+  "note_en": "What disappears along with the megabytes, and why a layer is not size.",
+  "pt": [
+    {
+      "q": "Um binário Go em `FROM scratch` faz uma chamada HTTPS e falha. Qual a causa mais provável?",
+      "options": [
+        {
+          "text": "Faltam os certificados raiz — `scratch` não tem `/etc/ssl/certs`, e é preciso copiá-los da stage de build.",
+          "correct": true,
+          "why": "O erro fala em certificado desconhecido e nada sugere arquivo ausente. É por isso que a stage `minimal` desta api copia TRÊS coisas à mão: os certificados, o /etc/passwd e o binário."
+        },
+        {
+          "text": "Falta a libc, porque TLS precisa dela.",
+          "why": "Um binário Go estático traz a própria implementação de TLS e não usa libc para nada. Por isso ele roda em scratch — o que falta é DADO, não biblioteca."
+        },
+        {
+          "text": "Falta resolução de DNS, que scratch não tem.",
+          "why": "O resolvedor do Go é próprio e funciona em scratch. Se fosse DNS, o erro seria de host não encontrado, não de certificado."
+        }
+      ]
+    },
+    {
+      "q": "A imagem `scratch` tem 3 camadas e a distroless tem 13, mas a distroless é maior. Por quê?",
+      "options": [
+        {
+          "text": "As camadas da distroless já vêm prontas na base — certificados, fuso horário, /etc/passwd. O COPY só acrescenta uma.",
+          "correct": true,
+          "why": "E as três do scratch são exatamente os três COPY que o Dockerfile escreve. A lição geral: contagem de camadas NÃO é proxy de tamanho — dez camadas de metadado pesam menos que uma com node_modules dentro."
+        },
+        {
+          "text": "Porque camadas comprimidas ocupam mais espaço que arquivos soltos.",
+          "why": "Camada comprimida ocupa menos, não mais. E as duas imagens são comprimidas do mesmo jeito — a diferença está no conteúdo."
+        },
+        {
+          "text": "Porque a distroless roda como não-root e isso exige metadados extras.",
+          "why": "O usuário nonroot é uma linha no /etc/passwd, que pesa bytes. O peso vem do conjunto de coisas que a base traz, não do usuário."
+        }
+      ]
+    },
+    {
+      "q": "Por que o worker usa `python:3.13-slim-bookworm` (Debian) e não a variante Alpine, que é menor?",
+      "options": [
+        {
+          "text": "Porque Alpine usa musl em vez de glibc, e wheel Python compilado contra glibc não roda — ou roda e quebra numa chamada específica.",
+          "correct": true,
+          "why": "A decisão é de COMPATIBILIDADE, e o tamanho veio junto como custo aceito. Para um binário Go estático a escolha seria indiferente; para Python com dependências compiladas, não é."
+        },
+        {
+          "text": "Porque Alpine não tem Python empacotado.",
+          "why": "Tem, e há imagem oficial `python:3.13-alpine`. O problema não é disponibilidade, é a libc que ela usa."
+        },
+        {
+          "text": "Porque o uv só funciona em Debian.",
+          "why": "O uv publica imagens para várias bases. E ele nem vai para a imagem final — vive só na stage de build."
+        }
+      ]
+    }
+  ],
+  "en": [
+    {
+      "q": "A Go binary on `FROM scratch` makes an HTTPS call and fails. What is the most likely cause?",
+      "options": [
+        {
+          "text": "The root certificates are missing — `scratch` has no `/etc/ssl/certs`, and they must be copied from the build stage.",
+          "correct": true,
+          "why": "The error talks about an unknown certificate and nothing suggests a missing file. That is why this api's `minimal` stage copies THREE things by hand: the certificates, /etc/passwd and the binary."
+        },
+        {
+          "text": "libc is missing, because TLS needs it.",
+          "why": "A static Go binary carries its own TLS implementation and uses libc for nothing. That is why it runs on scratch at all — what is missing is DATA, not a library."
+        },
+        {
+          "text": "DNS resolution is missing, which scratch does not have.",
+          "why": "Go's resolver is built in and works on scratch. If it were DNS, the error would be host not found, not a certificate error."
+        }
+      ]
+    },
+    {
+      "q": "The `scratch` image has 3 layers and the distroless one has 13, yet distroless is larger. Why?",
+      "options": [
+        {
+          "text": "Distroless' layers come ready in the base — certificates, timezone data, /etc/passwd. The COPY adds only one.",
+          "correct": true,
+          "why": "And scratch's three are exactly the three COPY instructions the Dockerfile writes. The general lesson: layer count is NOT a proxy for size — ten metadata layers weigh less than one with a node_modules inside."
+        },
+        {
+          "text": "Because compressed layers take more space than loose files.",
+          "why": "A compressed layer takes less, not more. And both images are compressed the same way — the difference is in the content."
+        },
+        {
+          "text": "Because distroless runs as non-root and that requires extra metadata.",
+          "why": "The nonroot user is one line in /etc/passwd, weighing bytes. The weight comes from the set of things the base brings, not from the user."
+        }
+      ]
+    },
+    {
+      "q": "Why does the worker use `python:3.13-slim-bookworm` (Debian) rather than the smaller Alpine variant?",
+      "options": [
+        {
+          "text": "Because Alpine uses musl instead of glibc, and a Python wheel compiled against glibc does not run — or runs and breaks on one specific call.",
+          "correct": true,
+          "why": "The decision is about COMPATIBILITY, and the size came along as an accepted cost. For a static Go binary the choice would be indifferent; for Python with compiled dependencies it is not."
+        },
+        {
+          "text": "Because Alpine has no Python packaged.",
+          "why": "It does, and there is an official `python:3.13-alpine` image. The problem is not availability, it is the libc it uses."
+        },
+        {
+          "text": "Because uv only works on Debian.",
+          "why": "uv publishes images for several bases. And it never reaches the final image — it lives only in the build stage."
+        }
+      ]
+    }
+  ]
+}

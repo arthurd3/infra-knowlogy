@@ -1,0 +1,116 @@
+{
+  "note_pt": "Em qual camada, e por que o portão trata as duas metades de formas diferentes.",
+  "note_en": "At which layer, and why the gate treats the two halves differently.",
+  "pt": [
+    {
+      "q": "O binário Go sai idêntico em dois builders bem diferentes. Qual das três travas é a mais sutil?",
+      "options": [
+        {
+          "text": "`CGO_ENABLED=0` — com cgo ligado, o build usaria o gcc e os cabeçalhos DO AMBIENTE, e os dois Alpines teriam que ser idênticos até o patch.",
+          "correct": true,
+          "why": "As outras duas travas são visíveis: o `FROM ...@sha256:` pina o compilador e o go.sum pina as dependências. O cgo é a que faz o SISTEMA AO REDOR deixar de participar da compilação, e é a que ninguém lembra."
+        },
+        {
+          "text": "O `go.sum`, porque sem ele qualquer dependência poderia mudar.",
+          "why": "É essencial e não é sutil: todo projeto Go tem um, e a ferramenta reclama sozinha se ele divergir. A sutileza está no que NÃO tem arquivo próprio."
+        },
+        {
+          "text": "O digest no `FROM`, porque tag é ponteiro mutável.",
+          "why": "Verdadeiro e é o ADR 0004 inteiro — mas é uma trava explícita e bem documentada aqui. O cgo é uma variável de ambiente que ninguém associa a reprodutibilidade."
+        }
+      ]
+    },
+    {
+      "q": "Por que o portão trata o binário como CHECAGEM e o digest da imagem como MEDIÇÃO?",
+      "options": [
+        {
+          "text": "Porque o digest diverge por carimbo de tempo e ordem no tar, sem nada estar errado — e um portão que reprova sem motivo é um portão que alguém desliga.",
+          "correct": true,
+          "why": "O binário divergir significa que alguma coisa está errada de verdade. O digest divergir significa que dois builders empacotaram o mesmo programa de formas diferentes. Tratar os dois igual destruiria a confiança no portão."
+        },
+        {
+          "text": "Porque o digest é caro de calcular e o binário não.",
+          "why": "Os dois são baratos: um `docker inspect` e um `cmp`. A diferença é de SIGNIFICADO da divergência, não de custo."
+        },
+        {
+          "text": "Porque o digest muda a cada push para o registry.",
+          "why": "Não muda — é justamente o que faz o digest ser um endereço confiável. Ele muda se algum BYTE da imagem mudar, e aqui mudam os carimbos de tempo."
+        }
+      ]
+    },
+    {
+      "q": "O que a reprodutibilidade NÃO garante?",
+      "options": [
+        {
+          "text": "Que o fonte seja bom, que as dependências sejam confiáveis ou que o compilador não tenha sido adulterado.",
+          "correct": true,
+          "why": "O ataque clássico do Ken Thompson — trusting trust — é um compilador que insere código malicioso e se reproduz perfeitamente. A defesa não é reprodutibilidade sozinha: é reprodutibilidade por MÚLTIPLAS PARTES, com builders independentes chegando ao mesmo artefato."
+        },
+        {
+          "text": "Que o build seja rápido.",
+          "why": "Verdade e é irrelevante: ninguém confunde reprodutibilidade com desempenho. A confusão perigosa é com SEGURANÇA."
+        },
+        {
+          "text": "Que a imagem seja pequena.",
+          "why": "Também verdade e também irrelevante. O ponto é que reprodutibilidade parece uma garantia de segurança e não é — é uma garantia de derivabilidade."
+        }
+      ]
+    }
+  ],
+  "en": [
+    {
+      "q": "The Go binary comes out identical on two very different builders. Which of the three locks is the subtlest?",
+      "options": [
+        {
+          "text": "`CGO_ENABLED=0` — with cgo on, the build would use the ENVIRONMENT's gcc and headers, and both Alpines would have to match down to the patch.",
+          "correct": true,
+          "why": "The other two locks are visible: `FROM ...@sha256:` pins the compiler and go.sum pins the dependencies. cgo is the one that makes the SURROUNDING SYSTEM stop participating in the compilation, and the one nobody remembers."
+        },
+        {
+          "text": "`go.sum`, because without it any dependency could change.",
+          "why": "Essential, and not subtle: every Go project has one, and the tooling complains by itself if it diverges. The subtlety is in what has no file of its own."
+        },
+        {
+          "text": "The digest in `FROM`, because a tag is a mutable pointer.",
+          "why": "True, and it is ADR 0004 in full — but it is an explicit, well-documented lock here. cgo is an environment variable nobody associates with reproducibility."
+        }
+      ]
+    },
+    {
+      "q": "Why does the gate treat the binary as a CHECK and the image digest as a MEASUREMENT?",
+      "options": [
+        {
+          "text": "Because the digest diverges over timestamps and tar ordering with nothing being wrong — and a gate that fails for no reason is a gate somebody switches off.",
+          "correct": true,
+          "why": "A diverging binary means something is genuinely wrong. A diverging digest means two builders packaged the same program differently. Treating both the same would destroy trust in the gate."
+        },
+        {
+          "text": "Because the digest is expensive to compute and the binary is not.",
+          "why": "Both are cheap: a `docker inspect` and a `cmp`. The difference is in what the divergence MEANS, not in cost."
+        },
+        {
+          "text": "Because the digest changes on every push to the registry.",
+          "why": "It does not — that is precisely what makes a digest a trustworthy address. It changes if any BYTE of the image changes, and here the timestamps do."
+        }
+      ]
+    },
+    {
+      "q": "What does reproducibility NOT guarantee?",
+      "options": [
+        {
+          "text": "That the source is good, that the dependencies are trustworthy, or that the compiler was not tampered with.",
+          "correct": true,
+          "why": "Ken Thompson's classic attack — trusting trust — is a compiler that inserts malicious code and reproduces itself perfectly. The defence is not reproducibility alone: it is MULTI-PARTY reproducibility, with independent builders arriving at the same artifact."
+        },
+        {
+          "text": "That the build is fast.",
+          "why": "True and irrelevant: nobody confuses reproducibility with performance. The dangerous confusion is with SECURITY."
+        },
+        {
+          "text": "That the image is small.",
+          "why": "Also true and also irrelevant. The point is that reproducibility looks like a security guarantee and is not — it is a derivability guarantee."
+        }
+      ]
+    }
+  ]
+}

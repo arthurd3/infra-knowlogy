@@ -1,0 +1,204 @@
+---
+key: multi-stage-three-idioms
+lang: pt
+track: producao
+order: 1
+title: Três idiomas de multi-stage, um princípio só
+summary: "A api tem quatro estágios, o worker tem três, o site tem quatro. Os números não são estilo: eles acompanham o que cada cadeia de build precisa isolar."
+minutes: 14
+tags: [producao, multi-stage, dockerfile, go, python, node]
+sources:
+  - label: "Docker — builds multi-stage"
+    url: "https://docs.docker.com/build/building/multi-stage/"
+    kind: docs
+    accessed: "2026-09-20"
+  - label: "Dockerfile reference"
+    url: "https://docs.docker.com/reference/dockerfile/"
+    kind: docs
+    accessed: "2026-09-20"
+  - label: "uv — o gerenciador de pacotes Python usado no worker"
+    url: "https://docs.astral.sh/uv/"
+    kind: docs
+    accessed: "2026-09-20"
+---
+
+import ThreeIdioms from "../../../components/diagrams/ThreeIdioms.astro";
+
+Esta stack é poliglota de propósito (ADR 0005), e a razão aparece aqui: **as
+três linguagens produzem Dockerfiles com formas diferentes**, e comparar as três
+ensina mais do que dominar uma.
+
+<ThreeIdioms />
+
+## O princípio, que é um só
+
+O que compila não viaja junto com o que roda. Compilador, gerenciador de
+pacotes, cabeçalhos de desenvolvimento, cache de dependência — nada disso
+precisa existir na imagem que vai para produção, e tudo isso é superfície de
+ataque se existir.
+
+O que muda entre as três é **o que sobra depois de compilar**.
+
+## Go: o que sobra é um arquivo
+
+```dockerfile
+FROM golang:1.25-alpine AS build
+# ... compila estático ...
+
+FROM gcr.io/distroless/static-debian12:nonroot AS dist
+COPY --from=build /out/api-go /api-go
+USER 65532:65532
+ENTRYPOINT ["/api-go"]
+```
+
+Um binário estático não depende de nada do sistema — nem de libc. A stage final
+pode ser literalmente vazia, e o `minimal` desta api é `FROM scratch`.
+
+<Callout type="trap" label="Scratch não tem nada, e 'nada' inclui o que você não lembrou">
+Olhe o que a stage `minimal` precisa copiar à mão:
+
+```dockerfile
+FROM scratch AS minimal
+COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+COPY --from=build /etc/passwd /etc/passwd
+COPY --from=build /out/api-go /api-go
+USER 65534:65534
+```
+
+Sem os **certificados raiz**, toda chamada HTTPS de saída falha — e o erro fala
+em certificado desconhecido, não em arquivo ausente. Sem o `/etc/passwd`, um
+`USER` por nome não resolve.
+
+São duas linhas que ninguém escreve na primeira tentativa, e as duas só doem em
+tempo de execução.
+</Callout>
+
+## Python: o que sobra é um diretório
+
+```dockerfile
+FROM ghcr.io/astral-sh/uv:0.9-python3.13-bookworm-slim AS build
+# ... uv sync: resolve e instala numa venv ...
+
+FROM python:3.13-slim-bookworm AS dist
+COPY --from=build --chown=65532:65532 /app /app
+USER 65532:65532
+ENTRYPOINT ["python", "-m", "worker.main"]
+```
+
+Python não compila para binário: o que se leva é o **interpretador mais a venv**.
+A stage final não pode ser `scratch` porque precisa do Python — e é por isso que
+o worker pesa dez vezes mais que a api, medido em `measured.json`.
+
+<Term word="ambiente virtual" alt="virtual environment" open>
+Um diretório com os pacotes de um projeto, isolado dos pacotes do sistema.
+
+Num container a pergunta natural é "para que isolar, se o container já isola?".
+A resposta é prática: a venv é **um diretório copiável**. O `COPY --from=build
+/app /app` leva a resolução inteira de dependências de um estágio para outro sem
+reinstalar nada — e sem levar o `uv`, o compilador e o cache junto.
+</Term>
+
+<Callout type="why" label="Por que o `--chown` está no COPY">
+`COPY --from=build --chown=65532:65532 /app /app` faz o dono certo **na
+cópia**. A alternativa seria copiar e depois `RUN chown -R`, que cria uma camada
+nova do tamanho de tudo que foi copiado — a imagem carregaria os arquivos duas
+vezes.
+
+É o mesmo motivo da armadilha da lição 2 dos Fundamentos: camada nova não apaga
+o que a anterior gravou.
+</Callout>
+
+## Node: o que sobra não tem Node
+
+```dockerfile
+FROM node:22-alpine AS deps    # só o npm ci
+FROM node:22-alpine AS build   # COPY --from=deps node_modules, e compila
+FROM caddy:2-alpine AS dist    # COPY --from=build /app/dist /srv
+FROM node:22-alpine AS dev     # npm run dev
+```
+
+O Astro compila para HTML estático. A imagem final é **um servidor web com
+arquivos dentro** — não há Node, não há `node_modules`, não há npm.
+
+O estágio `deps` separado existe pelo cache: `npm ci` depende só de
+`package.json` e `package-lock.json`, e isolá-lo faz uma mudança de código não
+invalidar a instalação de dependências. É a lição 4 dos Fundamentos aplicada.
+
+<Callout type="danger" label="E a `dev` é a ÚLTIMA stage do arquivo">
+Um `build:` sem `target:` constrói a **última** stage do Dockerfile. Aqui isso
+significa subir o site com `npm run dev` em produção — servidor de
+desenvolvimento, sem otimização, escutando em 0.0.0.0.
+
+Aconteceu neste repositório. É a armadilha 9 do `CLAUDE.md`, e o conserto é uma
+linha:
+
+```yaml
+build:
+  context: ../site
+  target: dist
+```
+</Callout>
+
+<Tradeoff
+  a="Poucos estágios, um Dockerfile por serviço"
+  b="Muitos estágios, com variantes no mesmo arquivo"
+  whenA="Quando a imagem tem um uso só e a equipe é pequena. Menos para ler, menos para manter, e o `target` nunca vira pegadinha."
+  whenB="Quando você precisa de variantes que compartilham o build: a api tem <code>dist</code> para produção, <code>minimal</code> para medir o piso e <code>debug</code> com shell para investigar. As três saem da MESMA compilação."
+  chose="b"
+  verdict="muitos estágios, e o <code>target</code> explícito em toda invocação — no compose, no Jenkinsfile e no HCL do módulo 4."
+  adr="0005-stack-poliglota"
+/>
+
+<LabExercise check="docker compose build" file="stack/services/api-go/Dockerfile">
+
+A stage `debug` da api copia o mesmo binário da `dist`, mas parte de
+`alpine:3.22` em vez de distroless.
+
+Pergunta: por que ela existe, se é maior e tem mais superfície de ataque?
+
+<Fragment slot="hint">
+Tente `docker exec` num container rodando a imagem `dist`.
+</Fragment>
+
+<Fragment slot="answer">
+
+Porque na imagem distroless **não há o que executar**:
+
+```
+$ podman run --rm --entrypoint sh infra-knowlogy/api-go:dev -c 'id -u'
+Error: crun: executable file `sh` not found in $PATH
+```
+
+Não há shell, não há `ls`, não há `cat`. É ótimo contra invasor e péssimo
+quando você precisa olhar lá dentro às três da manhã.
+
+A `debug` resolve isso mantendo o que importa igual: **o mesmo binário, da mesma
+compilação**. Só a base muda. Você investiga num ambiente que roda o artefato
+idêntico ao de produção, em vez de reconstruir algo parecido.
+
+```bash
+docker build --target debug -t api-debug stack/services/api-go
+docker run --rm -it --entrypoint sh api-debug
+```
+
+O que ela **não** resolve: o container de produção continua sem shell, e trocar
+a imagem em produção para investigar é trocar o artefato sob investigação. A
+resposta séria para isso é um container efêmero de depuração compartilhando os
+namespaces do container problemático — `docker run --pid=container:<id>` — e o
+`kubectl debug` do Kubernetes faz exatamente isso.
+
+</Fragment>
+</LabExercise>
+
+## O que fica
+
+- Um princípio: o que compila não viaja com o que roda.
+- Go deixa **um arquivo** — a stage final pode ser `scratch`, e aí você copia
+  certificado e `/etc/passwd` à mão.
+- Python deixa **um diretório** — a venv, copiada com `--chown` no próprio
+  `COPY` para não duplicar a camada.
+- Node não deixa **nada**: a imagem final é um servidor web com HTML dentro.
+- `deps` separado é cache; `debug` é o mesmo binário com shell; `dev` sendo a
+  última stage é a armadilha 9.
+
+<Quiz set="multi-stage-three-idioms" />

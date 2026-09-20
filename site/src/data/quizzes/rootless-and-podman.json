@@ -1,0 +1,116 @@
+{
+  "note_pt": "Root traduzido, a aritmética do subuid, e as duas defesas que se somam.",
+  "note_en": "Root translated, the subuid arithmetic, and the two defences that add up.",
+  "pt": [
+    {
+      "q": "Sob rootless, o uid 65532 da imagem distroless aparece no host como 589819. De onde vem esse número?",
+      "options": [
+        {
+          "text": "De `524288 + 65532 − 1` — o início da faixa do /etc/subuid mais o uid de dentro.",
+          "correct": true,
+          "why": "O mapa é `[{0 1000 1} {1 524288 65536}]`: o uid 0 vira o seu usuário, e os uids 1 em diante viram 524288 em diante. Não é mágica nem alocação dinâmica — é aritmética conferível."
+        },
+        {
+          "text": "É um uid aleatório que o podman aloca a cada execução.",
+          "why": "Não é aleatório e não muda entre execuções: repetir o comando dá o mesmo 589819, porque a faixa vem de um arquivo do sistema."
+        },
+        {
+          "text": "É o uid do seu usuário somado ao uid de dentro.",
+          "why": "Seria 1000 + 65532 = 66532, que não é o valor observado. A base é a faixa do subuid, não o seu uid."
+        }
+      ]
+    },
+    {
+      "q": "Rodando rootless, o `USER 65532` do Dockerfile ainda importa?",
+      "options": [
+        {
+          "text": "Sim: rootless protege o HOST, e o USER protege o container de si mesmo. São independentes e se somam.",
+          "correct": true,
+          "why": "Fora do container tanto faz — uid 0 e uid 65532 viram usuários sem privilégio no host. Dentro, muda tudo: um processo que se vê como uid 0 escreve em qualquer arquivo da imagem e mexe em /etc; como 65532 ele não faz nada disso."
+        },
+        {
+          "text": "Não: o user namespace já resolve, e o USER vira redundante.",
+          "why": "É a conclusão intuitiva e ela ignora a fronteira de dentro. O invasor que consegue execução herda o que o processo pode fazer NO CONTAINER, e aí uid 0 e 65532 são muito diferentes."
+        },
+        {
+          "text": "Só importa se você publicar porta abaixo de 1024.",
+          "why": "Porta baixa é recusada no rootless independentemente do USER — é o processo do HOST que não tem NET_BIND_SERVICE. As duas coisas não se relacionam."
+        }
+      ]
+    },
+    {
+      "q": "Qual consequência de NÃO haver daemon é a mais relevante para esta stack?",
+      "options": [
+        {
+          "text": "Não existe socket root para roubar — e toda a tensão do ADR 0003 existe justamente porque existe um.",
+          "correct": true,
+          "why": "O Alloy atrás de um proxy de allowlist, o `label=disable` do cAdvisor, a sonda SELinux do módulo 4: tudo isso são consequências de o socket do Docker ser root. Sem daemon, o problema tem outra forma."
+        },
+        {
+          "text": "Os containers param quando você fecha o terminal.",
+          "why": "Não param: eles ficam sob um `conmon`, que sobrevive à sessão. Daemon é um serviço CENTRAL, e a ausência dele não significa ausência de processo supervisor."
+        },
+        {
+          "text": "O consumo de memória em repouso cai a zero.",
+          "why": "Cai bastante e não é o ponto. A diferença que importa é de modelo de ameaça, não de consumo."
+        }
+      ]
+    }
+  ],
+  "en": [
+    {
+      "q": "Under rootless, the distroless image's uid 65532 shows on the host as 589819. Where does that number come from?",
+      "options": [
+        {
+          "text": "From `524288 + 65532 − 1` — the start of the /etc/subuid range plus the inside uid.",
+          "correct": true,
+          "why": "The map is `[{0 1000 1} {1 524288 65536}]`: uid 0 becomes your user, and uids from 1 onwards become 524288 onwards. It is neither magic nor dynamic allocation — it is checkable arithmetic."
+        },
+        {
+          "text": "It is a random uid podman allocates on each run.",
+          "why": "It is not random and does not change between runs: repeating the command gives the same 589819, because the range comes from a system file."
+        },
+        {
+          "text": "It is your user's uid plus the inside uid.",
+          "why": "That would be 1000 + 65532 = 66532, which is not the observed value. The base is the subuid range, not your uid."
+        }
+      ]
+    },
+    {
+      "q": "Running rootless, does the Dockerfile's `USER 65532` still matter?",
+      "options": [
+        {
+          "text": "Yes: rootless protects the HOST, and USER protects the container from itself. They are independent and they add up.",
+          "correct": true,
+          "why": "Outside the container it makes no difference — uid 0 and uid 65532 both become unprivileged users on the host. Inside, everything changes: a process seeing itself as uid 0 writes to any file in the image and edits /etc; as 65532 it does none of that."
+        },
+        {
+          "text": "No: the user namespace already handles it, and USER becomes redundant.",
+          "why": "The intuitive conclusion, and it ignores the inside boundary. An attacker achieving execution inherits what the process can do IN THE CONTAINER, and there uid 0 and 65532 are very different."
+        },
+        {
+          "text": "It only matters if you publish a port below 1024.",
+          "why": "Low ports are refused under rootless regardless of USER — it is the HOST process that lacks NET_BIND_SERVICE. The two are unrelated."
+        }
+      ]
+    },
+    {
+      "q": "Which consequence of having NO daemon is most relevant to this stack?",
+      "options": [
+        {
+          "text": "There is no root socket to steal — and all of ADR 0003's tension exists precisely because there is one.",
+          "correct": true,
+          "why": "Alloy behind an allowlist proxy, cAdvisor's `label=disable`, module 4's SELinux probe: all of those are consequences of the Docker socket being root. Without a daemon, the problem takes a different shape."
+        },
+        {
+          "text": "Containers stop when you close the terminal.",
+          "why": "They do not: they sit under a `conmon`, which survives the session. A daemon is a CENTRAL service, and its absence does not mean there is no supervising process."
+        },
+        {
+          "text": "Idle memory usage drops to zero.",
+          "why": "It drops considerably and that is not the point. The difference that matters is in the threat model, not in consumption."
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,219 @@
+---
+key: reproducible-builds
+lang: en
+track: producao
+order: 6
+title: "Reproducible at which layer?"
+summary: "Two builders, the same source: the Go binary comes out byte for byte identical and the image digest does NOT. Nothing is wrong — and knowing why separates a claim from a slogan."
+minutes: 14
+tags: [production, reproducibility, buildkit, digest, supply-chain]
+sources:
+  - label: "Reproducible Builds"
+    url: "https://reproducible-builds.org/"
+    kind: spec
+    accessed: "2026-09-20"
+  - label: "Docker — build cache"
+    url: "https://docs.docker.com/build/cache/"
+    kind: docs
+    accessed: "2026-09-20"
+  - label: "OCI Image Format Specification"
+    url: "https://github.com/opencontainers/image-spec"
+    kind: spec
+    accessed: "2026-09-20"
+  - label: "Ken Thompson — Reflections on Trusting Trust (1984)"
+    url: "https://www.cs.cmu.edu/~rdriley/487/papers/Thompson_1984_ReflectionsonTrustingTrust.pdf"
+    kind: talk
+    accessed: "2026-09-20"
+---
+
+import ReproducibilityLayers from "../../../components/diagrams/ReproducibilityLayers.astro";
+
+"Reproducible build" is one of those phrases everyone approves of and almost
+nobody measures. Module 3's gate measures it — and the result has two different
+halves.
+
+<ReproducibilityLayers />
+
+## The experiment, which the gate runs by itself
+
+`make cicd-verify` builds the api **twice**, on different builders:
+
+1. inside Jenkins, with **rootless BuildKit**, no daemon and no privilege;
+2. on the local machine, with an ordinary `docker build`.
+
+Then it extracts the binary from both images and compares them byte for byte.
+
+```bash
+cmp -s "$tmp/jenkins" "$tmp/local"   # the Go binary
+docker inspect -f '{{.Id}}' ...      # the whole image digest
+```
+
+<Callout type="why" label="The binary matches, and that is what supports the claim">
+The Go compiler is deterministic by design: same source, same flags, same
+toolchain version, same binary. `go.sum` guarantees the dependencies are exactly
+the same, and `FROM golang:...@sha256:` guarantees the compiler is the same.
+
+That is the claim that matters for the supply chain: **the artifact that runs is
+derivable from the source**, and anybody can repeat the build and check.
+</Callout>
+
+## And the digest does not match, and that is fine
+
+```json
+"goBinaryIdentical": true,
+"imageDigestIdentical": false
+```
+
+Three reasons, all of packaging and none of content:
+
+- **timestamps** on each layer — the creation moment goes into the metadata;
+- **ordering of entries** inside each layer's tar, which depends on how the
+  builder walks the filesystem;
+- **builder metadata** written into the image configuration.
+
+<Term word="image digest" alt="image digest" open>
+The SHA-256 hash of the image's **manifest** — which in turn references the
+hashes of the configuration and of every layer.
+
+Because it covers everything, it changes if any byte of any layer changes. That
+is what makes a digest a trustworthy address (Fundamentals lesson 2) and it is
+also what makes it sensitive to things that are not your code.
+
+Two different digests do **not** mean two different programs. They mean two
+different packagings, which may contain the same program.
+</Term>
+
+<Callout type="trap" label="Which is why the gate treats them differently">
+In `cicd-verify.sh`:
+
+```bash
+if cmp -s "$tmp/jenkins" "$tmp/local"; then
+  ok "o binário Go do Jenkins é byte a byte igual ao do docker build local"
+else
+  bad "o binário do Jenkins difere do local"
+fi
+# ...
+printf '   digest da imagem inteira igual: %s (medição, não checagem)\n' "$M_DIGEST_MATCH"
+```
+
+The binary is a **check**: if it diverges, something is wrong and the gate
+fails. The digest is a **measurement**: recorded, displayed, and failing
+nothing.
+
+Turning the second into a check would make the gate fail over a timestamp — and
+a gate that fails for no reason is a gate somebody switches off.
+</Callout>
+
+## You can make the digest match
+
+There are two levers, and BuildKit supports both:
+
+```bash
+# freezes the layers' timestamps
+SOURCE_DATE_EPOCH=0 docker build ...
+
+# rewrites the timestamps in the output image
+buildctl build --output type=image,rewrite-timestamp=true,...
+```
+
+<Tradeoff
+  a="Reproducibility at the ARTIFACT level"
+  b="Reproducibility at the IMAGE level"
+  whenA="When the question is “did this binary come from this source?”. That is what signing and provenance answer, and what holds the supply chain up. It costs nothing beyond pinning the inputs."
+  whenB="When the question is “do two independent builds produce the SAME address?” — third-party auditing, multi-party verification, reproducible distribution. It costs freezing timestamps and accepting flattened metadata."
+  chose="a"
+  verdict="the artifact, because it is what module 3's signature protects: cosign signs that build's DIGEST, and lesson cicd-07 shows that signing the tag would be signing a pointer."
+  adr="0004-pin-por-digest"
+/>
+
+<Callout type="danger" label="And what none of this guarantees">
+Reproducibility says the same source produces the same artifact. It does **not**
+say the source is good, that the dependencies are trustworthy, or that the
+compiler was not tampered with.
+
+The classic attack — Ken Thompson's *trusting trust* — is precisely a compiler
+that inserts malicious code and reproduces itself perfectly. The defence against
+that is not reproducibility alone, it is **multi-party reproducibility**, with
+independent builders arriving at the same artifact.
+
+That is exactly what image-level reproducibility is for — and the reason it is
+not wasted effort when the project is distributed.
+</Callout>
+
+<LabExercise check="o binário Go do Jenkins é byte a byte igual" file="tools/scripts/cicd-verify.sh">
+
+The Jenkins build uses rootless BuildKit in a container; the local one uses the
+Docker daemon running as root. These are very different environments.
+
+Question: why does the binary come out identical anyway?
+
+<Fragment slot="hint">
+List what actually goes into the compilation — and what the Dockerfile does to
+fix each item.
+</Fragment>
+
+<Fragment slot="answer">
+
+Because everything that goes into the compilation is **pinned**, and the
+surrounding environment does not go in.
+
+Three locks, each one a line in the Dockerfile or the repository:
+
+```dockerfile
+FROM golang:1.25-alpine@sha256:1ae0735f...   # the compiler, by digest
+```
+
+```
+go.sum        # every dependency, by hash
+CGO_ENABLED=0 # no linking against the environment's libc
+```
+
+`CGO_ENABLED=0` is the subtlest of the three: with cgo enabled, the build would
+use the **environment's** gcc and headers, and then Jenkins' Alpine and the local
+one would have to be identical down to the patch version. Without cgo, Go
+compiles on its own and the surrounding system stops participating.
+
+What does **not** go in: who is root, whether there is a daemon, which
+snapshotter is used, the machine's clock. Those are properties of the builder,
+not of the compilation — and that is why the image digest differs while the
+binary does not.
+
+The general lesson: **reproducibility is a property of the INPUTS, not of the
+environment.** Pin the inputs and the environment stops mattering; leave one
+input loose — a mutable tag, a dependency without a hash — and no amount of care
+about the environment saves you.
+
+</Fragment>
+</LabExercise>
+
+<FieldNote
+  source="Ken Thompson — Reflections on Trusting Trust, Turing Award lecture (1984)"
+  url="https://www.cs.cmu.edu/~rdriley/487/papers/Thompson_1984_ReflectionsonTrustingTrust.pdf"
+  kind="talk"
+  accessed="2026-09-20"
+>
+Three pages, and the argument no amount of individual reproducibility knocks
+down: Thompson describes a compiler that inserts a backdoor into `login` **and**
+inserts itself when recompiling the compiler. The source stays clean; the binary
+does not.
+
+His conclusion is uncomfortable and still holds — *"you can't trust code that you
+did not totally create yourself"*. What the industry built since is not a
+refutation but a mitigation: multi-party reproducibility, with independent
+builders arriving at the same artifact.
+</FieldNote>
+
+## What sticks
+
+- Reproducible **at which layer** is the question missing from most
+  conversations.
+- The Go binary matches byte for byte; the image digest does not, and that is
+  expected.
+- The gate treats the first as a check and the second as a measurement — on
+  purpose.
+- Timestamps, tar ordering and builder metadata explain the difference.
+- `SOURCE_DATE_EPOCH` and `rewrite-timestamp` attack the first reason.
+- Reproducibility is a property of the **inputs**: pin the compiler, pin the
+  dependencies, turn cgo off.
+
+<Quiz set="reproducible-builds" />

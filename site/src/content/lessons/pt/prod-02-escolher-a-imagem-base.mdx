@@ -1,0 +1,205 @@
+---
+key: choosing-a-base-image
+lang: pt
+track: producao
+order: 2
+title: Escolher a imagem base
+summary: "Entre a menor e a maior da mesma api há 3,8 MB. Escolher por isso é escolher pela razão errada — o que muda de verdade é o que você consegue olhar quando dá problema."
+minutes: 14
+tags: [producao, imagem-base, distroless, scratch, alpine, superficie-de-ataque]
+sources:
+  - label: "Distroless — imagens sem distribuição"
+    url: "https://github.com/GoogleContainerTools/distroless"
+    kind: docs
+    accessed: "2026-09-20"
+  - label: "OWASP — Docker Security Cheat Sheet"
+    url: "https://cheatsheetseries.owasp.org/cheatsheets/Docker_Security_Cheat_Sheet.html"
+    kind: docs
+    accessed: "2026-09-20"
+  - label: "Dockerfile reference — FROM scratch"
+    url: "https://docs.docker.com/reference/dockerfile/"
+    kind: docs
+    accessed: "2026-09-20"
+  - label: "PEP 656 — musllinux: rodas binárias para distribuições com musl"
+    url: "https://peps.python.org/pep-0656/"
+    kind: spec
+    accessed: "2026-09-20"
+---
+
+import BaseImageLadder from "../../../components/diagrams/BaseImageLadder.astro";
+
+O Dockerfile da api tem três stages finais diferentes, com o **mesmo binário**
+dentro. É um experimento controlado: só a base muda.
+
+<BaseImageLadder />
+
+## O tamanho é a razão errada
+
+Entre `scratch` (5,1 MB) e `alpine` (8,9 MB) há menos de quatro megabytes. Num
+mundo de links de gigabit e cache de camada, isso não decide nada — e escolher
+por esse número é o erro mais comum da área.
+
+O que decide é **o que some junto**.
+
+<Callout type="why" label="O que cada degrau tira de você">
+| base | shell | gerenciador de pacotes | CA raiz | usuário não-root |
+|---|---|---|---|---|
+| `scratch` | não | não | **não** | você cria o `/etc/passwd` |
+| `distroless:nonroot` | não | não | sim | sim, pronto |
+| `alpine` | sim (`sh`) | sim (`apk`) | sim | você cria |
+
+A coluna que morde primeiro é a dos **certificados raiz**. Um binário Go em
+`scratch` que faça uma chamada HTTPS falha com erro de certificado
+desconhecido — e nada na mensagem sugere que faltou copiar um arquivo.
+
+É por isso que a stage `minimal` desta api copia três coisas à mão, e não uma.
+</Callout>
+
+<Term word="superfície de ataque" alt="attack surface" open>
+Tudo que um invasor pode usar depois de conseguir executar código.
+
+Num container com `sh`, `curl` e `apk`, quem entra baixa ferramenta, lê arquivo,
+varre a rede interna. Num distroless, o mesmo invasor tem **o seu binário e mais
+nada** — não há com o que montar o passo seguinte.
+
+Isso não impede a invasão: impede a **escalada**. É defesa em profundidade, e a
+trilha de Segurança mede o efeito dela.
+</Term>
+
+## O custo, que é real e é operacional
+
+```
+$ docker exec -it <container-da-api> sh
+OCI runtime exec failed: exec failed: unable to start container process:
+exec: "sh": executable file not found in $PATH
+```
+
+Esse erro chega no pior momento possível. A imagem distroless é ótima em
+segurança e hostil em investigação — e a resposta honesta não é abandoná-la, é
+ter um caminho de depuração combinado antes do incidente (a stage `debug` da
+lição 1).
+
+<Callout type="trap" label="E o `HEALTHCHECK` escrito em shell não roda">
+```dockerfile
+# não funciona numa imagem sem shell
+HEALTHCHECK CMD curl -f http://localhost:8080/healthz || exit 1
+```
+
+Não há `curl`, não há `sh`, e nem o `||` existe sem interpretador. A api desta
+stack resolve com um **subcomando do próprio binário**:
+
+```dockerfile
+HEALTHCHECK --interval=10s --timeout=3s --retries=3 \
+    CMD ["/api-go", "healthcheck"]
+```
+
+Forma exec, sem shell, e o healthcheck passa a ser código que você testa junto
+com o resto.
+</Callout>
+
+## Python não escolhe
+
+O worker pesa 50,3 MB contra os 5,7 da api, e não há truque que resolva: Python
+precisa do interpretador, e o interpretador precisa de libc.
+
+O que dá para escolher é a **variante**: a stage `fat` usa a imagem do `uv`
+(71,3 MB) e a `dist` usa `python:3.13-slim-bookworm` (50,3 MB). Vinte e um
+megabytes de diferença, que são o `uv` e as ferramentas de build que não
+precisam ir junto.
+
+<Tradeoff
+  a="Distroless (ou scratch)"
+  b="Alpine (ou slim)"
+  whenA="Quando o artefato é autocontido — binário estático, ou interpretador com venv copiada — e você tem um caminho de depuração combinado. Menor superfície de ataque, e o `docker exec` deixa de ser uma opção."
+  whenB="Quando a equipe precisa entrar no container com frequência, quando o processo depende de utilitários de sistema, ou quando o custo de não conseguir investigar é maior que o risco da superfície extra."
+  chose="a"
+  verdict="distroless para a api, slim para o worker, e a stage <code>debug</code> como caminho combinado. A escolha muda se alguém precisar investigar em produção toda semana."
+  adr="0005-stack-poliglota"
+/>
+
+<Callout type="danger" label="Alpine tem uma pegadinha que não é de tamanho">
+O Alpine usa **musl** em vez de glibc. Para um binário Go estático, tanto faz.
+Para um wheel Python compilado contra glibc, ou um binário de terceiro que
+assume glibc, não: o programa simplesmente não executa, ou executa e quebra
+numa chamada específica.
+
+É por isso que o worker desta stack usa `python:3.13-slim-bookworm` (Debian, com
+glibc) e não a variante Alpine — a decisão é de compatibilidade, e o tamanho
+veio junto.
+</Callout>
+
+<RunIt>
+```bash
+# Os três, lado a lado, do mesmo Dockerfile
+docker build --target minimal -t api:scratch    stack/services/api-go
+docker build --target dist    -t api:distroless stack/services/api-go
+docker build --target debug   -t api:alpine     stack/services/api-go
+docker images --format '{{.Tag}}\t{{.Size}}' | grep -E '^(scratch|distroless|alpine)'
+```
+</RunIt>
+
+<LabExercise check="imagem da api é distroless" file="stack/services/api-go/Dockerfile">
+
+A stage `dist` usa `gcr.io/distroless/static-debian12:nonroot`, com 13 camadas.
+A `minimal` usa `scratch`, com 3.
+
+Pergunta: por que a imagem **menor** tem mais que o dobro de camadas?
+
+<Fragment slot="hint">
+Camada não é o mesmo que tamanho. Olhe de onde vêm as camadas de cada uma.
+</Fragment>
+
+<Fragment slot="answer">
+
+Porque as camadas da `dist` **já vêm prontas na base**. O distroless é uma
+imagem publicada pelo Google com dez camadas próprias — certificados, fuso
+horário, `/etc/passwd` com o usuário `nonroot`, licenças — e o seu `COPY` só
+acrescenta mais uma no topo.
+
+O `scratch` não tem camada nenhuma. As três da `minimal` são exatamente os três
+`COPY` que o Dockerfile escreve: certificados, `/etc/passwd` e o binário.
+
+```
+api-go  scratch            5,1 MB    3 layers
+api-go  distroless/static  5,7 MB   13 layers
+```
+
+A `minimal` é menor porque copia **só o que usa**; a `dist` é maior porque traz
+coisas que você talvez precise — e é 0,6 MB por não ter que lembrar delas.
+
+A lição geral: **contagem de camadas não é proxy de tamanho.** Dez camadas de
+metadados pesam menos que uma camada com um `node_modules` dentro. Otimizar
+número de camadas é uma preocupação da era pré-BuildKit que sobreviveu à razão
+que a justificava.
+
+</Fragment>
+</LabExercise>
+
+<FieldNote
+  source="PEP 656 — musllinux"
+  url="https://peps.python.org/pep-0656/"
+  kind="spec"
+  accessed="2026-09-20"
+>
+A incompatibilidade musl × glibc não é folclore: o ecossistema Python precisou
+de uma PEP inteira para ela. As rodas `manylinux` (PEP 513) são compiladas
+contra glibc e **não** instalam em Alpine; a `musllinux` veio em 2021 para
+cobrir o outro lado, e a adoção dela pelos projetos é bem menor.
+
+Na prática isso significa que `pip install` numa imagem Alpine muitas vezes cai
+para compilar do fonte — build lento, e uma cadeia de ferramentas de compilação
+na imagem que você estava justamente tentando evitar.
+</FieldNote>
+
+## O que fica
+
+- A diferença de tamanho entre as bases é pequena; **a diferença de capacidade
+  não é**.
+- `scratch` não tem certificado raiz — e o erro que isso causa não menciona
+  arquivo.
+- Distroless custa o `docker exec`: combine o caminho de depuração antes.
+- `HEALTHCHECK` em shell não roda sem shell — use subcomando do próprio binário.
+- Alpine é musl, e isso quebra binário compilado contra glibc.
+- Contagem de camadas não é proxy de tamanho.
+
+<Quiz set="choosing-a-base-image" />

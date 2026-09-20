@@ -1,0 +1,89 @@
+---
+/**
+ * prod-06 — em que camada "reprodutível" é verdade.
+ *
+ * Os dois booleanos vêm de cicd-measured.json, gravado pelo `make cicd-verify`
+ * ao comparar o artefato do Jenkins com um `docker build` local.
+ */
+import Figure from "../Figure.astro";
+import type { Lang } from "../../i18n/ui";
+import cicd from "../../data/cicd-measured.json";
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+const bin = cicd.measurements.goBinaryIdentical;
+const dig = cicd.measurements.imageDigestIdentical;
+
+const C = {
+  pt: {
+    head: "dois builders diferentes, o mesmo código-fonte",
+    b1: "BuildKit rootless, dentro do Jenkins",
+    b2: "docker build, na máquina local",
+    camadas: [
+      { nome: "o binário Go", ok: bin, nota: "byte a byte igual — cmp não acha diferença" },
+      { nome: "o digest da imagem", ok: dig, nota: "diferente, e isso é esperado" },
+    ],
+    porque: "por que o digest diverge sem nada estar errado",
+    razoes: [
+      "carimbo de tempo de criação em cada camada",
+      "ordem das entradas dentro do tar de cada camada",
+      "metadados do builder gravados na configuração da imagem",
+    ],
+    fix: "SOURCE_DATE_EPOCH e `--output type=image,rewrite-timestamp=true` atacam a primeira razão",
+    punch: "\"reprodutível\" precisa dizer EM QUE CAMADA — e a que importa para a cadeia de suprimentos é o artefato, não o empacotamento",
+    caption:
+      "Dois builders diferentes, o mesmo fonte, e a resposta depende de onde você olha. O <b>binário Go</b> sai byte a byte idêntico — é o que sustenta a afirmação de que o build é determinístico. O <b>digest da imagem inteira</b> diverge, e não há nada errado: ele inclui carimbos de tempo e a ordem das entradas no tar. Por isso o portão do módulo 3 trata o primeiro como <b>checagem</b> e o segundo como <b>medição</b>.",
+    alt: "Comparação entre dois builders, mostrando binário idêntico e digest de imagem diferente.",
+  },
+  en: {
+    head: "two different builders, the same source",
+    b1: "rootless BuildKit, inside Jenkins",
+    b2: "docker build, on the local machine",
+    camadas: [
+      { nome: "the Go binary", ok: bin, nota: "byte for byte identical — cmp finds no difference" },
+      { nome: "the image digest", ok: dig, nota: "different, and that is expected" },
+    ],
+    porque: "why the digest diverges with nothing being wrong",
+    razoes: [
+      "creation timestamps on every layer",
+      "ordering of entries inside each layer's tar",
+      "builder metadata written into the image config",
+    ],
+    fix: "SOURCE_DATE_EPOCH and `--output type=image,rewrite-timestamp=true` attack the first reason",
+    punch: "\"reproducible\" has to say AT WHICH LAYER — and the one that matters for the supply chain is the artifact, not the packaging",
+    caption:
+      "Two different builders, the same source, and the answer depends on where you look. The <b>Go binary</b> comes out byte for byte identical — that is what supports the claim that the build is deterministic. The <b>whole image digest</b> diverges, and nothing is wrong: it includes timestamps and tar entry ordering. That is why module 3's gate treats the first as a <b>check</b> and the second as a <b>measurement</b>.",
+    alt: "Comparison between two builders, showing an identical binary and a different image digest.",
+  },
+}[lang];
+---
+<Figure caption={C.caption} alt={C.alt}>
+  <svg viewBox="0 0 700 248" xmlns="http://www.w3.org/2000/svg" font-size="11">
+    <text x="14" y="16" class="dg-faint" font-size="9">{C.head}</text>
+
+    <rect x="14" y="26" width="250" height="34" rx="6" class="dg-box dg-box--raised" />
+    <text x="139" y="47" text-anchor="middle" class="dg-title" font-size="9.5">{C.b1}</text>
+    <rect x="436" y="26" width="250" height="34" rx="6" class="dg-box dg-box--raised" />
+    <text x="561" y="47" text-anchor="middle" class="dg-title" font-size="9.5">{C.b2}</text>
+
+    {C.camadas.map((c, i) => {
+      const y = 78 + i * 42;
+      return (
+        <g>
+          <rect x="280" y={y} width="140" height="32" rx="6"
+                class={`dg-box ${c.ok ? "dg-box--accent" : "dg-box--danger"}`} />
+          <text x="350" y={y + 20} text-anchor="middle" class="dg-title" font-size="9.5">{c.nome}</text>
+          <text x="350" y={y + 44} text-anchor="middle" class="dg-faint" font-size="8.5">{c.nota}</text>
+          <path d={`M264 ${y + 16} L274 ${y + 16}`} class="dg-line" fill="none" />
+          <path d={`M426 ${y + 16} L436 ${y + 16}`} class="dg-line" fill="none" />
+        </g>
+      );
+    })}
+
+    <text x="14" y="176" class="dg-muted" font-size="10" font-weight="620">{C.porque}</text>
+    {C.razoes.map((t, i) => (
+      <text x="14" y={192 + i * 14} class="dg-faint" font-size="8.5">· {t}</text>
+    ))}
+    <text x="380" y="192" class="dg-faint" font-size="8.5">{C.fix}</text>
+    <text x="14" y="242" class="dg-title" font-size="9.5">{C.punch}</text>
+  </svg>
+</Figure>

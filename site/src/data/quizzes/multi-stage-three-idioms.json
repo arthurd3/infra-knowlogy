@@ -1,0 +1,116 @@
+{
+  "note_pt": "O que sobra de cada linguagem, e a stage que é a última do arquivo.",
+  "note_en": "What each language leaves behind, and the stage that is last in the file.",
+  "pt": [
+    {
+      "q": "Por que a stage final do worker Python não pode ser `FROM scratch`?",
+      "options": [
+        {
+          "text": "Porque Python não compila para binário — é preciso levar o interpretador, e ele depende de libc.",
+          "correct": true,
+          "why": "É o que faz o worker pesar dez vezes mais que a api, medido em measured.json. O que dá para escolher é a variante do interpretador: a stage `dist` usa python:3.13-slim-bookworm e a `fat` usa a imagem do uv, 21 MB maior."
+        },
+        {
+          "text": "Porque a venv precisa de permissão de escrita e scratch é read-only.",
+          "why": "`scratch` não é read-only — ele é vazio. E a venv aqui é copiada pronta, sem precisar escrever em tempo de execução: o rootfs read-only do compose.prod prova isso."
+        },
+        {
+          "text": "Porque o uv não funciona sem gerenciador de pacotes do sistema.",
+          "why": "O uv roda só na stage `build`; ele nem vai para a imagem final. O problema é o interpretador na stage de execução, não a ferramenta de instalação."
+        }
+      ]
+    },
+    {
+      "q": "O Dockerfile do site tem quatro stages e a `dev` é a última. Qual é o risco?",
+      "options": [
+        {
+          "text": "Um `build:` sem `target:` constrói a ÚLTIMA stage — e o site sobe com `npm run dev` em produção.",
+          "correct": true,
+          "why": "É a armadilha 9 do CLAUDE.md, e aconteceu neste repositório. O container sobe, serve o site, e só em produção alguém descobre que é o servidor de desenvolvimento. O conserto é uma linha: `target: dist`."
+        },
+        {
+          "text": "O BuildKit constrói as quatro stages e a imagem fica quatro vezes maior.",
+          "why": "O BuildKit pula stage que o alvo pedido não precisa — é uma das vantagens dele sobre o construtor antigo. O problema não é tamanho, é QUAL stage vira a imagem."
+        },
+        {
+          "text": "A stage `dev` invalida o cache das anteriores.",
+          "why": "Cada stage tem cache próprio, e a `dev` até reaproveita o `node_modules` da `deps`. Ordem no arquivo não invalida cache de stage anterior."
+        }
+      ]
+    },
+    {
+      "q": "Por que o `COPY --from=build --chown=65532:65532` usa `--chown` em vez de um `RUN chown -R` depois?",
+      "options": [
+        {
+          "text": "Porque `RUN chown -R` cria uma camada nova do tamanho de tudo que foi copiado — a imagem carregaria os arquivos duas vezes.",
+          "correct": true,
+          "why": "Camada nova não apaga o que a anterior gravou: ela acrescenta. Mudar o dono de um diretório grande grava o diretório inteiro de novo. É a mesma física da lição 2 dos Fundamentos, onde apagar um arquivo numa camada nova não diminui a imagem."
+        },
+        {
+          "text": "Porque `RUN chown` exige a capability CHOWN, que o container não tem.",
+          "why": "Durante o BUILD o processo tem privilégio; o cap_drop do compose.prod vale em tempo de execução. O comando funcionaria — e deixaria a camada extra."
+        },
+        {
+          "text": "Porque o `--chown` é mais rápido de executar.",
+          "why": "Ele é, e a diferença de tempo é irrelevante perto da diferença de TAMANHO da imagem publicada, que é o que a decisão otimiza."
+        }
+      ]
+    }
+  ],
+  "en": [
+    {
+      "q": "Why can the Python worker's final stage not be `FROM scratch`?",
+      "options": [
+        {
+          "text": "Because Python does not compile to a binary — the interpreter has to come along, and it depends on libc.",
+          "correct": true,
+          "why": "It is what makes the worker weigh ten times the api, measured in measured.json. What you can choose is the interpreter variant: the `dist` stage uses python:3.13-slim-bookworm and `fat` uses the uv image, 21 MB larger."
+        },
+        {
+          "text": "Because the venv needs write permission and scratch is read-only.",
+          "why": "`scratch` is not read-only — it is empty. And the venv here is copied ready-made, with no runtime writes needed: compose.prod's read-only rootfs proves it."
+        },
+        {
+          "text": "Because uv does not work without a system package manager.",
+          "why": "uv runs only in the `build` stage; it never reaches the final image. The problem is the interpreter in the runtime stage, not the install tool."
+        }
+      ]
+    },
+    {
+      "q": "The site's Dockerfile has four stages and `dev` is the last. What is the risk?",
+      "options": [
+        {
+          "text": "A `build:` without `target:` builds the LAST stage — and the site ships `npm run dev` to production.",
+          "correct": true,
+          "why": "It is trap 9 in CLAUDE.md, and it happened in this repository. The container starts, serves the site, and only in production does somebody discover it is the development server. The fix is one line: `target: dist`."
+        },
+        {
+          "text": "BuildKit builds all four stages and the image becomes four times larger.",
+          "why": "BuildKit skips stages the requested target does not need — one of its advantages over the old builder. The problem is not size, it is WHICH stage becomes the image."
+        },
+        {
+          "text": "The `dev` stage invalidates the earlier stages' cache.",
+          "why": "Each stage has its own cache, and `dev` even reuses `deps`' `node_modules`. File ordering does not invalidate an earlier stage's cache."
+        }
+      ]
+    },
+    {
+      "q": "Why does `COPY --from=build --chown=65532:65532` use `--chown` instead of a later `RUN chown -R`?",
+      "options": [
+        {
+          "text": "Because `RUN chown -R` creates a new layer the size of everything copied — the image would carry the files twice.",
+          "correct": true,
+          "why": "A new layer does not erase what the previous one wrote: it adds. Changing the owner of a large directory writes the whole directory again. It is the same physics as Fundamentals lesson 2, where deleting a file in a new layer does not shrink the image."
+        },
+        {
+          "text": "Because `RUN chown` requires the CHOWN capability, which the container lacks.",
+          "why": "During the BUILD the process has privilege; compose.prod's cap_drop applies at runtime. The command would work — and leave the extra layer behind."
+        },
+        {
+          "text": "Because `--chown` is faster to execute.",
+          "why": "It is, and the time difference is irrelevant next to the difference in the published image's SIZE, which is what the decision optimises."
+        }
+      ]
+    }
+  ]
+}

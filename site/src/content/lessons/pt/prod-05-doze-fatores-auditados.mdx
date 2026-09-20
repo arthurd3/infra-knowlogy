@@ -1,0 +1,200 @@
+---
+key: twelve-factor-measured
+lang: pt
+track: producao
+order: 5
+title: Os doze fatores, auditados contra esta stack
+summary: "Dez cumpre, dois são desvio declarado, um não cumpre. E o que não cumpre é exatamente a pergunta que fez o módulo 2 existir."
+minutes: 14
+tags: [producao, 12-factor, configuracao, paridade, descartabilidade]
+sources:
+  - label: "The Twelve-Factor App"
+    url: "https://12factor.net/"
+    kind: spec
+    accessed: "2026-09-20"
+  - label: "The Twelve-Factor App — em português"
+    url: "https://12factor.net/pt_br/"
+    kind: spec
+    accessed: "2026-09-20"
+  - label: "Compose Specification"
+    url: "https://github.com/compose-spec/compose-spec/blob/main/spec.md"
+    kind: spec
+---
+
+import TwelveFactorAudit from "../../../components/diagrams/TwelveFactorAudit.astro";
+
+Os doze fatores são de 2011 e envelheceram bem — mas viraram checklist de slide,
+recitado sem ser conferido. Esta lição faz o contrário: **audita**, item por
+item, com comando.
+
+<TwelveFactorAudit />
+
+## O que a stack cumpre sem esforço
+
+Quatro fatores caíram de graça, porque container já os impõe:
+
+- **II. Dependências** — `go.sum`, `uv.lock`, `package-lock.json` e imagem base
+  pinada por digest. Não há "instale isto antes"; o Dockerfile é a declaração.
+- **V. Build, release, run** — todo Dockerfile tem stage `dist`, e a **imagem é
+  o release**. Rodar é `docker run`, e não dá para editar código no meio.
+- **VII. Vínculo de porta** — a api escuta em `:8080` sozinha, sem Apache ou
+  Nginx injetado por fora.
+- **XI. Logs** — um `grep` não achou nenhuma aplicação escrevendo arquivo de
+  log. Todas escrevem em stdout, e o Alloy coleta.
+
+<Callout type="why" label="Fator XI não é sobre formato, é sobre quem escreve">
+O fator diz: a aplicação **não gerencia** arquivo de log. Ela escreve no fluxo
+de saída e acabou — rotação, retenção e envio são problema do ambiente.
+
+Nesta stack isso é o que permite o `config.alloy` existir sem tocar em nenhuma
+aplicação. Se a api escrevesse em `/var/log/api.log`, o coletor precisaria de um
+volume compartilhado, e a rotação viraria responsabilidade dela.
+
+A prova é a ausência: nenhuma das três aplicações tem uma linha de configuração
+de arquivo de log.
+</Callout>
+
+## Os dois desvios, declarados
+
+**III. Configuração.** O fator manda pôr tudo no ambiente. Esta stack põe quase
+tudo — e o **segredo entra por caminho de arquivo**:
+
+```yaml
+POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+```
+
+<Callout type="trap" label="Aqui o fator está desatualizado, e desviar é o certo">
+Variável de ambiente vaza por caminhos que 2011 não previa: `docker inspect`
+mostra, `/proc/<pid>/environ` mostra, processo filho herda, e relatório de crash
+costuma capturar o ambiente inteiro.
+
+A convenção `<VAR>_FILE` passa o **caminho**, e quem abre o arquivo é a
+aplicação. É mais seguro do que o fator pede — e é por isso que o desvio é
+declarado em vez de escondido.
+
+Vale notar que o próprio fator já admite parte disso: ele fala em "config no
+ambiente" para distinguir de config em arquivo **versionado**, que é o problema
+real que ele ataca.
+</Callout>
+
+**X. Paridade dev/prod.** O overlay de desenvolvimento quebra a paridade de
+propósito:
+
+```yaml
+web:
+  build: {target: dev}
+  command: ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
+api:
+  build: {target: debug}
+```
+
+O site roda `astro dev` com hot-reload, e a api usa a stage `debug` com shell. É
+uma quebra real, e o ganho — ciclo de segundos em vez de minutos — é o motivo de
+ela existir. O que mantém a quebra sob controle é a **mesma origem**: as duas
+stages saem do mesmo Dockerfile e do mesmo código.
+
+<Term word="paridade dev/prod" alt="dev/prod parity" open>
+Manter desenvolvimento, homologação e produção o mais parecidos possível — em
+tempo, em pessoal e em ferramenta.
+
+O fator foi escrito contra um mundo em que o desenvolvedor usava SQLite e a
+produção usava Postgres. Container resolveu a maior parte disso sozinho: aqui a
+api de desenvolvimento e a de produção rodam o **mesmo binário**, contra o
+**mesmo Postgres**, na **mesma versão pinada por digest**.
+
+O que sobra de quebra é a camada de ferramenta de desenvolvimento — e ela é
+consciente, localizada e documentada.
+</Term>
+
+## O que a stack NÃO cumpre
+
+**VIII. Concorrência.** Não há `replicas:` em nenhum dos quatro arquivos compose.
+A stack sobe uma instância de cada serviço, e ponto.
+
+<Callout type="danger" label="E esse é o fator que criou o módulo 2">
+O fator manda escalar pelo modelo de processo — mais instâncias, sem estado
+compartilhado. O Compose até tem `deploy.replicas`, e ele é uma meia-resposta:
+sobe N containers e não resolve balanceamento, descoberta, rolling update nem
+recolocação quando um nó morre.
+
+Escalar de verdade é o que um orquestrador faz, e é literalmente o assunto da
+trilha de Kubernetes. O fator que esta stack não cumpre não é uma falha do
+desenho: é **a fronteira onde o Compose deixa de bastar**, medida.
+</Callout>
+
+<Tradeoff
+  a="Tratar os doze fatores como checklist de conformidade"
+  b="Tratar como perguntas de auditoria"
+  whenA="Quando há um padrão organizacional a cumprir e alguém vai auditar a lista. É verificável e fecha discussão — e produz a conformidade pela letra, com desvio escondido em vez de declarado."
+  whenB="Quando o objetivo é entender o desenho. A pergunta deixa de ser “cumpre?” e passa a ser “o que acontece aqui, e por quê?” — que é como o desvio do fator III virou uma decisão melhor que o fator."
+  chose="b"
+  verdict="auditoria. Dez cumpre, dois desviam por motivo escrito, e um não cumpre — e esse um aponta para o módulo seguinte em vez de virar um item vermelho numa planilha."
+  adr="0001-compose-em-vez-de-kubernetes"
+/>
+
+<RunIt>
+```bash
+# XI: alguma aplicação escreve arquivo de log?
+grep -rniE 'FileHandler|/var/log|access_log.*\.log' stack/services/ || echo "nenhuma"
+
+# IX: o portão mede a descartabilidade
+make shutdown-test
+
+# VIII: quantas réplicas o compose declara?
+grep -c 'replicas:' stack/compose*.yaml
+```
+</RunIt>
+
+<LabExercise check="todos os serviços param em menos de 3s" file="tools/scripts/shutdown-test.sh">
+
+O fator IX pede "início rápido e desligamento gracioso". Esta é a única parte da
+auditoria que o portão **mede em segundos**, e não confere por inspeção.
+
+Pergunta: por que desligamento gracioso precisa de medição, e início rápido não?
+
+<Fragment slot="hint">
+Pense no que acontece quando um serviço demora demais para parar.
+</Fragment>
+
+<Fragment slot="answer">
+
+Porque as duas falham de formas diferentes, e só uma falha em silêncio.
+
+**Início lento** é visível: o `up --wait` demora, o healthcheck leva mais tempo,
+alguém percebe na primeira execução. É irritante e óbvio.
+
+**Desligamento lento** é invisível no dia a dia e caro no dia errado. O
+`docker stop` manda SIGTERM, espera o `stop_grace_period` e então manda SIGKILL.
+Se o processo não trata SIGTERM, ele é morto à força — e você só descobre quando
+uma requisição some no meio, ou uma transação fica aberta.
+
+```bash
+$ make shutdown-test
+   todos os serviços param em menos de 3s
+```
+
+O portão cronometra cada serviço. Três segundos é o limiar escolhido; o que
+importa não é o número e sim que ele seja **medido**, porque um processo que
+passou a ignorar SIGTERM continua subindo normalmente.
+
+É a mesma família da lição 5 dos Fundamentos: o kernel não aplica ação padrão de
+sinal ao PID 1, então "tratar SIGTERM" é código que alguém escreveu — e código
+que alguém escreveu é código que alguém pode quebrar.
+
+</Fragment>
+</LabExercise>
+
+## O que fica
+
+- Container entrega de graça os fatores II, V, VII e XI — o desenho já força.
+- O fator III está **desatualizado** quanto a segredo: caminho de arquivo é
+  melhor que variável, e o desvio é declarado.
+- Paridade dev/prod é quebrada de propósito no overlay de desenvolvimento, e a
+  quebra é localizada.
+- O fator VIII é o único não cumprido — e ele é a fronteira onde o Compose
+  deixa de bastar.
+- Descartabilidade é o único fator que o portão mede em segundos.
+- Auditar ensina mais que cumprir: o desvio bem justificado é a parte
+  interessante.
+
+<Quiz set="twelve-factor-measured" />

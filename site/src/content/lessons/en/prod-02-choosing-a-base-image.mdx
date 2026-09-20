@@ -1,0 +1,207 @@
+---
+key: choosing-a-base-image
+lang: en
+track: producao
+order: 2
+title: Choosing a base image
+summary: "Between the smallest and largest build of the same api there are 3.8 MB. Choosing on that is choosing for the wrong reason — what really changes is what you can look at when things break."
+minutes: 14
+tags: [production, base-image, distroless, scratch, alpine, attack-surface]
+sources:
+  - label: "Distroless — images without a distribution"
+    url: "https://github.com/GoogleContainerTools/distroless"
+    kind: docs
+    accessed: "2026-09-20"
+  - label: "OWASP — Docker Security Cheat Sheet"
+    url: "https://cheatsheetseries.owasp.org/cheatsheets/Docker_Security_Cheat_Sheet.html"
+    kind: docs
+    accessed: "2026-09-20"
+  - label: "Dockerfile reference — FROM scratch"
+    url: "https://docs.docker.com/reference/dockerfile/"
+    kind: docs
+    accessed: "2026-09-20"
+  - label: "PEP 656 — musllinux: binary wheels for musl-based distributions"
+    url: "https://peps.python.org/pep-0656/"
+    kind: spec
+    accessed: "2026-09-20"
+---
+
+import BaseImageLadder from "../../../components/diagrams/BaseImageLadder.astro";
+
+The api's Dockerfile has three different final stages, with the **same binary**
+inside. It is a controlled experiment: only the base changes.
+
+<BaseImageLadder />
+
+## Size is the wrong reason
+
+Between `scratch` (5.1 MB) and `alpine` (8.9 MB) there are fewer than four
+megabytes. In a world of gigabit links and layer caching, that decides nothing —
+and choosing on that number is the field's most common mistake.
+
+What decides is **what disappears along with it**.
+
+<Callout type="why" label="What each rung takes away from you">
+| base | shell | package manager | root CAs | non-root user |
+|---|---|---|---|---|
+| `scratch` | no | no | **no** | you create `/etc/passwd` |
+| `distroless:nonroot` | no | no | yes | yes, ready |
+| `alpine` | yes (`sh`) | yes (`apk`) | yes | you create it |
+
+The column that bites first is **root certificates**. A Go binary on `scratch`
+making an HTTPS call fails with an unknown-certificate error — and nothing in
+the message suggests a file was not copied.
+
+That is why this api's `minimal` stage copies three things by hand, not one.
+</Callout>
+
+<Term word="attack surface" alt="attack surface" open>
+Everything an attacker can use after achieving code execution.
+
+In a container with `sh`, `curl` and `apk`, whoever gets in downloads tools,
+reads files, scans the internal network. In a distroless one, the same attacker
+has **your binary and nothing else** — there is nothing to build the next step
+from.
+
+This does not prevent the breach: it prevents the **escalation**. It is defence
+in depth, and the Security track measures its effect.
+</Term>
+
+## The cost, which is real and operational
+
+```
+$ docker exec -it <api-container> sh
+OCI runtime exec failed: exec failed: unable to start container process:
+exec: "sh": executable file not found in $PATH
+```
+
+That error arrives at the worst possible moment. A distroless image is excellent
+for security and hostile for investigation — and the honest answer is not to
+abandon it but to have an agreed debugging path before the incident (lesson 1's
+`debug` stage).
+
+<Callout type="trap" label="And a shell-written `HEALTHCHECK` does not run">
+```dockerfile
+# does not work in an image without a shell
+HEALTHCHECK CMD curl -f http://localhost:8080/healthz || exit 1
+```
+
+There is no `curl`, no `sh`, and not even `||` exists without an interpreter.
+This stack's api solves it with a **subcommand of the binary itself**:
+
+```dockerfile
+HEALTHCHECK --interval=10s --timeout=3s --retries=3 \
+    CMD ["/api-go", "healthcheck"]
+```
+
+Exec form, no shell, and the healthcheck becomes code you test along with the
+rest.
+</Callout>
+
+## Python does not get to choose
+
+The worker weighs 50.3 MB against the api's 5.7, and no trick fixes that: Python
+needs the interpreter, and the interpreter needs libc.
+
+What you can choose is the **variant**: the `fat` stage uses the `uv` image
+(71.3 MB) and `dist` uses `python:3.13-slim-bookworm` (50.3 MB). Twenty-one
+megabytes of difference, which are `uv` and the build tooling that need not
+travel.
+
+<Tradeoff
+  a="Distroless (or scratch)"
+  b="Alpine (or slim)"
+  whenA="When the artifact is self-contained — a static binary, or an interpreter with a copied venv — and you have an agreed debugging path. Smaller attack surface, and `docker exec` stops being an option."
+  whenB="When the team needs to enter the container frequently, when the process depends on system utilities, or when the cost of not being able to investigate exceeds the risk of the extra surface."
+  chose="a"
+  verdict="distroless for the api, slim for the worker, and the <code>debug</code> stage as the agreed path. The choice changes if somebody needs to investigate in production every week."
+  adr="0005-stack-poliglota"
+/>
+
+<Callout type="danger" label="Alpine has a catch that is not about size">
+Alpine uses **musl** instead of glibc. For a static Go binary, that makes no
+difference. For a Python wheel compiled against glibc, or a third-party binary
+assuming glibc, it does: the program simply does not execute, or executes and
+breaks on one specific call.
+
+That is why this stack's worker uses `python:3.13-slim-bookworm` (Debian, with
+glibc) rather than the Alpine variant — the decision is about compatibility, and
+the size came along with it.
+</Callout>
+
+<RunIt>
+```bash
+# All three, side by side, from the same Dockerfile
+docker build --target minimal -t api:scratch    stack/services/api-go
+docker build --target dist    -t api:distroless stack/services/api-go
+docker build --target debug   -t api:alpine     stack/services/api-go
+docker images --format '{{.Tag}}\t{{.Size}}' | grep -E '^(scratch|distroless|alpine)'
+```
+</RunIt>
+
+<LabExercise check="imagem da api é distroless" file="stack/services/api-go/Dockerfile">
+
+The `dist` stage uses `gcr.io/distroless/static-debian12:nonroot`, with 13
+layers. `minimal` uses `scratch`, with 3.
+
+Question: why does the **smaller** image have more than twice the layers?
+
+<Fragment slot="hint">
+A layer is not the same as size. Look at where each one's layers come from.
+</Fragment>
+
+<Fragment slot="answer">
+
+Because `dist`'s layers **come ready in the base**. Distroless is an image
+published by Google with ten layers of its own — certificates, timezone data,
+an `/etc/passwd` with the `nonroot` user, licences — and your `COPY` only adds
+one more on top.
+
+`scratch` has no layers at all. `minimal`'s three are exactly the three `COPY`
+instructions the Dockerfile writes: certificates, `/etc/passwd` and the binary.
+
+```
+api-go  scratch            5.1 MB    3 layers
+api-go  distroless/static  5.7 MB   13 layers
+```
+
+`minimal` is smaller because it copies **only what it uses**; `dist` is larger
+because it brings things you might need — and it is 0.6 MB for not having to
+remember them.
+
+The general lesson: **layer count is not a proxy for size.** Ten layers of
+metadata weigh less than one layer with a `node_modules` in it. Optimising layer
+count is a pre-BuildKit concern that outlived the reason that justified it.
+
+</Fragment>
+</LabExercise>
+
+<FieldNote
+  source="PEP 656 — musllinux"
+  url="https://peps.python.org/pep-0656/"
+  kind="spec"
+  accessed="2026-09-20"
+>
+The musl versus glibc incompatibility is not folklore: the Python ecosystem
+needed a whole PEP for it. `manylinux` wheels (PEP 513) are compiled against
+glibc and do **not** install on Alpine; `musllinux` arrived in 2021 to cover the
+other side, and project adoption of it is far lower.
+
+In practice that means `pip install` on an Alpine image often falls back to
+compiling from source — a slow build, and a compiler toolchain in the image you
+were trying to avoid in the first place.
+</FieldNote>
+
+## What sticks
+
+- The size difference between bases is small; **the capability difference is
+  not**.
+- `scratch` has no root certificates — and the error that causes mentions no
+  file.
+- Distroless costs you `docker exec`: agree the debugging path beforehand.
+- A shell `HEALTHCHECK` does not run without a shell — use a subcommand of the
+  binary.
+- Alpine is musl, and that breaks binaries compiled against glibc.
+- Layer count is not a proxy for size.
+
+<Quiz set="choosing-a-base-image" />

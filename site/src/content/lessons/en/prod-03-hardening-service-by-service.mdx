@@ -1,0 +1,195 @@
+---
+key: hardening-service-by-service
+lang: en
+track: producao
+order: 3
+title: Hardening service by service
+summary: "Everything starts from cap_drop ALL. Two of the six needed none back — and finding that out requires trying, because the error for a missing one never mentions capabilities."
+minutes: 15
+tags: [production, hardening, owasp, capabilities, read-only, selinux]
+sources:
+  - label: "OWASP — Docker Security Cheat Sheet"
+    url: "https://cheatsheetseries.owasp.org/cheatsheets/Docker_Security_Cheat_Sheet.html"
+    kind: docs
+    accessed: "2026-09-20"
+  - label: "capabilities(7) — Linux manual page"
+    url: "https://man7.org/linux/man-pages/man7/capabilities.7.html"
+    kind: docs
+    accessed: "2026-09-20"
+  - label: "Compose Specification"
+    url: "https://github.com/compose-spec/compose-spec/blob/main/spec.md"
+    kind: spec
+---
+
+import CapabilityLedger from "../../../components/diagrams/CapabilityLedger.astro";
+
+`compose.prod.yaml` is not a configuration file: it is a **hardening overlay**,
+and every block in it maps to an OWASP rule. What it teaches is not the policy —
+it is why the same policy produces different results on each service.
+
+<CapabilityLedger />
+
+## The anchor, and what it applies to everybody
+
+```yaml
+x-hardened: &hardened
+  security_opt:
+    - no-new-privileges:true
+  read_only: true
+```
+
+Two lines, two rules. The first stops a setuid binary inside the container from
+escalating privilege — zero cost, no side effects, it should be in every stack.
+The second is the more consequential one.
+
+<Term word="read-only rootfs" alt="read-only root filesystem" open>
+The container's root filesystem mounted without write permission.
+
+What it prevents is concrete: whoever achieves code execution **cannot drop a
+binary**, nor a webshell, nor a cron job. The attacker gets in and has nowhere
+to write the tool for the next step.
+
+What it breaks: every process that writes to `/tmp`, to `/run` or to a cache.
+That is why the overlay declares a `tmpfs` for each — and each tmpfs's size
+becomes an explicit decision instead of an infinite disk by omission.
+</Term>
+
+```yaml
+tmpfs:
+  - /tmp:rw,noexec,nosuid,size=32m
+```
+
+`noexec` closes the circle: even writing into `/tmp`, you cannot execute what
+you wrote.
+
+## And then policy meets reality
+
+`cap_drop: [ALL]` on all of them. And then:
+
+| service | handed back | why |
+|---|---|---|
+| api, worker | **none** | static binary, distroless, `USER 65532` |
+| cache | 2 | Redis drops privilege after starting |
+| db | 5 | the entrypoint starts as root and setuids |
+| edge, web | 5 | the Caddy binary **requires** one of them to execute |
+
+<Callout type="danger" label="The capability written into the binary">
+Caddy needs `NET_BIND_SERVICE` **even when publishing on 8080**, and the reason
+is not the bind:
+
+```
+exec /usr/bin/caddy: operation not permitted
+```
+
+The Caddy binary carries `cap_net_bind_service=+ep` written into it as a *file
+capability*. The kernel refuses to `exec()` a binary whose file capabilities are
+not in the process's bounding set — the check happens **before** the program
+runs a single instruction.
+
+The message mentions no capability. It does not mention Caddy. It is trap 6 in
+`CLAUDE.md`, and it cost time here.
+</Callout>
+
+<Callout type="why" label="Why Postgres needs five">
+The official image's entrypoint starts as root, fixes the data directory's
+owner, and **only then** setuids to `postgres`. Removing `CHOWN`,
+`DAC_OVERRIDE`, `FOWNER`, `SETGID` and `SETUID` prevents the boot itself.
+
+It is the perfect example of why a blind `cap_drop: [ALL]` breaks official
+images — and of why the right rule is **drop everything and hand back one at a
+time**, measuring what fails, rather than copying another project's list.
+</Callout>
+
+## A resource limit is a security control
+
+```yaml
+deploy:
+  resources:
+    limits: {cpus: "1.00", memory: 256M, pids: 200}
+```
+
+Without a ceiling, a single container eats the host's RAM and takes its
+neighbours down — turning a bug into a denial of service for the entire stack.
+`pids` is what contains a fork bomb.
+
+<Callout type="trap" label="`pids_limit` and `deploy.resources.limits.pids` cannot coexist">
+Compose refuses the project if you declare both. `pids_limit` is the legacy
+alias; the canonical form lives inside `deploy`.
+
+And there is a side effect the IaC track measured: the **OpenTofu Docker
+provider has no `pids_limit` at all**. That hardening line is not expressible
+there — a provider is a partial mapping of an API, and finding out which piece is
+missing is the adopter's job.
+</Callout>
+
+<Tradeoff
+  a="One hardening policy for everybody"
+  b="Hardening measured service by service"
+  whenA="When services are similar and the team is large: a single rule is easier to audit, and nobody has to justify an exception. The price is that the policy becomes the MOST demanding service's — everyone gets capabilities they do not use."
+  whenB="When services genuinely differ, as here: two need zero capabilities and one needs five. Every exception becomes a line with a comment saying what breaks without it."
+  chose="b"
+  verdict="measured service by service, with the reason written beside each hand-back. It is more to maintain, and it is what lets the gate prove the hardening has not regressed."
+  adr="0003-socket-do-docker-na-observabilidade"
+/>
+
+<RunIt>
+```bash
+make up
+# What each container REALLY has, read from the daemon
+for c in api worker edge web db cache; do
+  printf '%-8s ' "$c"
+  docker inspect "infra-knowlogy-$c-1" \
+    --format 'ro={{.HostConfig.ReadonlyRootfs}} add={{.HostConfig.CapAdd}} pids={{.HostConfig.PidsLimit}}'
+done
+```
+</RunIt>
+
+<LabExercise check="rootfs read-only aplicado" file="stack/compose.prod.yaml">
+
+Module 1's gate has a check called *"rootfs read-only aplicado (escrita em /
+recusada)"*. It does not read `compose.prod.yaml`.
+
+Question: why does it try to **write** instead of checking the configuration?
+
+<Fragment slot="hint">
+Think about what would happen if somebody added a volume remounting `/`.
+</Fragment>
+
+<Fragment slot="answer">
+
+Because declared configuration and observed behaviour are different things, and
+the gate exists to prove the second.
+
+Checking `read_only: true` in the YAML proves **somebody wrote the line**. It
+does not prove the container is read-only: a bind mount over a path, a
+misplaced `tmpfs`, a later overlay that overrides the block — any of those leaves
+the line in the file and the filesystem writable.
+
+```bash
+docker compose exec -T api sh -c 'touch /prova' 2>&1
+# the api is distroless and has no sh — the gate uses another route
+```
+
+The check tries to write and requires it to fail. It is the same principle as
+module 4's negative proof (a tampered lock must fail `init`) and as the entire
+`attack-lab`, where each step passes when the attack **fails**.
+
+The general rule: **a check that reads configuration tests the author; one that
+exercises behaviour tests the system.** Only the second catches a regression
+arriving from another file.
+
+</Fragment>
+</LabExercise>
+
+## What sticks
+
+- `no-new-privileges` is free and should be in every stack.
+- `read_only` prevents dropping tools; a `tmpfs` with `noexec` closes the circle.
+- `cap_drop: [ALL]` and hand back **one at a time**, measuring what breaks.
+- A file capability written into a binary makes the kernel refuse the `exec()` —
+  and the message mentions no capability.
+- A resource limit is a security control, not only a capacity one.
+- A check that reads configuration tests the author; one that exercises
+  behaviour tests the system.
+
+<Quiz set="hardening-service-by-service" />

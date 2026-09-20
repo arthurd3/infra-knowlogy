@@ -1,0 +1,217 @@
+---
+key: reproducible-builds
+lang: pt
+track: producao
+order: 6
+title: "Reprodutível em qual camada?"
+summary: "Dois builders, o mesmo fonte: o binário Go sai byte a byte igual e o digest da imagem NÃO. Nada está errado — e saber por quê é o que separa afirmação de slogan."
+minutes: 14
+tags: [producao, reprodutibilidade, buildkit, digest, cadeia-de-suprimentos]
+sources:
+  - label: "Reproducible Builds"
+    url: "https://reproducible-builds.org/"
+    kind: spec
+    accessed: "2026-09-20"
+  - label: "Docker — cache de build"
+    url: "https://docs.docker.com/build/cache/"
+    kind: docs
+    accessed: "2026-09-20"
+  - label: "OCI Image Format Specification"
+    url: "https://github.com/opencontainers/image-spec"
+    kind: spec
+    accessed: "2026-09-20"
+  - label: "Ken Thompson — Reflections on Trusting Trust (1984)"
+    url: "https://www.cs.cmu.edu/~rdriley/487/papers/Thompson_1984_ReflectionsonTrustingTrust.pdf"
+    kind: talk
+    accessed: "2026-09-20"
+---
+
+import ReproducibilityLayers from "../../../components/diagrams/ReproducibilityLayers.astro";
+
+"Build reprodutível" é uma dessas frases que todo mundo aprova e quase ninguém
+mede. O portão do módulo 3 mede — e o resultado tem duas metades diferentes.
+
+<ReproducibilityLayers />
+
+## O experimento, que o portão roda sozinho
+
+O `make cicd-verify` constrói a api **duas vezes**, em builders diferentes:
+
+1. dentro do Jenkins, com **BuildKit rootless**, sem daemon e sem privilégio;
+2. na máquina local, com um `docker build` comum.
+
+Depois extrai o binário das duas imagens e compara byte a byte.
+
+```bash
+cmp -s "$tmp/jenkins" "$tmp/local"   # o binário Go
+docker inspect -f '{{.Id}}' ...      # o digest da imagem inteira
+```
+
+<Callout type="why" label="O binário bate, e é isso que sustenta a afirmação">
+O compilador Go é determinístico por desenho: mesmo fonte, mesmas flags, mesma
+versão do toolchain, mesmo binário. O `go.sum` garante que as dependências são
+exatamente as mesmas, e o `FROM golang:...@sha256:` garante que o compilador é
+o mesmo.
+
+Essa é a afirmação que importa para cadeia de suprimentos: **o artefato que
+roda é derivável do fonte**, e qualquer pessoa pode repetir o build e conferir.
+</Callout>
+
+## E o digest não bate, e está tudo certo
+
+```json
+"goBinaryIdentical": true,
+"imageDigestIdentical": false
+```
+
+Três razões, todas de empacotamento e nenhuma de conteúdo:
+
+- **carimbo de tempo** em cada camada — o momento da criação entra no metadado;
+- **ordem das entradas** dentro do tar de cada camada, que depende de como o
+  builder percorre o sistema de arquivos;
+- **metadados do builder** gravados na configuração da imagem.
+
+<Term word="digest de imagem" alt="image digest" open>
+O hash SHA-256 do **manifest** da imagem — que por sua vez referencia os hashes
+da configuração e de cada camada.
+
+Como ele cobre tudo, ele muda se qualquer byte de qualquer camada mudar. É o que
+faz o digest ser um endereço confiável (lição 2 dos Fundamentos) e é também o
+que o torna sensível a coisas que não são o seu código.
+
+Dois digests diferentes **não** significam dois programas diferentes. Significam
+dois empacotamentos diferentes, que podem conter o mesmo programa.
+</Term>
+
+<Callout type="trap" label="Por isso o portão trata os dois de formas diferentes">
+No `cicd-verify.sh`:
+
+```bash
+if cmp -s "$tmp/jenkins" "$tmp/local"; then
+  ok "o binário Go do Jenkins é byte a byte igual ao do docker build local"
+else
+  bad "o binário do Jenkins difere do local"
+fi
+# ...
+printf '   digest da imagem inteira igual: %s (medição, não checagem)\n' "$M_DIGEST_MATCH"
+```
+
+O binário é **checagem**: se divergir, alguma coisa está errada e o portão
+reprova. O digest é **medição**: registrado, exibido, e não reprova nada.
+
+Transformar a segunda em checagem faria o portão reprovar por causa de
+carimbo de tempo — e um portão que reprova sem motivo é um portão que alguém
+desliga.
+</Callout>
+
+## Dá para fazer o digest bater
+
+Existem duas alavancas, e o BuildKit suporta as duas:
+
+```bash
+# congela o carimbo de tempo das camadas
+SOURCE_DATE_EPOCH=0 docker build ...
+
+# reescreve os carimbos na imagem de saída
+buildctl build --output type=image,rewrite-timestamp=true,...
+```
+
+<Tradeoff
+  a="Reprodutibilidade no nível do ARTEFATO"
+  b="Reprodutibilidade no nível da IMAGEM"
+  whenA="Quando a pergunta é “este binário veio deste fonte?”. É o que a assinatura e a proveniência respondem, e é o que sustenta a cadeia de suprimentos. Custa nada além de pinar as entradas."
+  whenB="Quando a pergunta é “dois builds independentes produzem o MESMO endereço?” — auditoria de terceiro, verificação por múltiplas partes, distribuição reproduzível. Custa congelar carimbo de tempo e aceitar metadados achatados."
+  chose="a"
+  verdict="artefato, porque é o que a assinatura do módulo 3 protege: o cosign assina o DIGEST daquele build, e a lição cicd-07 mostra que assinar a tag seria assinar um ponteiro."
+  adr="0004-pin-por-digest"
+/>
+
+<Callout type="danger" label="E o que NADA disso garante">
+Reprodutibilidade diz que o mesmo fonte produz o mesmo artefato. Ela **não** diz
+que o fonte é bom, que as dependências são confiáveis, nem que o compilador não
+foi adulterado.
+
+O ataque clássico — *trusting trust*, de Ken Thompson — é justamente um
+compilador que insere código malicioso e se reproduz perfeitamente. A defesa
+contra isso não é reprodutibilidade sozinha, é **reprodutibilidade por múltiplas
+partes**, com builders independentes chegando ao mesmo artefato.
+
+É exatamente para isso que a reprodutibilidade em nível de imagem serve — e é a
+razão de ela não ser esforço desperdiçado quando o projeto é distribuído.
+</Callout>
+
+<LabExercise check="o binário Go do Jenkins é byte a byte igual" file="tools/scripts/cicd-verify.sh">
+
+O build do Jenkins usa BuildKit rootless num container; o local usa o daemon do
+Docker rodando como root. São ambientes bem diferentes.
+
+Pergunta: por que o binário sai idêntico mesmo assim?
+
+<Fragment slot="hint">
+Liste o que de fato entra na compilação — e o que o Dockerfile faz para fixar
+cada item.
+</Fragment>
+
+<Fragment slot="answer">
+
+Porque tudo que entra na compilação está **pinado**, e o ambiente ao redor não
+entra.
+
+Três travas, cada uma numa linha do Dockerfile ou do repositório:
+
+```dockerfile
+FROM golang:1.25-alpine@sha256:1ae0735f...   # o compilador, por digest
+```
+
+```
+go.sum        # cada dependência, por hash
+CGO_ENABLED=0 # sem ligação com a libc do ambiente
+```
+
+O `CGO_ENABLED=0` é a mais sutil das três: com cgo ligado, o build usaria o gcc
+e os cabeçalhos **do ambiente**, e aí o Alpine do Jenkins e o do local
+precisariam ser idênticos até a versão de patch. Sem cgo, o Go compila sozinho e
+o sistema ao redor deixa de participar.
+
+O que **não** entra: quem é root, se há daemon, qual é o snapshotter, o horário
+da máquina. São propriedades do builder, não da compilação — e é por isso que o
+digest da imagem difere enquanto o binário não.
+
+A lição geral: **reprodutibilidade é propriedade das ENTRADAS, não do
+ambiente.** Fixe as entradas e o ambiente para de importar; deixe uma entrada
+solta — uma tag mutável, uma dependência sem hash — e nenhum cuidado com o
+ambiente salva.
+
+</Fragment>
+</LabExercise>
+
+<FieldNote
+  source="Ken Thompson — Reflections on Trusting Trust, palestra do Turing Award (1984)"
+  url="https://www.cs.cmu.edu/~rdriley/487/papers/Thompson_1984_ReflectionsonTrustingTrust.pdf"
+  kind="talk"
+  accessed="2026-09-20"
+>
+Três páginas, e o argumento que nenhuma quantidade de reprodutibilidade
+individual derruba: Thompson descreve um compilador que insere uma porta dos
+fundos no `login` **e** insere a si mesmo ao recompilar o próprio compilador. O
+fonte fica limpo; o binário, não.
+
+A conclusão dele é desconfortável e continua válida — *"você não pode confiar em
+código que não escreveu inteiramente"*. O que a indústria construiu desde então
+não é uma refutação, é uma mitigação: reprodutibilidade por múltiplas partes,
+com builders independentes chegando ao mesmo artefato.
+</FieldNote>
+
+## O que fica
+
+- Reprodutível **em qual camada** é a pergunta que falta na maioria das
+  conversas.
+- O binário Go bate byte a byte; o digest da imagem não, e isso é esperado.
+- O portão trata o primeiro como checagem e o segundo como medição — de
+  propósito.
+- Carimbo de tempo, ordem no tar e metadados do builder explicam a diferença.
+- `SOURCE_DATE_EPOCH` e `rewrite-timestamp` atacam a primeira razão.
+- Reprodutibilidade é propriedade das **entradas**: pine o compilador, pine as
+  dependências, desligue o cgo.
+
+<Quiz set="reproducible-builds" />

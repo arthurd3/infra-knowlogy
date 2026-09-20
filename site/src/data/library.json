@@ -1029,6 +1029,273 @@
           "why_en": "The specific chapter, free and short, with the burn-rate table this stack's `slo.yml` implements line by line. If you read one thing about SLO alerting in your life, this is it — and it fits in one sitting."
         }
       ]
+    },
+    {
+      "id": "images-and-multi-stage",
+      "lessons": [
+        "multi-stage-three-idioms",
+        "choosing-a-base-image",
+        "images-layers-and-digests"
+      ],
+      "pt": {
+        "label": "Multi-stage e escolha de imagem base",
+        "what": "Como separar o que compila do que roda, e o que se perde a cada degrau de base — shell, gerenciador de pacotes, certificado raiz, usuário pronto."
+      },
+      "en": {
+        "label": "Multi-stage and base image choice",
+        "what": "How to separate what compiles from what runs, and what is lost at each base rung — shell, package manager, root certificates, ready-made user."
+      },
+      "refs": [
+        {
+          "kind": "docs",
+          "title": "Docker — builds multi-stage",
+          "author": "Docker Inc.",
+          "where": "docs.docker.com",
+          "year": 2025,
+          "lang": "en",
+          "url": "https://docs.docker.com/build/building/multi-stage/",
+          "free": true,
+          "accessed": "2026-09-20",
+          "why_pt": "A documentação canônica, e curta. O que ela faz melhor que os tutoriais é mostrar o `--target` desde o começo — que é justamente a diferença entre construir a stage certa e construir a última do arquivo, a armadilha 9 daqui.",
+          "why_en": "The canonical documentation, and short. What it does better than tutorials is showing `--target` from the start — which is exactly the difference between building the right stage and building the file's last one, trap 9 here."
+        },
+        {
+          "kind": "docs",
+          "title": "Distroless — imagens sem distribuição",
+          "author": "GoogleContainerTools",
+          "where": "GitHub",
+          "year": 2025,
+          "lang": "en",
+          "url": "https://github.com/GoogleContainerTools/distroless",
+          "free": true,
+          "accessed": "2026-09-20",
+          "why_pt": "O repositório explica o que cada variante contém — e é a leitura que responde por que a `:nonroot` já traz usuário e certificado, enquanto `scratch` não traz nada. A tabela de variantes vale mais que o README inteiro.",
+          "why_en": "The repository explains what each variant contains — and it is the reading that answers why `:nonroot` already ships a user and certificates while `scratch` ships nothing. The variant table is worth more than the whole README."
+        },
+        {
+          "kind": "book",
+          "title": "Docker Deep Dive",
+          "author": "Nigel Poulton",
+          "where": "edição do autor (Leanpub)",
+          "year": 2025,
+          "lang": "en",
+          "url": "https://leanpub.com/dockerdeepdive",
+          "free": false,
+          "accessed": "2026-09-20",
+          "why_pt": "Pela parte de multi-stage e BuildKit, que ele acompanha versão a versão. Um livro de Docker que não acompanha o BuildKit envelhece rápido, e este é o que menos envelhece.",
+          "why_en": "For the multi-stage and BuildKit material, which it tracks release by release. A Docker book that does not follow BuildKit ages fast, and this is the one that ages least."
+        },
+        {
+          "kind": "video",
+          "title": "Descomplicando o Docker (playlist do curso)",
+          "author": "LINUXtips (Jeferson Fernando)",
+          "where": "YouTube",
+          "year": 2016,
+          "lang": "pt",
+          "url": "https://www.youtube.com/playlist?list=PLf-O3X2-mxDn1VpyU2q3fuI6YYeIWp5rR",
+          "free": true,
+          "accessed": "2026-09-20",
+          "why_pt": "O curso completo, em português, liberado no YouTube pelo próprio autor. A sintaxe do Docker mudou desde 2016 em alguns pontos, mas a explicação dos conceitos continua válida — e é material audiovisual gratuito em português, que é raro.",
+          "why_en": "The complete course, in Portuguese, released on YouTube by the author himself. Docker syntax has changed in places since 2016, but the conceptual explanation still holds — and free audiovisual material in Portuguese is rare."
+        },
+        {
+          "kind": "book",
+          "title": "Container Security",
+          "author": "Liz Rice",
+          "where": "O'Reilly",
+          "year": 2020,
+          "lang": "en",
+          "url": "https://www.oreilly.com/library/view/container-security/9781492056690/",
+          "free": false,
+          "accessed": "2026-09-20",
+          "why_pt": "Ele explica os mecanismos do Linux a partir da pergunta 'o que isto permite a um invasor?', que é a ordem certa para quem já usa container e quer entender o que está confiando. A 2ª edição saiu depois; esta é a que os capítulos citados aqui seguem.",
+          "why_en": "It explains the Linux mechanisms starting from 'what does this allow an attacker to do?', which is the right order for someone already using containers and wanting to understand what they are trusting. A 2nd edition exists; this is the one the chapters cited here follow.",
+          "isbn": "978-1-4920-5670-6"
+        }
+      ]
+    },
+    {
+      "id": "rootless-containers",
+      "lessons": [
+        "rootless-and-podman",
+        "what-is-a-container"
+      ],
+      "pt": {
+        "label": "Containers rootless e user namespaces",
+        "what": "O mecanismo que faz o uid 0 de dentro ser um usuário comum de fora — e o que se perde junto: porta abaixo de 1024 e algumas integrações."
+      },
+      "en": {
+        "label": "Rootless containers and user namespaces",
+        "what": "The mechanism that makes the inside uid 0 an ordinary user outside — and what is lost with it: ports below 1024 and some integrations."
+      },
+      "refs": [
+        {
+          "kind": "docs",
+          "title": "user_namespaces(7) — Linux manual page",
+          "author": "Michael Kerrisk (mantenedor)",
+          "where": "man7.org",
+          "year": 2025,
+          "lang": "en",
+          "url": "https://man7.org/linux/man-pages/man7/user_namespaces.7.html",
+          "free": true,
+          "accessed": "2026-09-20",
+          "why_pt": "A seção sobre `uid_map` e `gid_map` é o que torna a aritmética desta lição conferível em vez de mágica: ela define exatamente como um intervalo de dentro vira um intervalo de fora, que é o `524288 + 65532 − 1`.",
+          "why_en": "The section on `uid_map` and `gid_map` is what makes this lesson's arithmetic checkable rather than magic: it defines exactly how an inside range becomes an outside range, which is the `524288 + 65532 − 1`."
+        },
+        {
+          "kind": "docs",
+          "title": "Docker — modo rootless",
+          "author": "Docker Inc.",
+          "where": "docs.docker.com",
+          "year": 2025,
+          "lang": "en",
+          "url": "https://docs.docker.com/engine/security/rootless/",
+          "free": true,
+          "accessed": "2026-09-20",
+          "why_pt": "Vale pela lista de limitações, que é a parte honesta: drivers de armazenamento suportados, o que não funciona em rede, e o `sysctl` de porta privilegiada. É a página para ler ANTES de prometer rootless a alguém.",
+          "why_en": "Worth it for the limitations list, which is the honest part: supported storage drivers, what does not work in networking, and the privileged-port `sysctl`. It is the page to read BEFORE promising anyone rootless."
+        },
+        {
+          "kind": "talk",
+          "title": "Containers From Scratch",
+          "author": "Liz Rice",
+          "where": "GOTO 2018",
+          "year": 2018,
+          "lang": "en",
+          "url": "https://www.youtube.com/watch?v=8fi7uSYlOdc",
+          "free": true,
+          "accessed": "2026-09-20",
+          "why_pt": "Vale pelo trecho do user namespace: ela cria o namespace ao vivo e mostra o processo se vendo como root enquanto o host o vê como usuário comum. É a mesma coisa que esta lição mede com `ps`, só que construída passo a passo em vez de observada pronta.",
+          "why_en": "Worth it for the user namespace stretch: she creates the namespace live and shows the process seeing itself as root while the host sees an ordinary user. It is the same thing this lesson measures with `ps`, only built step by step instead of observed after the fact.",
+          "minutes": 43
+        },
+        {
+          "kind": "book",
+          "title": "Container Security",
+          "author": "Liz Rice",
+          "where": "O'Reilly",
+          "year": 2020,
+          "lang": "en",
+          "url": "https://www.oreilly.com/library/view/container-security/9781492056690/",
+          "free": false,
+          "accessed": "2026-09-20",
+          "why_pt": "Ele explica os mecanismos do Linux a partir da pergunta 'o que isto permite a um invasor?', que é a ordem certa para quem já usa container e quer entender o que está confiando. A 2ª edição saiu depois; esta é a que os capítulos citados aqui seguem.",
+          "why_en": "It explains the Linux mechanisms starting from 'what does this allow an attacker to do?', which is the right order for someone already using containers and wanting to understand what they are trusting. A 2nd edition exists; this is the one the chapters cited here follow.",
+          "isbn": "978-1-4920-5670-6"
+        }
+      ]
+    },
+    {
+      "id": "supply-chain-and-reproducibility",
+      "lessons": [
+        "reproducible-builds",
+        "signing-what-you-ship"
+      ],
+      "pt": {
+        "label": "Cadeia de suprimentos e reprodutibilidade",
+        "what": "Em qual camada \"reprodutível\" é verdade, o que a assinatura de fato responde, e por que nenhuma das duas garante que o fonte é bom."
+      },
+      "en": {
+        "label": "Supply chain and reproducibility",
+        "what": "At which layer \"reproducible\" is true, what a signature actually answers, and why neither guarantees the source is good."
+      },
+      "refs": [
+        {
+          "kind": "spec",
+          "title": "Reproducible Builds",
+          "author": "Reproducible Builds project",
+          "where": "reproducible-builds.org",
+          "year": 2025,
+          "lang": "en",
+          "url": "https://reproducible-builds.org/",
+          "free": true,
+          "accessed": "2026-09-20",
+          "why_pt": "O projeto que catalogou as fontes de não-determinismo — carimbo de tempo, ordem de arquivo, caminho de build, locale. A página \"Documentation\" é uma lista de causas concretas, e é ela que explica por que o digest da imagem diverge enquanto o binário não.",
+          "why_en": "The project that catalogued the sources of non-determinism — timestamps, file ordering, build paths, locale. The \"Documentation\" page is a list of concrete causes, and it is what explains why the image digest diverges while the binary does not."
+        },
+        {
+          "kind": "talk",
+          "title": "SLSA, A Security Paradigm For Your Builds",
+          "author": "Teja Kummarikuntla",
+          "where": "Harness",
+          "year": 2024,
+          "lang": "en",
+          "url": "https://www.youtube.com/watch?v=eqv4aR6LFeg",
+          "free": true,
+          "accessed": "2026-09-20",
+          "why_pt": "Percorre os níveis do SLSA mostrando o que cada um exige do pipeline. É o complemento prático da lição cicd-07: ali a assinatura é feita, aqui se vê onde ela se encaixa num modelo de maturidade que alguém vai te cobrar.",
+          "why_en": "It walks the SLSA levels showing what each demands of the pipeline. It is the practical complement to lesson cicd-07: there the signing is done, here you see where it fits into a maturity model somebody will hold you to."
+        },
+        {
+          "kind": "spec",
+          "title": "OCI Image Format Specification",
+          "author": "Open Container Initiative",
+          "where": "GitHub / OCI",
+          "year": 2025,
+          "lang": "en",
+          "url": "https://github.com/opencontainers/image-spec",
+          "free": true,
+          "accessed": "2026-09-20",
+          "why_pt": "A especificação que define manifest, índice, camadas e configuração — e o motivo de uma imagem ser a mesma coisa em qualquer runtime. Curta o suficiente para ler inteira numa tarde, o que quase nenhuma especificação é.",
+          "why_en": "The specification that defines manifest, index, layers and config — and the reason an image is the same thing in any runtime. Short enough to read end to end in an afternoon, which almost no specification is."
+        }
+      ]
+    },
+    {
+      "id": "twelve-factor",
+      "lessons": [
+        "twelve-factor-measured",
+        "compose-and-healthchecks"
+      ],
+      "pt": {
+        "label": "A metodologia dos doze fatores",
+        "what": "As doze práticas de 2011 para aplicação de serviço — e quais delas o container já impõe, quais envelheceram e qual só um orquestrador cumpre."
+      },
+      "en": {
+        "label": "The twelve-factor methodology",
+        "what": "The twelve 2011 practices for service applications — which ones containers already impose, which have aged, and which only an orchestrator meets."
+      },
+      "refs": [
+        {
+          "kind": "spec",
+          "title": "The Twelve-Factor App",
+          "author": "Adam Wiggins e colaboradores",
+          "where": "12factor.net",
+          "year": 2011,
+          "lang": "en",
+          "url": "https://12factor.net/",
+          "free": true,
+          "accessed": "2026-09-20",
+          "why_pt": "Doze páginas curtas, uma por fator, e dá para ler inteiro numa hora. Leia sabendo a data: ele é anterior ao Docker, e o fator III sobre configuração no ambiente mira um problema — config em arquivo versionado — que hoje se resolve melhor com caminho de segredo.",
+          "why_en": "Twelve short pages, one per factor, readable end to end in an hour. Read it knowing the date: it predates Docker, and factor III on config in the environment aims at a problem — config in a versioned file — that is better solved today with a secret path."
+        },
+        {
+          "kind": "spec",
+          "title": "The Twelve-Factor App — tradução em português",
+          "author": "Adam Wiggins e colaboradores",
+          "where": "12factor.net",
+          "year": 2011,
+          "lang": "pt",
+          "url": "https://12factor.net/pt_br/",
+          "free": true,
+          "accessed": "2026-09-20",
+          "why_pt": "A mesma metodologia, traduzida e mantida no site oficial. Está aqui pela mesma razão editorial do resto da biblioteca: recomendar só bibliografia em inglês exclui exatamente o leitor que mais precisa começar.",
+          "why_en": "The same methodology, translated and hosted on the official site. It is here for the same editorial reason as the rest of the library: recommending English-only material excludes precisely the reader who most needs to start."
+        },
+        {
+          "kind": "video",
+          "title": "Descomplicando o Docker (playlist do curso)",
+          "author": "LINUXtips (Jeferson Fernando)",
+          "where": "YouTube",
+          "year": 2016,
+          "lang": "pt",
+          "url": "https://www.youtube.com/playlist?list=PLf-O3X2-mxDn1VpyU2q3fuI6YYeIWp5rR",
+          "free": true,
+          "accessed": "2026-09-20",
+          "why_pt": "O curso mostra na prática o que os fatores III, XI e IX pedem — configuração por ambiente, log em stdout e ciclo de vida do container —, em português e de graça. O limite honesto: ele NÃO discute os doze fatores pelo nome; quem quiser a metodologia em si lê o site, que também está traduzido.",
+          "why_en": "The course shows in practice what factors III, XI and IX ask for — config by environment, logs to stdout and container lifecycle — in Portuguese and for free. The honest limit: it does NOT discuss the twelve factors by name; for the methodology itself read the site, which is also translated."
+        }
+      ]
     }
   ]
 }

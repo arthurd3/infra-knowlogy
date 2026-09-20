@@ -1,0 +1,77 @@
+---
+/** prod-04 — o mapeamento de UID que faz root não ser root. */
+import Figure from "../Figure.astro";
+import type { Lang } from "../../i18n/ui";
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+const C = {
+  pt: {
+    dentro: "dentro do container", fora: "no host",
+    rows: [
+      { a: "uid 0 (root)", b: "userlinux (uid 1000)", nota: "o mapa {0 1000 1}: só o uid 0 vira o seu usuário", cls: "dg-box--accent" },
+      { a: "uid 65532", b: "uid 589819", nota: "524288 + 65532 − 1 — a aritmética do /etc/subuid", cls: "dg-box--raised" },
+    ],
+    sub: "/etc/subuid: userlinux:524288:65536 — a faixa que o kernel deixa este usuário mapear",
+    quebra: "o que quebra, e é medido",
+    quebras: [
+      "porta 80: recusada (net.ipv4.ip_unprivileged_port_start = 1024)",
+      "daemon residente: zero — o podman não deixa processo de pé entre comandos",
+    ],
+    mesma: "e a MESMA imagem roda nas duas engines: a api sobe no podman e falha com o erro de config dela mesma",
+    caption:
+      "A frase \"root no container não é root no host\" vira uma tabela quando você mede. O processo que se vê como <code>uid 0</code> aparece no <code>ps</code> do host como o seu usuário comum. E o <code>uid 65532</code> da imagem distroless vira <b>589819</b>, que não é um número mágico: é <code>524288 + 65532 − 1</code>, a faixa que o <code>/etc/subuid</code> concede. O que se perde junto é concreto — porta privilegiada é recusada, e é por isso que a stack publica em 8080.",
+    alt: "Mapeamento de UID entre container e host sob execução rootless, com os números medidos.",
+  },
+  en: {
+    dentro: "inside the container", fora: "on the host",
+    rows: [
+      { a: "uid 0 (root)", b: "userlinux (uid 1000)", nota: "the map {0 1000 1}: only uid 0 becomes your user", cls: "dg-box--accent" },
+      { a: "uid 65532", b: "uid 589819", nota: "524288 + 65532 − 1 — the arithmetic of /etc/subuid", cls: "dg-box--raised" },
+    ],
+    sub: "/etc/subuid: userlinux:524288:65536 — the range the kernel lets this user map",
+    quebra: "what breaks, and is measured",
+    quebras: [
+      "port 80: refused (net.ipv4.ip_unprivileged_port_start = 1024)",
+      "resident daemon: zero — podman leaves no process standing between commands",
+    ],
+    mesma: "and the SAME image runs on both engines: the api starts under podman and fails with its own config error",
+    caption:
+      "The sentence \"root in the container is not root on the host\" becomes a table once you measure it. The process that sees itself as <code>uid 0</code> shows up in the host's <code>ps</code> as your ordinary user. And the distroless image's <code>uid 65532</code> becomes <b>589819</b>, which is not a magic number: it is <code>524288 + 65532 − 1</code>, the range <code>/etc/subuid</code> grants. What is lost along with it is concrete — privileged ports are refused, which is why the stack publishes on 8080.",
+    alt: "UID mapping between container and host under rootless execution, with measured numbers.",
+  },
+}[lang];
+---
+<Figure caption={C.caption} alt={C.alt}>
+  <svg viewBox="0 0 700 250" xmlns="http://www.w3.org/2000/svg" font-size="11">
+    <defs>
+      <marker id="um-a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M0 0 L10 5 L0 10 z" class="dg-fill-accent" />
+      </marker>
+    </defs>
+
+    <text x="90" y="18" text-anchor="middle" class="dg-faint" font-size="9">{C.dentro}</text>
+    <text x="330" y="18" text-anchor="middle" class="dg-faint" font-size="9">{C.fora}</text>
+
+    {C.rows.map((r, i) => {
+      const y = 28 + i * 48;
+      return (
+        <g>
+          <rect x="14" y={y} width="152" height="34" rx="6" class={`dg-box ${r.cls}`} />
+          <text x="90" y={y + 22} text-anchor="middle" class="dg-mono dg-title" font-size="10">{r.a}</text>
+          <path d={`M172 ${y + 17} L248 ${y + 17}`} class="dg-line dg-line--accent" fill="none" marker-end="url(#um-a)" />
+          <rect x="254" y={y} width="152" height="34" rx="6" class="dg-box dg-box--raised" />
+          <text x="330" y={y + 22} text-anchor="middle" class="dg-mono dg-title" font-size="10">{r.b}</text>
+          <text x="418" y={y + 21} class="dg-faint" font-size="8.5">{r.nota}</text>
+        </g>
+      );
+    })}
+
+    <text x="14" y="140" class="dg-mono dg-faint" font-size="8.5">{C.sub}</text>
+
+    <text x="14" y="168" class="dg-muted" font-size="10" font-weight="620">{C.quebra}</text>
+    {C.quebras.map((t, i) => (
+      <text x="14" y={184 + i * 15} class="dg-faint" font-size="9">· {t}</text>
+    ))}
+    <text x="14" y="232" class="dg-title" font-size="9.5">{C.mesma}</text>
+  </svg>
+</Figure>

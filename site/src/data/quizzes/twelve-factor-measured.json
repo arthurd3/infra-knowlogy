@@ -1,0 +1,116 @@
+{
+  "note_pt": "O fator desatualizado, o fator quebrado de propósito, e o que criou o módulo 2.",
+  "note_en": "The outdated factor, the deliberately broken one, and the one that created module 2.",
+  "pt": [
+    {
+      "q": "O fator III manda pôr configuração no ambiente. Por que esta stack desvia para segredo?",
+      "options": [
+        {
+          "text": "Porque variável de ambiente vaza por `docker inspect`, `/proc/<pid>/environ`, herança de processo filho e relatório de crash — o caminho de arquivo não.",
+          "correct": true,
+          "why": "O desvio é MAIS seguro do que o fator pede, e por isso é declarado em vez de escondido. Vale notar que o fator já mira outro problema: ele fala em ambiente para distinguir de config em arquivo VERSIONADO."
+        },
+        {
+          "text": "Porque o Compose não suporta variável de ambiente para segredo.",
+          "why": "Suporta perfeitamente — é o que a maioria dos tutoriais faz. A decisão aqui é de segurança, não de limitação da ferramenta."
+        },
+        {
+          "text": "Porque o Postgres exige o formato `_FILE`.",
+          "why": "A imagem oficial ACEITA os dois. A convenção foi escolhida aqui e implementada igual no config.go e no config.py, que são código próprio."
+        }
+      ]
+    },
+    {
+      "q": "Qual fator esta stack NÃO cumpre, e o que isso significa?",
+      "options": [
+        {
+          "text": "O VIII, concorrência: não há `replicas:` em compose nenhum — e escalar de verdade é o que fez o módulo 2 existir.",
+          "correct": true,
+          "why": "O Compose tem `deploy.replicas` e ele é meia-resposta: sobe N containers e não resolve balanceamento, descoberta, rolling update nem recolocação. O fator não cumprido aponta para a fronteira onde o Compose deixa de bastar."
+        },
+        {
+          "text": "O XI, logs, porque o Alloy escreve em arquivo.",
+          "why": "Nenhuma aplicação escreve arquivo — um grep confirma. O Alloy LÊ o stdout pelo daemon e manda para o Loki; a aplicação segue sem saber que ele existe."
+        },
+        {
+          "text": "O IX, descartabilidade, porque o Postgres demora a parar.",
+          "why": "O `make shutdown-test` cronometra e todos param em menos de 3s. É o único fator que o portão mede em segundos, e ele passa."
+        }
+      ]
+    },
+    {
+      "q": "Por que o portão mede desligamento gracioso em segundos, e não início rápido?",
+      "options": [
+        {
+          "text": "Porque início lento é visível na primeira execução, e desligamento lento é invisível até o dia em que uma requisição some no meio.",
+          "correct": true,
+          "why": "O `docker stop` manda SIGTERM, espera o stop_grace_period e manda SIGKILL. Um processo que passou a ignorar SIGTERM continua subindo normalmente — e só a medição pega."
+        },
+        {
+          "text": "Porque início rápido não é um dos doze fatores.",
+          "why": "É: o fator IX pede as duas coisas, \"início rápido e desligamento gracioso\". A diferença é como cada uma falha, não se o fator as menciona."
+        },
+        {
+          "text": "Porque o Compose não consegue medir tempo de início.",
+          "why": "O `up --wait` mede exatamente isso — ele espera todo healthcheck passar. A razão é de visibilidade da falha, não de capacidade da ferramenta."
+        }
+      ]
+    }
+  ],
+  "en": [
+    {
+      "q": "Factor III says put config in the environment. Why does this stack deviate for secrets?",
+      "options": [
+        {
+          "text": "Because an environment variable leaks through `docker inspect`, `/proc/<pid>/environ`, child process inheritance and crash reports — a file path does not.",
+          "correct": true,
+          "why": "The deviation is SAFER than the factor asks for, which is why it is declared rather than hidden. Worth noting the factor aims at a different problem: it says environment to distinguish it from config in a VERSIONED file."
+        },
+        {
+          "text": "Because Compose does not support environment variables for secrets.",
+          "why": "It supports them perfectly well — it is what most tutorials do. The decision here is about security, not a tool limitation."
+        },
+        {
+          "text": "Because Postgres requires the `_FILE` format.",
+          "why": "The official image ACCEPTS both. The convention was chosen here and implemented identically in config.go and config.py, which are our own code."
+        }
+      ]
+    },
+    {
+      "q": "Which factor does this stack NOT meet, and what does that mean?",
+      "options": [
+        {
+          "text": "Factor VIII, concurrency: there is no `replicas:` in any compose file — and real scaling is what made module 2 exist.",
+          "correct": true,
+          "why": "Compose has `deploy.replicas` and it is half an answer: it starts N containers and solves neither load balancing, discovery, rolling updates nor rescheduling. The unmet factor points at the boundary where Compose stops being enough."
+        },
+        {
+          "text": "Factor XI, logs, because Alloy writes to a file.",
+          "why": "No application writes files — a grep confirms it. Alloy READS stdout through the daemon and ships it to Loki; the application still does not know it exists."
+        },
+        {
+          "text": "Factor IX, disposability, because Postgres is slow to stop.",
+          "why": "`make shutdown-test` times them and all stop in under 3s. It is the only factor the gate measures in seconds, and it passes."
+        }
+      ]
+    },
+    {
+      "q": "Why does the gate measure graceful shutdown in seconds, and not fast startup?",
+      "options": [
+        {
+          "text": "Because slow startup is visible on the first run, and slow shutdown is invisible until the day a request vanishes mid-flight.",
+          "correct": true,
+          "why": "`docker stop` sends SIGTERM, waits out stop_grace_period and sends SIGKILL. A process that started ignoring SIGTERM still comes up normally — and only measurement catches it."
+        },
+        {
+          "text": "Because fast startup is not one of the twelve factors.",
+          "why": "It is: factor IX asks for both, \"fast startup and graceful shutdown\". The difference is how each one fails, not whether the factor mentions them."
+        },
+        {
+          "text": "Because Compose cannot measure startup time.",
+          "why": "`up --wait` measures exactly that — it waits for every healthcheck to pass. The reason is failure visibility, not tool capability."
+        }
+      ]
+    }
+  ]
+}

@@ -94,6 +94,7 @@ make iac-verify # its own gate — 28 checks, including idempotence and drift
 
 make obs        # Prometheus, Grafana, Loki, Alloy and four exporters
                 # with SLO rules that load and a burn-rate alert the gate makes fire
+make shutdown-test  # proves every service stops gracefully in under 3s
 ```
 
 Requirements: Docker 25+ with BuildKit, Docker Compose v2+, Node 22+ (site only),

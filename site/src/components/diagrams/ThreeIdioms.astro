@@ -1,0 +1,89 @@
+---
+/** prod-01 — os três Dockerfiles, e por que os estágios não coincidem. */
+import Figure from "../Figure.astro";
+import type { Lang } from "../../i18n/ui";
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+const C = {
+  pt: {
+    cols: [
+      { svc: "api-go", lang: "Go", stages: ["build", "dist", "minimal", "debug"],
+        why: "compila estático; a `dist` é FROM scratch", extra: "`debug` existe porque distroless não tem shell" },
+      { svc: "worker-py", lang: "Python", stages: ["build", "dist", "fat"],
+        why: "o uv resolve e instala numa venv que é copiada", extra: "`fat` guarda as ferramentas para quando precisar" },
+      { svc: "web", lang: "Node", stages: ["deps", "build", "dist", "dev"],
+        why: "`deps` isola o npm ci do código que muda", extra: "`dev` é a ÚLTIMA — e é a armadilha 9" },
+    ],
+    head: ["serviço", "estágios", "por que assim", "o estágio extra"],
+    rule: "o princípio é um só: o que compila não vai junto. O número de estágios muda porque as linguagens compilam de formas diferentes.",
+    trap: "a stage `dev` do site é a ÚLTIMA do arquivo — um `build:` sem `target:` constrói ela, e o site sobe com astro dev em produção",
+    caption:
+      "Três linguagens, três formas de multi-stage, <b>um princípio só</b>: o que compila não viaja junto com o que roda. O Go produz binário estático e a stage final pode ser <code>scratch</code>; o Python precisa carregar um interpretador, então o que se copia é uma venv; o Node compila para HTML e a imagem final nem tem Node. O número de estágios não é estilo — ele acompanha o que cada cadeia de build precisa isolar.",
+    alt: "Os três Dockerfiles da stack, com seus estágios e o motivo de cada um.",
+  },
+  en: {
+    cols: [
+      { svc: "api-go", lang: "Go", stages: ["build", "dist", "minimal", "debug"],
+        why: "compiles static; `dist` is FROM scratch", extra: "`debug` exists because distroless has no shell" },
+      { svc: "worker-py", lang: "Python", stages: ["build", "dist", "fat"],
+        why: "uv resolves and installs into a venv that is copied", extra: "`fat` keeps the tools for when you need them" },
+      { svc: "web", lang: "Node", stages: ["deps", "build", "dist", "dev"],
+        why: "`deps` isolates npm ci from the code that changes", extra: "`dev` is the LAST one — and it is trap 9" },
+    ],
+    head: ["service", "stages", "why this shape", "the extra stage"],
+    rule: "the principle is one: what compiles does not travel along. The stage count differs because languages compile differently.",
+    trap: "the site's `dev` stage is the LAST in the file — a `build:` without `target:` builds it, and the site ships astro dev to production",
+    caption:
+      "Three languages, three multi-stage shapes, <b>one principle</b>: what compiles does not travel with what runs. Go produces a static binary and the final stage can be <code>scratch</code>; Python needs an interpreter, so what gets copied is a venv; Node compiles to HTML and the final image has no Node at all. The stage count is not style — it follows what each build chain needs to isolate.",
+    alt: "The stack's three Dockerfiles, with their stages and the reason for each.",
+  },
+}[lang];
+---
+<Figure caption={C.caption} alt={C.alt}>
+  <svg viewBox="0 0 700 272" xmlns="http://www.w3.org/2000/svg" font-size="11">
+    <defs>
+      <marker id="ti-a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+        <path d="M0 0 L10 5 L0 10 z" class="dg-fill-accent" />
+      </marker>
+    </defs>
+
+    {C.head.map((h, i) => (
+      <text x={[16, 110, 330, 500][i]} y="16" class="dg-faint" font-size="8.5">{h}</text>
+    ))}
+
+    {C.cols.map((c, i) => {
+      const y = 28 + i * 62;
+      return (
+        <g>
+          <text x="16" y={y + 22} class="dg-mono dg-title" font-size="10.5">{c.svc}</text>
+          <text x="16" y={y + 35} class="dg-faint" font-size="8.5">{c.lang}</text>
+
+          {c.stages.map((s, j) => {
+            const x = 110 + j * 54;
+            const ultima = j === c.stages.length - 1;
+            const dist = s === "dist";
+            return (
+              <g>
+                <rect x={x} y={y + 8} width={46} height={26} rx={5}
+                      class={`dg-box ${dist ? "dg-box--accent" : ultima ? "dg-box--warn" : "dg-box--raised"}`} />
+                <text x={x + 23} y={y + 25} text-anchor="middle" font-size="8"
+                      class={`dg-mono ${dist ? "dg-on-accent" : "dg-title"}`}>{s}</text>
+                {j < c.stages.length - 1 && (
+                  <path d={`M${x + 46} ${y + 21} L${x + 52} ${y + 21}`} class="dg-line dg-line--accent"
+                        fill="none" marker-end="url(#ti-a)" />
+                )}
+              </g>
+            );
+          })}
+
+          <text x="330" y={y + 20} class="dg-faint" font-size="8.5">{c.why}</text>
+          <text x="500" y={y + 20} class="dg-faint" font-size="8.5">{c.extra}</text>
+        </g>
+      );
+    })}
+
+    <path d="M14 218 L686 218" class="dg-line dg-line--dashed" fill="none" />
+    <text x="16" y="236" class="dg-title" font-size="9.5">{C.rule}</text>
+    <text x="16" y="256" class="dg-muted" font-size="9" font-weight="620">{C.trap}</text>
+  </svg>
+</Figure>

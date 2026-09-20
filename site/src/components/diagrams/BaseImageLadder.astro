@@ -1,0 +1,85 @@
+---
+/**
+ * prod-02 — a escada de imagem base, com os bytes medidos.
+ *
+ * Os tamanhos vêm de measured.json, que o `sizes.sh` regrava a cada
+ * `make verify`. Escrever "5 MB" aqui seria um número que envelhece calado.
+ */
+import Figure from "../Figure.astro";
+import type { Lang } from "../../i18n/ui";
+import measured from "../../data/measured.json";
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+
+const mb = (b: number) => (b / 1_048_576).toFixed(1);
+const go = measured.images.filter((i) => i.service === "api-go");
+const py = measured.images.filter((i) => i.service === "worker-py");
+const maior = Math.max(...measured.images.map((i) => i.bytes));
+
+const C = {
+  pt: {
+    head: "o MESMO binário Go, em quatro bases diferentes",
+    head2: "e o worker Python, que não tem como fugir do interpretador",
+    cost: "o que cada degrau custa",
+    costs: [
+      "scratch — sem shell, sem libc, sem CA: TLS de saída quebra até você copiar os certificados",
+      "distroless — sem shell, com CA e usuário não-root prontos: `docker exec` não abre nada",
+      "alpine — tem shell e apk: o mais fácil de depurar, e o maior dos três",
+    ],
+    punch: "a escolha não é de tamanho: é de quanto você aceita não conseguir olhar lá dentro",
+    caption:
+      "A mesma aplicação, em bases diferentes, medida pelo <code>sizes.sh</code>. A diferença entre o menor e o maior é de poucos megabytes — e é a razão errada para escolher. A razão certa é o que some junto: <code>scratch</code> não tem nem certificado raiz, e uma chamada HTTPS de saída falha com um erro que não menciona certificado. O que se compra com bytes a mais é a capacidade de entrar e olhar quando algo der errado.",
+    alt: "Barras com o tamanho medido da mesma aplicação em bases diferentes.",
+  },
+  en: {
+    head: "the SAME Go binary, on four different bases",
+    head2: "and the Python worker, which cannot escape the interpreter",
+    cost: "what each rung costs",
+    costs: [
+      "scratch — no shell, no libc, no CA bundle: outbound TLS breaks until you copy the certificates",
+      "distroless — no shell, with CA bundle and a non-root user ready: `docker exec` opens nothing",
+      "alpine — has a shell and apk: the easiest to debug, and the largest of the three",
+    ],
+    punch: "the choice is not about size: it is about how much you accept not being able to look inside",
+    caption:
+      "The same application, on different bases, measured by <code>sizes.sh</code>. The difference between smallest and largest is a few megabytes — and that is the wrong reason to choose. The right reason is what disappears with it: <code>scratch</code> has no root certificates, and an outbound HTTPS call fails with an error that never mentions certificates. What extra bytes buy is the ability to go in and look when something breaks.",
+    alt: "Bars with the measured size of the same application on different bases.",
+  },
+}[lang];
+---
+<Figure caption={C.caption} alt={C.alt}>
+  <svg viewBox="0 0 700 284" xmlns="http://www.w3.org/2000/svg" font-size="11">
+    <text x="14" y="16" class="dg-faint" font-size="9">{C.head}</text>
+
+    {go.map((i, k) => {
+      const y = 26 + k * 26;
+      const w = Math.max(6, Math.round((i.bytes / maior) * 400));
+      return (
+        <g>
+          <text x="14" y={y + 13} class="dg-mono dg-title" font-size="9">{i.base}</text>
+          <rect x={190} y={y + 2} width={w} height={14} rx={2} class={k === 0 ? "dg-fill-accent" : "dg-fill-warn"} />
+          <text x={190 + w + 8} y={y + 13} class="dg-mono dg-faint" font-size="9">{mb(i.bytes)} MB · {i.layers} layers</text>
+        </g>
+      );
+    })}
+
+    <text x="14" y={26 + go.length * 26 + 16} class="dg-faint" font-size="9">{C.head2}</text>
+    {py.map((i, k) => {
+      const y = 26 + go.length * 26 + 24 + k * 26;
+      const w = Math.max(6, Math.round((i.bytes / maior) * 400));
+      return (
+        <g>
+          <text x="14" y={y + 13} class="dg-mono dg-title" font-size="9">{i.base}</text>
+          <rect x={190} y={y + 2} width={w} height={14} rx={2} class="dg-fill-danger" />
+          <text x={190 + w + 8} y={y + 13} class="dg-mono dg-faint" font-size="9">{mb(i.bytes)} MB</text>
+        </g>
+      );
+    })}
+
+    <text x="14" y="196" class="dg-muted" font-size="10" font-weight="620">{C.cost}</text>
+    {C.costs.map((t, i) => (
+      <text x="14" y={212 + i * 15} class="dg-faint" font-size="8.5">· {t}</text>
+    ))}
+    <text x="14" y="272" class="dg-title" font-size="9.5">{C.punch}</text>
+  </svg>
+</Figure>

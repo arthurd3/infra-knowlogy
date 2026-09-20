@@ -11,7 +11,7 @@ lado a lado só é honesta porque a aplicação é a mesma.
 
 | # | Módulo | Diretório | Portão | Estado |
 |---|---|---|---|---|
-| 1 | **Docker** — imagens, Compose, hardening OWASP, observabilidade | `stack/` | `make verify` (32 checagens) | **feito** · pendência: Trilha Produção (12 lições) |
+| 1 | **Docker** — imagens, Compose, hardening OWASP, observabilidade | `stack/` | `make verify` (37 checagens) | **feito** · trilhas Fundamentos (8) e Produção (6) escritas |
 | 2 | **Kubernetes** — a mesma stack portada para um cluster kind | `k8s/` | `make k8s-verify` (33 checagens) | **feito (v1)** · [ADR 0007](adr/0007-kind-e-o-porte-para-kubernetes.md) · pendências: lições 4+, Gateway API, HPA, RBAC, kind no CI |
 | 3 | **CI/CD self-hosted (Jenkins)** — o mesmo pipeline do GitHub Actions rodando num Jenkins que é seu, sobre a mesma stack | `cicd/` | `make cicd-verify` (35 checagens) | **feito (v1)** · [ADR 0011](adr/0011-como-o-agente-de-build-constroi-imagens.md) e [0012](adr/0012-jenkins-conteinerizado.md) · pendências: as 8 lições, scan e assinatura no pipeline |
 | 4 | **IaC (OpenTofu)** — a mesma stack declarada em HCL e provisionada contra o daemon local | `iac/` | `make iac-verify` (28 checagens) | **feito (v1)** · [ADR 0015](adr/0015-opentofu-e-o-provider-docker.md) e [0016](adr/0016-como-o-tofu-alcanca-o-daemon.md) · 8 lições bilíngues na trilha `iac` |
@@ -77,6 +77,7 @@ depois de a trilha de Fundamentos ser retrabalhada (ADR 0017):
 | trilha | lições | `Term` | `Tradeoff` | `FieldNote` |
 |---|---|---|---|---|
 | fundamentos | 8 | 15 | 1 | 1 |
+| producao | 6 | 6 | 6 | 2 |
 | observabilidade | 7 | 7 | 3 | 1 |
 | seguranca | 6 | 13 | 3 | 9 |
 | **kubernetes** | 3 | **0** | **0** | **0** |
@@ -89,10 +90,16 @@ estendê-la para as outras trilhas é trabalho declarado, não esquecido.
 
 ## Itens dentro dos módulos já abertos
 
-- **Módulo 1:** Trilha Produção — 12 lições sobre o código que já existe
-  (multi-stage nos três idiomas, BuildKit, PID 1 e sinais, hardening, segredos,
-  rootless/Podman, observabilidade, cadeia de suprimentos, CI/CD, limites do
-  Compose, 12-Factor).
+- **Módulo 1:** a Trilha Produção está **escrita**, com seis lições e não doze.
+  A lista de doze é de agosto de 2026, quando o repositório tinha uma trilha
+  só; auditando antes de escrever, **metade dela já tinha dono** — BuildKit na
+  lição 4 de Fundamentos, PID 1 na 5, cadeia de suprimentos em `cicd-07`,
+  observabilidade numa trilha inteira, e `_FILE` em onze lições. O
+  [ADR 0019](adr/0019-reescopar-a-trilha-producao.md) registra a auditoria e o
+  critério: só entrou o que o repositório TEM e ninguém ensinava.
+
+  Ficou de fora e continua sem dono: **Alertmanager** (o `firing` da trilha de
+  Observabilidade não notifica ninguém) e **tracing/OpenTelemetry**.
 - **Módulo 4:** de pé e verde (28 checagens), com as 8 lições escritas. Ficou
   para depois: um backend remoto de verdade (com lock) para a lição 2 deixar de
   citar concorrência sem medi-la, e o espelho do módulo 2 — provisionar o

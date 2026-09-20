@@ -1,0 +1,223 @@
+---
+key: rootless-and-podman
+lang: en
+track: producao
+order: 4
+title: Rootless, and what changes when root is not root
+summary: "Measured on this machine: the process sees itself as uid 0 and shows up in the host's ps as your user. uid 65532 becomes 589819, which is not magic — it is 524288 + 65532 − 1."
+minutes: 15
+tags: [production, rootless, podman, user-namespace, subuid, daemon]
+sources:
+  - label: "Docker — rootless mode"
+    url: "https://docs.docker.com/engine/security/rootless/"
+    kind: docs
+    accessed: "2026-09-20"
+  - label: "user_namespaces(7) — Linux manual page"
+    url: "https://man7.org/linux/man-pages/man7/user_namespaces.7.html"
+    kind: docs
+    accessed: "2026-09-20"
+  - label: "Podman — documentation"
+    url: "https://docs.podman.io/en/latest/markdown/podman.1.html"
+    kind: docs
+    accessed: "2026-09-20"
+---
+
+import UidMapping from "../../../components/diagrams/UidMapping.astro";
+
+Fundamentals lesson 1 says a container is an ordinary Linux process. This lesson
+shows the consequence almost nobody measures: **who owns that process from the
+outside.**
+
+<UidMapping />
+
+## The same container, two engines
+
+```bash
+docker run --rm -d --name t alpine sleep 30
+ps -o user= -p "$(docker inspect t --format '{{.State.Pid}}')"
+# root
+
+podman run --rm -d --name t alpine sleep 30
+ps -o user= -p "$(podman inspect t --format '{{.State.Pid}}')"
+# userlinux
+```
+
+Inside, both say `uid=0`. Outside, one is really root and the other is an
+ordinary user. That is the entire difference.
+
+<Term word="user namespace" alt="user namespace" open>
+The namespace that gives a process its own mapping of UIDs and GIDs.
+
+Inside it, uid 0 exists and holds capabilities — **in that namespace**. Outside,
+it is translated into a uid with no privilege at all. It is not pretence: the
+kernel applies both views at once, and the host's file permissions are decided
+by the outside view.
+
+It is what the whole of rootless rests on, and it is the same mechanism
+Fundamentals lesson 1 lists among the seven namespaces.
+</Term>
+
+## The arithmetic, which is checkable
+
+```bash
+$ cat /etc/subuid
+userlinux:524288:65536
+
+$ podman info --format '{{.Host.IDMappings.UIDMap}}'
+[{0 1000 1} {1 524288 65536}]
+```
+
+Two ranges. The first says the container's uid 0 becomes the host's uid 1000 —
+your user. The second says uids 1 to 65536 become 524288 onwards.
+
+The api's distroless image runs as `USER 65532`. So:
+
+```
+524288 + 65532 − 1 = 589819
+```
+
+And that is exactly what the host's `ps` shows. Measured:
+
+<RunIt>
+```bash
+podman run --rm -d --name t --user 65532 alpine sleep 20
+ps -o user=,uid= -p "$(podman inspect t --format '{{.State.Pid}}')"
+# 589819   589819
+```
+</RunIt>
+
+<Callout type="why" label="Why this changes the threat model">
+A container escape under the rootful model hands over **root on the host**.
+Under rootless, it hands over a user who owns almost nothing — it cannot read
+`/etc/shadow`, write to `/usr`, or load a kernel module.
+
+It is not immunity: the kernel is still the single boundary, and a kernel
+escalation bug crosses both models. What changes is **how much the next step is
+worth** to whoever got there.
+</Callout>
+
+## What you lose, measured
+
+```bash
+$ podman run --rm -d -p 80:80 alpine sleep 20
+Error: rootlessport cannot expose privileged port 80
+```
+
+```bash
+$ sysctl -n net.ipv4.ip_unprivileged_port_start
+1024
+```
+
+Ports below 1024 are refused, because the host process does not hold
+`CAP_NET_BIND_SERVICE`. You can lower the `sysctl`, and then the protection
+disappears for everyone on the machine — that is a trade, not a fix.
+
+<Callout type="trap" label="And there is a second cost, in storage">
+Rootless uses `fuse-overlayfs` or unprivileged overlay, depending on the kernel.
+On an older kernel that means I/O through FUSE, with worse write performance on
+large builds.
+
+On this machine native overlay works without FUSE. Worth checking before
+assuming the cost is zero — `podman info --format '{{.Store.GraphDriverName}}'`.
+</Callout>
+
+## And there is no daemon
+
+```bash
+$ pgrep -c dockerd
+1
+$ pgrep -c podman
+0
+```
+
+Docker keeps a long-lived daemon running as root, and it is what creates the
+containers. Podman keeps nothing: every command forks and execs the runtime and
+exits. A container that keeps running is a child of a `conmon`, not of a central
+service.
+
+The most direct practical consequence: **there is no socket to steal**. All of
+ADR 0003's tension — Alloy behind an allowlist proxy, cAdvisor's `label=disable`
+— exists because there is a socket that is root. Without a daemon, the problem
+takes a different shape.
+
+<Tradeoff
+  a="Rootful Docker, with a daemon"
+  b="Rootless Podman, daemonless"
+  whenA="When the stack depends on the Docker ecosystem — Compose with every feature, tools that talk to the socket, publishing on low ports — and the host is dedicated, with controlled access."
+  whenB="When containers run on several people's machine, on a shared CI runner, or anywhere an escape would hand over root on a machine that is not only yours. It costs low ports and some integrations."
+  chose="a"
+  verdict="this stack runs on rootful Docker, and the lesson states why: module 1 was written first, Compose is its subject, and porting everything would change the variable under study. Module 3 made the OPPOSITE decision where it matters most — the build agent uses rootless BuildKit (ADR 0011), because there whoever controls the Dockerfile is whoever opens the pull request."
+  adr="0011-como-o-agente-de-build-constroi-imagens"
+/>
+
+<Callout type="why" label="The same image runs on both">
+```bash
+$ docker save infra-knowlogy/api-go:dev | podman load
+$ podman run --rm infra-knowlogy/api-go:dev
+{"level":"ERROR","msg":"configuração inválida",
+ "err":"segredo ausente: defina POSTGRES_PASSWORD_FILE ou POSTGRES_PASSWORD"}
+```
+
+The error is the **application's own**, in Portuguese, complaining about
+configuration — and it is the best possible proof that the image worked. The OCI
+specification is what makes that possible: the image is not "a Docker image", it
+is an OCI artifact any conforming runtime executes.
+</Callout>
+
+<LabExercise check="worker roda como não-root" file="stack/services/api-go/Dockerfile">
+
+The api's Dockerfile declares `USER 65532:65532`, and module 1's gate checks
+that the worker runs as non-root.
+
+Question: running **rootless**, does that `USER` still matter?
+
+<Fragment slot="hint">
+Think about the two boundaries: what the process reaches inside the container,
+and what it reaches outside.
+</Fragment>
+
+<Fragment slot="answer">
+
+It does, for a reason the mapping makes clear.
+
+**Outside the container**, under rootless, it makes no difference: `uid 0`
+becomes your user, `uid 65532` becomes 589819, and neither is root on the host.
+The protection already came from the user namespace.
+
+**Inside the container**, it changes everything. A process that sees itself as
+uid 0 holds, in that namespace, every capability the bounding set allows: it
+mounts, it writes to any file in the image, it edits `/etc`. With `USER 65532`
+it does none of that — and the surface an attacker inherits on achieving
+execution is much smaller.
+
+```bash
+# inside the container, under rootless, as uid 0
+podman run --rm alpine sh -c 'touch /etc/new-account && echo wrote'
+# wrote
+
+# and as 65532
+podman run --rm --user 65532 alpine sh -c 'touch /etc/new-account || echo refused'
+# refused
+```
+
+The rule that follows: **the two defences are independent and they add up.**
+Rootless protects the host; a non-root `USER` protects the container from
+itself. Having one does not excuse the other — and this stack has only the
+second, which is declared in the tradeoff above.
+
+</Fragment>
+</LabExercise>
+
+## What sticks
+
+- Rootless is not "without root": it is **root translated** by a user namespace.
+- The arithmetic is checkable: `/etc/subuid` plus the inside uid gives the
+  outside uid.
+- It costs ports below 1024, and possibly FUSE-backed I/O — both measurable.
+- With no daemon there is no root socket to steal — ADR 0003's tension changes
+  shape.
+- The same OCI image runs on both engines: the artifact is not "Docker's".
+- Rootless protects the host; a non-root `USER` protects the container. They add
+  up.
+
+<Quiz set="rootless-and-podman" />
