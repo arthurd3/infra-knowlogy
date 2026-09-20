@@ -1,0 +1,152 @@
+{
+  "note_pt": "A única lição da trilha sem número medido aqui — as perguntas testam se a fronteira ficou clara.",
+  "note_en": "The only lesson in the track with no number measured here — the questions test whether the boundary landed.",
+  "pt": [
+    {
+      "q": "A taxa de US$ 0,10 por cluster por hora do EKS e do GKE compra o quê, exatamente?",
+      "options": [
+        {
+          "text": "A disponibilidade do PLANO DE CONTROLE: API server, etcd, scheduler, controller-manager.",
+          "correct": true,
+          "why": "E nada acima dessa linha. Os nós continuam sendo cobrados à parte e continuam sendo seus, inclusive nos modos ditos 'sem servidor', onde eles apenas ficam invisíveis na fatura. Toda decisão que esta trilha mediu — probe, policy, RBAC, PDB — continua do lado de cá."
+        },
+        {
+          "text": "O cluster inteiro, nós inclusos, até um limite de uso.",
+          "why": "Os nós são cobrados como computação, separadamente, e costumam ser a maior parte da conta. A taxa de cluster é previsível e pequena justamente porque cobre só o plano de controle."
+        },
+        {
+          "text": "Suporte de engenharia para os seus workloads.",
+          "why": "Suporte é produto à parte em todos os três. A taxa cobre operação da infraestrutura do plano de controle, não análise da sua aplicação."
+        }
+      ]
+    },
+    {
+      "q": "Por que a lição de PodDisruptionBudget é MAIS importante num cluster gerenciado, e não menos?",
+      "options": [
+        {
+          "text": "Porque o provedor não deixa você escrever PDB.",
+          "why": "Deixa: PDB é objeto padrão da API e funciona igual em qualquer cluster conforme. Não há restrição."
+        },
+        {
+          "text": "Porque clusters gerenciados têm mais disrupção involuntária.",
+          "why": "Tendem a ter menos — o hardware é redundante e monitorado. O que muda não é a disrupção involuntária, é a voluntária."
+        },
+        {
+          "text": "Porque o upgrade de versão que a taxa financia DRENA os seus nós, e o drain consulta o seu PDB.",
+          "correct": true,
+          "why": "É a ligação direta entre o que você comprou e o que continua sendo seu: o provedor inicia um `drain` de verdade, pela API de eviction, num horário que você não escolheu. Sem PDB, ele pode despejar todas as suas réplicas ao mesmo tempo — e o Deployment vai recriá-las, com um intervalo sem serviço no meio."
+        }
+      ]
+    },
+    {
+      "q": "Por que o `kubectl apply -k k8s/base` deste repositório funcionaria num EKS sem mudanças?",
+      "options": [
+        {
+          "text": "Porque os manifests usam apenas APIs do próprio Kubernetes, validadas contra os schemas oficiais.",
+          "correct": true,
+          "why": "O portão roda `kubeconform -strict` contra as definições oficiais, e o programa de conformidade da CNCF existe para que uma distribuição certificada implemente exatamente essas. É o que torna o manifesto portátil — e é uma afirmação sobre um programa de certificação, não algo que este cluster possa demonstrar."
+        },
+        {
+          "text": "Porque o kind é um EKS local.",
+          "why": "O kind é Kubernetes rodando em containers Docker; ele não implementa nada de AWS. A portabilidade vem da API ser a mesma, não da implementação."
+        },
+        {
+          "text": "Porque o kustomize traduz os manifests para o formato de cada nuvem.",
+          "why": "Não há tradução alguma: o kustomize renderiza objetos Kubernetes, e é o mesmo YAML que sai dos dois lados. Se houvesse tradução, a portabilidade seria da ferramenta e não do padrão."
+        }
+      ]
+    },
+    {
+      "q": "O `kubeconform` aprovou todos os 25 objetos. O que AINDA pode quebrar na migração?",
+      "options": [
+        {
+          "text": "A ordem de criação dos objetos, que muda por provedor.",
+          "why": "O `apply` é declarativo e o controlador reconcilia em qualquer ordem — um Deployment criado antes do seu ConfigMap simplesmente espera. Ordem não é o risco aqui."
+        },
+        {
+          "text": "Coisas sobre o AMBIENTE: StorageClass inexistente, CNI que ignora NetworkPolicy, GatewayClass sem controlador, imagePullPolicy: Never.",
+          "correct": true,
+          "why": "Schema válido é necessário e não suficiente. `standard` é a StorageClass do kind; há CNI que aceita NetworkPolicy e não aplica (motivo de o k8s-prereqs recusar kind antigo); uma GatewayClass sem controlador fica sem ser programada; e `Never` vira ErrImageNeverPull onde não existe `kind load`. Nenhum validador de schema enxerga ambiente."
+        },
+        {
+          "text": "Nada: schema válido garante que aplica e funciona.",
+          "why": "É justamente a confusão que a lição desfaz. O validador confere a FORMA do objeto contra a especificação; ele não sabe se existe StorageClass, controlador ou imagem no destino."
+        }
+      ]
+    }
+  ],
+  "en": [
+    {
+      "q": "What exactly does the US$ 0.10 per cluster per hour fee on EKS and GKE buy?",
+      "options": [
+        {
+          "text": "The CONTROL PLANE's availability: API server, etcd, scheduler, controller-manager.",
+          "correct": true,
+          "why": "And nothing above that line. Nodes are still billed separately and are still yours, including in the so-called 'serverless' modes where they merely become invisible on the invoice. Every decision this track measured — probe, policy, RBAC, PDB — stays on your side."
+        },
+        {
+          "text": "The whole cluster, nodes included, up to a usage cap.",
+          "why": "Nodes are billed as compute, separately, and usually make up most of the bill. The cluster fee is predictable and small precisely because it covers only the control plane."
+        },
+        {
+          "text": "Engineering support for your workloads.",
+          "why": "Support is a separate product on all three. The fee covers operating the control plane's infrastructure, not analysing your application."
+        }
+      ]
+    },
+    {
+      "q": "Why is the PodDisruptionBudget lesson MORE important on a managed cluster, not less?",
+      "options": [
+        {
+          "text": "Because the provider does not let you write PDBs.",
+          "why": "It does: PDB is a standard API object and works identically on any conformant cluster. There is no restriction."
+        },
+        {
+          "text": "Because managed clusters have more involuntary disruption.",
+          "why": "They tend to have less — the hardware is redundant and monitored. What changes is not involuntary disruption, it is voluntary."
+        },
+        {
+          "text": "Because the version upgrade the fee pays for DRAINS your nodes, and drain consults your PDB.",
+          "correct": true,
+          "why": "It is the direct link between what you bought and what stays yours: the provider starts a real `drain`, through the eviction API, at a time you did not choose. Without a PDB it may evict all your replicas at once — and the Deployment will recreate them, with a service gap in between."
+        }
+      ]
+    },
+    {
+      "q": "Why would this repository's `kubectl apply -k k8s/base` work on an EKS unchanged?",
+      "options": [
+        {
+          "text": "Because the manifests use only Kubernetes's own APIs, validated against the official schemas.",
+          "correct": true,
+          "why": "The gate runs `kubeconform -strict` against the official definitions, and the CNCF conformance programme exists so that a certified distribution implements exactly those. That is what makes the manifest portable — and it is a claim about a certification programme, not something this cluster could demonstrate."
+        },
+        {
+          "text": "Because kind is a local EKS.",
+          "why": "kind is Kubernetes running in Docker containers; it implements nothing of AWS. Portability comes from the API being the same, not from the implementation."
+        },
+        {
+          "text": "Because kustomize translates the manifests into each cloud's format.",
+          "why": "There is no translation: kustomize renders Kubernetes objects, and it is the same YAML on both sides. If translation existed, portability would belong to the tool rather than to the standard."
+        }
+      ]
+    },
+    {
+      "q": "`kubeconform` approved all 25 objects. What can STILL break during the migration?",
+      "options": [
+        {
+          "text": "Object creation order, which differs by provider.",
+          "why": "`apply` is declarative and the controller reconciles in any order — a Deployment created before its ConfigMap simply waits. Order is not the risk here."
+        },
+        {
+          "text": "Things about the ENVIRONMENT: a missing StorageClass, a CNI that ignores NetworkPolicy, a GatewayClass with no controller, imagePullPolicy: Never.",
+          "correct": true,
+          "why": "A valid schema is necessary and not sufficient. `standard` is kind's StorageClass; some CNIs accept NetworkPolicy and never enforce it (the reason k8s-prereqs refuses old kind); a GatewayClass with no controller never gets programmed; and `Never` becomes ErrImageNeverPull where no `kind load` exists. No schema validator sees the environment."
+        },
+        {
+          "text": "Nothing: a valid schema guarantees it applies and works.",
+          "why": "That is exactly the confusion the lesson undoes. The validator checks the object's SHAPE against the specification; it does not know whether a StorageClass, a controller or the image exists at the destination."
+        }
+      ]
+    }
+  ]
+}

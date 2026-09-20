@@ -1,0 +1,187 @@
+---
+key: managed-clusters
+lang: en
+track: kubernetes
+order: 10
+title: "What a managed cluster adds"
+summary: "This is the only lesson in the track with no number measured here — EKS, GKE and AKS require an account and a card. It says so out loud and asks the question that matters: what exactly does the hourly fee buy, and what stays yours."
+minutes: 13
+tags: [kubernetes, eks, gke, aks, managed, cost]
+sources:
+  - label: "Amazon EKS — Pricing"
+    url: "https://aws.amazon.com/eks/pricing/"
+    kind: docs
+    accessed: "2026-09-20"
+  - label: "Google Kubernetes Engine — Pricing"
+    url: "https://cloud.google.com/kubernetes-engine/pricing"
+    kind: docs
+    accessed: "2026-09-20"
+  - label: "Azure Kubernetes Service — Pricing tiers"
+    url: "https://azure.microsoft.com/en-us/pricing/details/kubernetes-service/"
+    kind: docs
+    accessed: "2026-09-20"
+  - label: "Kubernetes Docs — Production environment: managed control plane"
+    url: "https://kubernetes.io/docs/setup/production-environment/"
+    kind: docs
+  - label: "CNCF — Certified Kubernetes Conformance Program"
+    url: "https://www.cncf.io/training/certification/software-conformance/"
+    kind: spec
+    accessed: "2026-09-20"
+---
+
+import ManagedBoundary from "../../../components/diagrams/ManagedBoundary.astro";
+
+Every other lesson in this track quotes a number `make k8s-verify` produced on
+this machine. **This one does not.** EKS, GKE and AKS require a cloud account
+and a credit card, and this repository's principle is that a technical claim is
+verified by a command — so here honesty means declaring the boundary rather than
+working around it.
+
+What follows is **cited, with source and access date**. Nothing here was
+measured.
+
+## The right question
+
+It is not "managed or self-managed?". It is:
+
+> **What exactly does the hourly fee buy?**
+
+<ManagedBoundary />
+
+The answer is a well-defined line: the provider operates the **control plane** —
+API server, etcd, scheduler, controller-manager — and nothing above it.
+
+<Term word="Control plane" alt="control plane">
+The set of processes that decides *what ought to exist*: the API server that
+receives and validates objects, the `etcd` that stores them, the scheduler that
+picks each pod's node, and the controller-manager that reconciles desired with
+actual.
+
+It runs none of your containers. The **kubelet** does that, on each node — and
+the nodes stay yours on all three providers, even in the so-called "serverless"
+modes, where they merely become invisible on the invoice.
+</Term>
+
+## What the invoice says
+
+Consulted on 20 September 2026:
+
+| | cluster fee | note |
+|---|---|---|
+| **EKS** | **US$ 0.10** / cluster / hour | **US$ 0.60** / hour on *extended support* — 12 extra months on a version past the standard 14-month window |
+| **GKE** | **US$ 0.10** / cluster / hour | billed in 1-second increments, regardless of mode, size or topology; the free tier gives **US$ 74.40** of monthly credit per billing account, covering **one** zonal or Autopilot cluster |
+| **AKS** | **Free**: no SLA | **Standard**: financially backed API server SLA. **Premium**: long-term extended support. The amount varies by region and the page publishes no figure |
+
+Ten cents an hour is about **US$ 73 a month**. Against the cost of the nodes it
+is noise — which makes running your own control plane a decision that **almost
+never** pays for itself in money.
+
+<Callout type="warn" title="The surprising line item is a different one">
+The cluster fee is predictable and small. What tends to explode is what it does
+not cover: cross-zone traffic, load balancers provisioned by every
+`Service type: LoadBalancer`, forgotten volumes — precisely the orphaned PVCs
+the [StatefulSet lesson](/en/lessons/statefulsets-in-depth) describes — and
+ingested logs.
+</Callout>
+
+## What stays yours
+
+Everything this track measured.
+
+The provider does not write your `requests`, and without `requests.cpu` the HPA
+sits at `<unknown>` on an EKS exactly as it did here. It does not write your
+`readinessProbe`, does not write your `NetworkPolicy`, does not tighten your
+RBAC and does not decide your `PodDisruptionBudget`.
+
+And there is a direct link between the thing you bought and the thing that
+stays yours:
+
+> **The version upgrade the fee pays for DRAINS your nodes.**
+
+It is a real `drain`, through the eviction API, and what decides whether it
+drops the service is the PDB you wrote — or did not write. The
+[previous lesson](/en/lessons/rollouts-and-disruption) measured both sides of
+that: the `201 Success` and the `429 TooManyRequests`.
+
+<Tradeoff
+  a="Managed control plane"
+  b="Your own control plane"
+  whenA="Almost always. US$ 73/month is less than one hour of whoever would restore etcd at three in the morning, and version upgrades stop being a project."
+  whenB="A regulatory sovereignty requirement, air-gapped environments, specialised hardware outside the cloud, or a scale where the fee multiplied by hundreds of clusters genuinely starts to matter."
+>
+  <Fragment slot="a">
+    You lose access to `etcd`, do not choose the API server's flags and depend on
+    the provider's version calendar. In exchange: multi-zone HA, backup and
+    restore that somebody has already tested.
+  </Fragment>
+  <Fragment slot="b">
+    Total control, including flags no provider exposes. In exchange: `etcd`
+    becomes a database **you** operate, with a backup **you** test by restoring
+    it.
+  </Fragment>
+</Tradeoff>
+
+## Why studying on kind is not studying something else
+
+This repository's `kubectl apply -k k8s/base` works on an EKS without a line
+changed, and that is not a coincidence: the manifests use only Kubernetes's own
+APIs, and the gate validates them against the **official schemas** with
+`kubeconform -strict` — the same 25 definitions any conformant cluster
+implements.
+
+<FieldNote
+  source="CNCF — Certified Kubernetes Conformance Program"
+  url="https://www.cncf.io/training/certification/software-conformance/"
+  accessed="2026-09-20"
+>
+The CNCF conformance programme exists precisely so that "Kubernetes" means the
+same thing everywhere: a certified distribution must pass a battery of API
+behaviour tests, and only then may use the trademark. That is what supports the
+claim that the same manifest applies on any of the three — and it is a claim
+about a certification programme, not something this single-node cluster could
+demonstrate.
+</FieldNote>
+
+What kind does **not** give you — and it is worth knowing what you are not
+exercising:
+
+- **More than one node.** Without it there are no `topologySpreadConstraints` to
+  observe, and `ReadWriteOnce` never fails (that was lesson 8's finding).
+- **A real control plane failure.** Here it is a process in a container.
+- **Cost.** Nothing here has a price, and a capacity decision without a price is
+  an exercise, not a decision.
+
+<LabExercise
+  question="You are migrating this stack to a managed cluster. What command do you run FIRST, and what does it NOT guarantee?"
+  check="kubeconform: 25 resources found parsing stdin"
+>
+  <Fragment slot="hint">
+    The gate already runs that command, and it needs no cluster at all.
+  </Fragment>
+  <Fragment slot="answer">
+
+```bash
+kubectl kustomize k8s/base | \
+  docker run --rm -i ghcr.io/yannh/kubeconform:v0.8.0 -strict -summary -
+```
+
+`kubeconform` validates every object against the **official** schema of the
+target Kubernetes version — the portability check that costs nothing.
+
+**What it does not guarantee**, and this is the important part:
+
+- that a `StorageClass` with that name exists at the destination (`standard` is
+  kind's);
+- that the destination's CNI actually **enforces** NetworkPolicy (some accept
+  and ignore — that is why `k8s-prereqs.sh` refuses old kind);
+- that a controller exists for the `GatewayClass` you declared;
+- that `imagePullPolicy: Never` makes sense — there is no `kind load` there, and
+  that line becomes `ErrImageNeverPull`.
+
+A valid schema is necessary and not sufficient. The four things above are about
+the **environment**, and no schema validator can see them.
+
+  </Fragment>
+</LabExercise>
+
+<Quiz set="managed-clusters" />

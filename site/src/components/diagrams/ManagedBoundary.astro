@@ -1,0 +1,65 @@
+---
+/** k8s-10 — a linha entre o que o provedor opera e o que continua sendo seu. */
+import Figure from "../Figure.astro";
+import type { Lang } from "../../i18n/ui";
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+const C = {
+  pt: {
+    prov: "O PROVEDOR OPERA — é isto que a taxa por hora compra",
+    voce: "CONTINUA SENDO SEU — e é tudo o que esta trilha ensinou",
+    p1: "API server (HA, multi-zona)", p2: "etcd: backup, restauração, criptografia",
+    p3: "scheduler e controller-manager", p4: "upgrade da versão do Kubernetes",
+    v1: "requests e limits", v2: "liveness e readiness",
+    v3: "NetworkPolicy", v4: "RBAC e tokens",
+    v5: "PodDisruptionBudget", v6: "a imagem e a cadeia dela",
+    linha: "a linha",
+    aviso: "o upgrade que você comprou DRENA os seus nós — e é o seu PDB que decide se isso derruba o serviço",
+    kind: "no kind, tudo isto roda num container Docker no seu laptop — mesma API, mesmos manifests, nenhuma das garantias",
+    caption:
+      "A taxa por hora compra a <b>disponibilidade do plano de controle</b>, e nada acima da linha. Toda decisão que esta trilha mediu — probe, policy, orçamento de disrupção, RBAC — continua sendo sua em qualquer nuvem. É por isso que estudar num kind não é estudar uma coisa diferente.",
+    alt: "Duas faixas separadas por uma linha: abaixo o que o provedor opera, acima o que continua sendo do usuário.",
+  },
+  en: {
+    prov: "THE PROVIDER OPERATES — this is what the hourly fee buys",
+    voce: "STILL YOURS — and it is everything this track taught",
+    p1: "API server (HA, multi-zone)", p2: "etcd: backup, restore, encryption",
+    p3: "scheduler and controller-manager", p4: "Kubernetes version upgrades",
+    v1: "requests and limits", v2: "liveness and readiness",
+    v3: "NetworkPolicy", v4: "RBAC and tokens",
+    v5: "PodDisruptionBudget", v6: "the image and its supply chain",
+    linha: "the line",
+    aviso: "the upgrade you paid for DRAINS your nodes — and your PDB decides whether that drops the service",
+    kind: "on kind, all of this runs in a Docker container on your laptop — same API, same manifests, none of the guarantees",
+    caption:
+      "The hourly fee buys the <b>control plane's availability</b>, and nothing above the line. Every decision this track measured — probe, policy, disruption budget, RBAC — remains yours on any cloud. That is why studying on kind is not studying something different.",
+    alt: "Two bands separated by a line: below, what the provider operates; above, what stays with the user.",
+  },
+}[lang];
+---
+<Figure caption={C.caption} alt={C.alt}>
+  <svg viewBox="0 0 720 272" xmlns="http://www.w3.org/2000/svg" font-size="11">
+    <text x="14" y="15" class="dg-muted" font-weight="640" font-size="10.5">{C.voce}</text>
+    {[C.v1, C.v2, C.v3, C.v4, C.v5, C.v6].map((t, i) => (
+      <g>
+        <rect x={14 + (i % 3) * 232} y={24 + Math.floor(i / 3) * 40} width="220" height="32" rx="5"
+              class="dg-box dg-box--accent" />
+        <text x={124 + (i % 3) * 232} y={44 + Math.floor(i / 3) * 40} text-anchor="middle" font-size="10">{t}</text>
+      </g>
+    ))}
+
+    <line x1="14" y1="122" x2="706" y2="122" class="dg-line dg-line--warn" stroke-width="2" />
+    <text x="706" y="117" text-anchor="end" class="dg-fill-warn" font-size="9">{C.linha}</text>
+
+    <text x="14" y="146" class="dg-muted" font-weight="640" font-size="10.5">{C.prov}</text>
+    {[C.p1, C.p2, C.p3, C.p4].map((t, i) => (
+      <g>
+        <rect x={14 + (i % 2) * 350} y={156 + Math.floor(i / 2) * 38} width="338" height="30" rx="5" class="dg-box" />
+        <text x={30 + (i % 2) * 350} y={175 + Math.floor(i / 2) * 38} class="dg-faint" font-size="10">{t}</text>
+      </g>
+    ))}
+
+    <text x="14" y="248" class="dg-fill-warn" font-size="9.5" font-weight="620">{C.aviso}</text>
+    <text x="14" y="264" class="dg-faint" font-size="8.5">{C.kind}</text>
+  </svg>
+</Figure>
