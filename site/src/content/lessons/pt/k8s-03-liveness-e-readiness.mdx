@@ -140,6 +140,50 @@ balanceamento — é reversível no instante em que a dependência volta.
 
 <RollingUpdate />
 
+<Term word="startupProbe" alt="startup probe">
+A terceira probe, e a que resolve um problema que as outras duas criam juntas.
+
+Uma aplicação que demora um minuto para subir — JVM com warm-up, migração no
+start, modelo carregado na memória — falha a `livenessProbe` durante esse
+minuto. O kubelet reinicia. Ela recomeça, demora um minuto, falha de novo: um
+crash-loop causado pela própria proteção.
+
+A saída óbvia, `initialDelaySeconds` alto na liveness, custa caro no resto da
+vida do pod: atrasa a detecção de travamento para sempre.
+
+A `startupProbe` separa os dois regimes. Enquanto ela não passa, liveness e
+readiness ficam **suspensas**; quando passa, ela nunca mais roda. Boot lento
+com detecção rápida depois — sem escolher entre os dois.
+</Term>
+
+<Tradeoff
+  a="initialDelaySeconds alto na liveness"
+  b="startupProbe"
+  whenA="Boot previsível e curto, e você quer um objeto a menos para manter. Cinco segundos de atraso inicial não estragam nada."
+  whenB="Boot longo ou variável. É o único jeito de ter tolerância grande na partida e detecção rápida depois — com initialDelaySeconds você paga a tolerância para sempre."
+>
+  <Fragment slot="a">
+    Uma linha. Em troca: o atraso vale durante toda a vida do pod, e um
+    travamento no terceiro dia demora o mesmo tempo para ser notado.
+  </Fragment>
+  <Fragment slot="b">
+    `failureThreshold × periodSeconds` pode ser minutos sem custo nenhum
+    depois. Em troca: mais um bloco, e um modo a mais para entender.
+  </Fragment>
+</Tradeoff>
+
+<FieldNote
+  source="Kubernetes Docs — Configure Liveness, Readiness and Startup Probes"
+  url="https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/"
+  accessed="2026-09-20"
+>
+A documentação recomenda explicitamente a `startupProbe` para containers de
+inicialização lenta, com a justificativa de evitar que o kubelet os mate antes
+de estarem prontos. Não medido aqui: nenhum serviço desta stack demora o
+bastante para exercitar isso — a api é um binário Go que sobe em menos de um
+segundo, que é o piso dos carimbos do Kubernetes.
+</FieldNote>
+
 ## As três letras miúdas
 
 Três sutilezas que o porte desta stack encontrou na prática, para levar junto

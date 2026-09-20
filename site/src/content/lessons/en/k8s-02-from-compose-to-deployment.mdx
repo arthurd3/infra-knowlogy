@@ -8,6 +8,10 @@ summary: The port of the stack, block by block — a service becomes Deployment 
 minutes: 14
 tags: [kubernetes, deployment, service, networkpolicy, secrets, kustomize]
 sources:
+  - label: "Kubernetes Docs — Objects In Kubernetes"
+    url: "https://kubernetes.io/docs/concepts/overview/working-with-objects/"
+    kind: docs
+    accessed: "2026-09-20"
   - label: "Kubernetes Docs — Services"
     url: "https://kubernetes.io/docs/concepts/services-networking/service/"
   - label: "Kubernetes Docs — Network Policies"
@@ -170,6 +174,51 @@ securityContext:
 A better outcome than the original: the cache runs with
 `capabilities.drop: [ALL]` **giving none back** — under Compose it needed
 SETGID/SETUID for the entrypoint to switch users.
+
+<Term word="Controller and resource" alt="controller and resource">
+The pair that explains almost everything in Kubernetes. A **resource** is an
+object describing a wish (`Deployment`, `Service`, `NetworkPolicy`). A
+**controller** is the process that turns that wish into reality.
+
+Translating `compose.yaml` gets easier read in this key: Compose had one block
+per service, and Kubernetes has one resource per *concern*. `deploy:` became a
+`Deployment`; the port became a `Service`; the network became a
+`NetworkPolicy`; the secret became a `Secret`.
+
+It is the reason for the line bloat — and also the reason you can grant
+permission over one without granting it over the other, which is the subject of
+the RBAC lesson.
+</Term>
+
+<Tradeoff
+  a="One file per stack (Compose)"
+  b="One resource per concern (Kubernetes)"
+  whenA="When the whole stack fits in your head and changes together. Reading one file top to bottom and knowing EVERYTHING that will come up is an underrated power."
+  whenB="When different parts change at different rates, or belong to different owners. Then having the network in one file and the application in another stops being bureaucracy."
+>
+  <Fragment slot="a">
+    Compact and readable in one pass. In exchange: no permission boundary is
+    possible, and a network change means touching the application's file.
+  </Fragment>
+  <Fragment slot="b">
+    Each concern with its object, its schema and its permission. In exchange:
+    the lines this lesson counts, and one `kubectl get` per type to see the
+    whole.
+  </Fragment>
+</Tradeoff>
+
+<FieldNote
+  source="Kubernetes Docs — Objects In Kubernetes"
+  url="https://kubernetes.io/docs/concepts/overview/working-with-objects/"
+  accessed="2026-09-20"
+>
+The documentation describes every object as having a `spec` (the desired state,
+written by you) and a `status` (the observed state, written by the controller) —
+and that separation is the contract that lets the system be declarative. Later
+lessons in this track live off one consequence of it: a green `status` is a
+control-plane assertion, not proof that traffic arrives. Not measured here — it
+is the shape of the API, not a number.
+</FieldNote>
 
 ## What the port does not solve
 

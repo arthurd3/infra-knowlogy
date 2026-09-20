@@ -217,6 +217,52 @@ downtime".
 
 <K8sMeasurements client:visible lang="en" />
 
+<Term word="Reconciliation loop" alt="reconciliation loop">
+The mechanism that makes Kubernetes different from a deploy script. A
+controller sits in a perpetual loop comparing two things:
+
+- the **desired** — what is in the objects you applied;
+- the **actual** — what really exists in the cluster.
+
+When they diverge, it acts to bring them together, and compares again. There is
+no "the deploy finished": there is continuous convergence.
+
+That is why deleting a pod by hand is not a destructive operation — it is a
+divergence, and the controller undoes it. And it is also why a cluster does not
+"get lost": it holds no sequence of steps that could be interrupted halfway.
+</Term>
+
+<Tradeoff
+  a="Compose"
+  b="Kubernetes"
+  whenA="One machine, one team, one environment. Compose fits in a file you read end to end, and `docker compose up` is the entire learning curve."
+  whenB="From the moment somebody has to be woken at night because a process died. Two-second self-healing pays for learning the model."
+>
+  <Fragment slot="a">
+    One file, one command, no abstraction between you and `docker run`. In
+    exchange: nothing recreates what died, `restart: always` counts nothing and
+    scaling is manual.
+  </Fragment>
+  <Fragment slot="b">
+    Continuous reconciliation, counted restarts, rolling updates that drop no
+    requests. In exchange: porting this stack cost the lines of YAML lesson 2
+    measures, and a whole vocabulary.
+  </Fragment>
+</Tradeoff>
+
+<FieldNote
+  source="Kubernetes Docs — Kubernetes Components"
+  url="https://kubernetes.io/docs/concepts/overview/components/"
+  accessed="2026-09-20"
+>
+The documentation describes the control plane as a set of independent
+controllers, each responsible for one object type, all running the same
+reconciliation loop. The architecture is deliberately decentralised: there is no
+single orchestrator that knows the whole state. Not measured here — this cluster
+runs everything as one process per container, and the controllers' independence
+only shows when one of them fails on its own.
+</FieldNote>
+
 ## The verdict stays the same
 
 None of this revokes ADR 0001. A well-configured host running Compose still

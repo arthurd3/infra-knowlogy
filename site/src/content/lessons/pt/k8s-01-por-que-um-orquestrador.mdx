@@ -214,6 +214,53 @@ promete o rolling; quem entrega o "sem downtime" é a aplicação.
 
 <K8sMeasurements client:visible lang="pt" />
 
+<Term word="Laço de reconciliação" alt="reconciliation loop">
+O mecanismo que faz o Kubernetes ser diferente de um script de deploy. Um
+controlador fica num laço perpétuo comparando duas coisas:
+
+- o **desejado** — o que está nos objetos que você aplicou;
+- o **real** — o que existe de fato no cluster.
+
+Quando eles divergem, ele age para aproximá-los, e volta a comparar. Não há
+"deploy terminou": há convergência contínua.
+
+É por isso que apagar um pod à mão não é uma operação destrutiva — é uma
+divergência, e o controlador a desfaz. E é também por isso que um cluster
+não "se perde": ele não guarda uma sequência de passos que possa ser
+interrompida no meio.
+</Term>
+
+<Tradeoff
+  a="Compose"
+  b="Kubernetes"
+  whenA="Uma máquina, um time, um ambiente. O Compose cabe num arquivo que você lê inteiro, e `docker compose up` é a curva de aprendizado completa."
+  whenB="A partir do momento em que alguém precisa ser acordado de madrugada porque um processo morreu. Auto-cura de 2 s paga o custo de aprender o modelo."
+>
+  <Fragment slot="a">
+    Um arquivo, um comando, nenhuma abstração entre você e o `docker run`.
+    Em troca: nada recria o que morreu, `restart: always` não conta nada e
+    escalar é manual.
+  </Fragment>
+  <Fragment slot="b">
+    Reconciliação contínua, restart contado, rolling update sem derrubar
+    requisição. Em troca: o porte desta stack custou linhas de YAML que a
+    lição 2 mede, e um vocabulário inteiro.
+  </Fragment>
+</Tradeoff>
+
+<FieldNote
+  source="Kubernetes Docs — Kubernetes Components"
+  url="https://kubernetes.io/docs/concepts/overview/components/"
+  accessed="2026-09-20"
+>
+A documentação descreve o plano de controle como um conjunto de controladores
+independentes, cada um responsável por um tipo de objeto, todos rodando o
+mesmo laço de reconciliação. A arquitetura é deliberadamente descentralizada:
+não existe um orquestrador único que saiba o estado inteiro. Não medido aqui
+— este cluster roda tudo num processo por container, e a independência dos
+controladores só se observa quando um deles falha sozinho.
+</FieldNote>
+
 ## O veredito continua o mesmo
 
 Nada disso revoga o ADR 0001. Um host bem configurado com Compose continua

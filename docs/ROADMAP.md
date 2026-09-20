@@ -77,7 +77,7 @@ setembro de 2026, depois de a trilha de Fundamentos ser retrabalhada
 
 | trilha | lições | `Term` | `Tradeoff` | `FieldNote` |
 |---|---|---|---|---|
-| kubernetes | 10 | 9 | 7 | 7 |
+| kubernetes | 10 | 12 | 10 | 10 |
 | fundamentos | 8 | 15 | 1 | 1 |
 | **cicd** | 8 | **0** | 1 | 1 |
 | iac | 8 | 6 | 7 | 7 |
@@ -87,8 +87,9 @@ setembro de 2026, depois de a trilha de Fundamentos ser retrabalhada
 
 O Kubernetes era o pior caso e era também a trilha mais curta — as duas coisas
 pelo mesmo motivo, e as duas resolvidas na mesma passada: as sete lições novas
-nasceram com os primitivos, e as três antigas ainda precisam do retrofit. Hoje o
-pior caso é o **cicd**, com 8 lições e nenhum `Term`. A `library.json` cobre
+nasceram com os primitivos e as três antigas receberam o retrofit — a trilha
+passou de zero a ser a mais bem coberta das sete. Hoje o pior caso é o **cicd**,
+com 8 lições e nenhum `Term`. A `library.json` cobre
 Fundamentos, Observabilidade e Produção; estendê-la para as outras trilhas é
 trabalho declarado, não esquecido.
 

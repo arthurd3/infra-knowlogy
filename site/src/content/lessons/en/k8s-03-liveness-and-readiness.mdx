@@ -141,6 +141,51 @@ balancing — reverses the instant the dependency returns.
 
 <RollingUpdate />
 
+<Term word="startupProbe" alt="startup probe">
+The third probe, and the one that solves a problem the other two create
+together.
+
+An application that takes a minute to come up — a JVM warming up, a migration
+at start, a model loaded into memory — fails the `livenessProbe` during that
+minute. The kubelet restarts it. It starts again, takes a minute, fails again:
+a crash-loop caused by its own protection.
+
+The obvious way out, a large `initialDelaySeconds` on liveness, is expensive
+for the rest of the pod's life: it delays stuck-process detection forever.
+
+The `startupProbe` separates the two regimes. While it has not passed, liveness
+and readiness are **suspended**; once it passes, it never runs again. A slow
+boot with fast detection afterwards — without choosing between them.
+</Term>
+
+<Tradeoff
+  a="A large initialDelaySeconds on liveness"
+  b="startupProbe"
+  whenA="A predictable, short boot, and you want one object less to maintain. Five seconds of initial delay spoil nothing."
+  whenB="A long or variable boot. It is the only way to have large tolerance at start and fast detection afterwards — with initialDelaySeconds you pay the tolerance forever."
+>
+  <Fragment slot="a">
+    One line. In exchange: the delay applies for the pod's entire life, and a
+    hang on day three takes just as long to be noticed.
+  </Fragment>
+  <Fragment slot="b">
+    `failureThreshold × periodSeconds` can be minutes at no cost afterwards. In
+    exchange: one more block, and one more mode to understand.
+  </Fragment>
+</Tradeoff>
+
+<FieldNote
+  source="Kubernetes Docs — Configure Liveness, Readiness and Startup Probes"
+  url="https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/"
+  accessed="2026-09-20"
+>
+The documentation explicitly recommends a `startupProbe` for slow-starting
+containers, on the grounds of stopping the kubelet from killing them before
+they are ready. Not measured here: no service in this stack takes long enough
+to exercise it — the api is a Go binary that comes up in under a second, which
+is the floor of Kubernetes's timestamps.
+</FieldNote>
+
 ## The three pieces of fine print
 
 Three subtleties the port of this stack hit in practice, to carry along with

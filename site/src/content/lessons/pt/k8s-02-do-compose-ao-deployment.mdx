@@ -8,6 +8,10 @@ summary: O porte da stack, bloco a bloco — serviço vira Deployment + Service,
 minutes: 14
 tags: [kubernetes, deployment, service, networkpolicy, secrets, kustomize]
 sources:
+  - label: "Kubernetes Docs — Objetos no Kubernetes"
+    url: "https://kubernetes.io/docs/concepts/overview/working-with-objects/"
+    kind: docs
+    accessed: "2026-09-20"
   - label: "Kubernetes Docs — Services"
     url: "https://kubernetes.io/docs/concepts/services-networking/service/"
   - label: "Kubernetes Docs — Network Policies"
@@ -165,6 +169,50 @@ securityContext:
 Resultado melhor que o original: o cache roda com `capabilities.drop: [ALL]`
 **sem devolver nenhuma** — no Compose ele precisava de SETGID/SETUID para o
 entrypoint trocar de usuário.
+
+<Term word="Controlador e recurso" alt="controller and resource">
+O par que explica quase tudo no Kubernetes. Um **recurso** é um objeto que
+descreve um desejo (`Deployment`, `Service`, `NetworkPolicy`). Um
+**controlador** é o processo que faz aquele desejo virar realidade.
+
+A tradução do `compose.yaml` fica mais fácil quando se lê nesta chave: o
+Compose tinha um bloco por serviço, e o Kubernetes tem um recurso por
+*preocupação*. `deploy:` virou `Deployment`; a porta virou `Service`; a rede
+virou `NetworkPolicy`; o segredo virou `Secret`.
+
+É a razão do inchaço de linhas — e também a razão de dar para conceder
+permissão sobre um sem conceder sobre o outro, que é o assunto da lição de
+RBAC.
+</Term>
+
+<Tradeoff
+  a="Um arquivo por stack (Compose)"
+  b="Um recurso por preocupação (Kubernetes)"
+  whenA="Quando a stack inteira cabe na sua cabeça e muda junta. Ler um arquivo de cima a baixo e saber TUDO o que vai subir é um poder que se subestima."
+  whenB="Quando partes diferentes mudam em ritmos diferentes, ou pertencem a donos diferentes. Aí ter a rede num arquivo e a aplicação noutro deixa de ser burocracia."
+>
+  <Fragment slot="a">
+    Compacto e legível de uma vez. Em troca: nenhum recorte de permissão
+    possível, e uma mudança de rede exige tocar o arquivo da aplicação.
+  </Fragment>
+  <Fragment slot="b">
+    Cada preocupação com seu objeto, seu schema e sua permissão. Em troca: as
+    linhas que esta lição conta, e um `kubectl get` por tipo para ver o todo.
+  </Fragment>
+</Tradeoff>
+
+<FieldNote
+  source="Kubernetes Docs — Objects In Kubernetes"
+  url="https://kubernetes.io/docs/concepts/overview/working-with-objects/"
+  accessed="2026-09-20"
+>
+A documentação descreve todo objeto como tendo um `spec` (o desejado, escrito
+por você) e um `status` (o observado, escrito pelo controlador) — e essa
+separação é o contrato que permite ao sistema ser declarativo. As lições
+posteriores desta trilha vivem de uma consequência dela: `status` verde é
+afirmação do plano de controle, e não prova de que o tráfego chega. Não medido
+aqui — é a forma da API, não um número.
+</FieldNote>
 
 ## O que o porte não resolve
 
