@@ -87,7 +87,8 @@ make verify     # the quality gate: build, boot, test, and prove the hardening
 make site-verify # the site alone — types, tests, build, generated HTML (no Docker)
 
 make k8s-up     # module 2: the SAME stack in a kind cluster, at 127.0.0.1:8081
-make k8s-verify # its own gate — 33 checks, from scratch, cluster destroyed after
+make k8s-gateway # add the Gateway API (Envoy Gateway); the same stack at :8083
+make k8s-verify # its own gate — 58 checks, from scratch, cluster destroyed after
 
 make iac-up     # module 4: the SAME stack again, declared in HCL, at 127.0.0.1:8082
 make iac-verify # its own gate — 28 checks, including idempotence and drift
@@ -145,9 +146,9 @@ seconds instead of paying for fifteen containers.
 
 ## The lessons
 
-34 lessons — 17 topics, in English and Portuguese — under
-`site/src/content/lessons/`, with 20 hand-drawn SVG diagrams and eight
-interactive widgets. The diagrams are written as markup, not exported as
+106 lessons — 53 topics, in English and Portuguese — under
+`site/src/content/lessons/`, across seven tracks, with 56 hand-drawn SVG
+diagrams, 53 quiz sets and eight interactive widgets. The diagrams are written as markup, not exported as
 pictures: they inherit the light/dark theme from CSS custom properties, stay
 sharp at any zoom and show up in `git diff` as text.
 
@@ -166,11 +167,23 @@ against this stack's own Postgres · layered defense, including the list of what
 this stack deliberately does **not** defend. Every claim is tied to a step of
 `make attack-lab`; the numbers come from `site/src/data/attack-lab.json`.
 
-**Kubernetes track** (module 2): why an orchestrator — ADR 0001's accepted
-limits, measured · from compose.yaml to Deployment, block by block · liveness
-vs readiness, with the database outage staged and counted. The numbers these
+**Kubernetes track** (module 2), ten lessons: why an orchestrator — ADR 0001's
+accepted limits, measured · from compose.yaml to Deployment, block by block ·
+liveness vs readiness, with the database outage staged and counted · **the
+Gateway API**, where every status condition goes green and nothing routes,
+because a NetworkPolicy drops the packet the control plane never hears about ·
+**RBAC and the negative proof**, done twice — cheaply by impersonation, honestly
+by a pod carrying the real token · **the HPA's blind window**, 12.8 to 44.7
+seconds against a one-second pod boot, with the arithmetic that predicts the
+bound (and the forgotten term: CPU usage is a *rate*, so it needs two scrapes) ·
+**Helm vs Kustomize settled by diff**, the same service rendered both ways and
+compared field by field · **StatefulSet**, where measuring contradicted the
+lesson I meant to write — `ReadWriteOnce` is per *node*, and two pods happily
+shared one volume · **rollouts, PDBs and what actually drops requests** · and
+**what a managed cluster adds**, the one lesson with nothing measured here,
+cited with prices verified on the providers' own pages. The numbers these
 lessons cite are written by `make k8s-verify` into
-`site/src/data/k8s-measured.json`.
+`site/src/data/k8s-measured.json` and `k8s-hpa.json`.
 
 **Two kinds of claim, told apart on the page.** Everything this repository
 measures is proven by a command in the gate. Plenty of what matters, though,
@@ -251,7 +264,7 @@ Current state: **32 passed · 0 failed**.
 For faster local iteration: `SKIP_SCAN=1 SKIP_OBS=1 make verify` (**27 passed**).
 For the site alone, with no Docker at all: `make site-verify`.
 
-Module 2 has its own independent gate, `make k8s-verify` (**33 passed · 0
+Module 2 has its own independent gate, `make k8s-verify` (**58 passed · 0
 failed**): it creates a kind cluster from scratch, loads the same images,
 applies the manifests, reruns the same smoke test through port 8081, proves the
 NetworkPolicies mirror the Compose networks (edge cannot reach db; db has no

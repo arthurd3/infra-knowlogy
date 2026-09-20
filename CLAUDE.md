@@ -336,6 +336,24 @@ justamente por isso.
     `/run/secrets/postgres_password`. Primo da armadilha 31: comando que sai
     calado vira conclusão errada.
 
+56. **O `k8s-verify` NÃO chama o `k8s-up.sh`** — ele cria o próprio cluster e
+    aplica os manifests direto. Um addon ligado só ao `k8s-up.sh` (foi o caso
+    do metrics-server) existe no seu cluster de trabalho e **não existe no
+    portão**. O que esconde isso é o `KEEP_CLUSTER=1`: toda iteração rápida
+    reaproveita o cluster que você montou à mão, e a falha só aparece na
+    primeira execução do zero. Addon novo entra nos **dois**.
+57. **`bad "falta A ou B"` é uma mensagem que manda o leitor investigar duas
+    coisas.** A checagem do HPA dizia "falta metrics-server ou requests.cpu" e
+    a causa real — a API de métricas nem estava servindo — só apareceu com um
+    `kubectl top pod` à mão. Quando duas causas produzem o mesmo sintoma,
+    **espere e reporte as duas separadamente**; o portão fica mais lento e para
+    de fazer você adivinhar.
+58. **`pkill -f <padrão>` mata o shell que o executa** se o padrão aparecer na
+    própria linha de comando dele — e aparece, porque o comando que você
+    escreveu contém o padrão. O shell morre com código 144 e a sessão perde o
+    resto do script. Use `pgrep -af` para conferir antes, ou restrinja com
+    `pkill -f -- "-x nome-exato"`.
+
 ## Ao mexer na stack
 
 - Rode `make verify` antes de considerar qualquer coisa pronta. Para iterar

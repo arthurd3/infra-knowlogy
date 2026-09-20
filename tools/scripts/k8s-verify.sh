@@ -106,6 +106,22 @@ else
   bad "kind load docker-image"; tail -10 /tmp/k8s-load.txt | sed 's/^/       /'
 fi
 
+# ── metrics-server, que o kind não traz e sem o qual o HPA fica em <unknown>.
+#
+# Precisa estar AQUI e não só no k8s-up.sh: o portão cria o próprio cluster e
+# nunca chama aquele script. Esta checagem já falhou por isso — as execuções
+# com KEEP_CLUSTER=1 passavam porque reaproveitavam um cluster montado à mão,
+# e a primeira execução do zero descobriu que o addon não existia.
+MS_IMG=$(grep -oE 'registry\.k8s\.io/metrics-server/metrics-server:[^ ]+' k8s/addons/metrics-server.yaml | head -1)
+docker image inspect "$MS_IMG" >/dev/null 2>&1 || docker pull -q "$MS_IMG" >/dev/null 2>&1
+kind load docker-image --name "$CLUSTER" "$MS_IMG" >/dev/null 2>&1 || true
+if kubectl apply -f k8s/addons/metrics-server.yaml >/tmp/k8s-ms.txt 2>&1 &&
+   kubectl -n kube-system rollout status deployment/metrics-server --timeout=180s >>/tmp/k8s-ms.txt 2>&1; then
+  ok "metrics-server aplicado (com --kubelet-insecure-tls, que o kind exige)"
+else
+  bad "metrics-server não subiu"; tail -8 /tmp/k8s-ms.txt | sed 's/^/       /'
+fi
+
 # ─── 3. Secret/ConfigMaps gerados + apply + rollout ──────────────────────────
 step "3/11 Aplicar manifests e esperar todos os rollouts"
 t0=$(now_ms)
@@ -569,6 +585,21 @@ if "${KC[@]}" get hpa api >/dev/null 2>&1; then
   # de `--metric-resolution`. É a armadilha 25 (prontidão ≠ configuração
   # aplicada) na roupa do metrics-server — a primeira versão desta checagem
   # reprovava por corrida, com o HPA perfeitamente funcional.
+  # Duas esperas e não uma, porque são duas causas diferentes e a mensagem de
+  # erro precisa distinguir: a API de métricas pode não estar servindo (addon
+  # ausente ou sem permissão de raspar o kubelet), ou estar servindo e o HPA
+  # ainda não ter denominador (falta `requests.cpu`). A primeira versão desta
+  # checagem só esperava a condição do HPA e reportava "falta metrics-server ou
+  # requests.cpu" — um "ou" que manda quem lê conferir as duas coisas.
+  METRICAS=""
+  for _ in $(seq 1 40); do
+    METRICAS=$("${KC[@]}" top pod -l app=api --no-headers 2>/dev/null || true)
+    [ -n "$METRICAS" ] && break
+    sleep 3
+  done
+  if [ -z "$METRICAS" ]; then
+    bad "a API de métricas não responde — o metrics-server não está servindo"
+  fi
   UTIL=""
   for _ in $(seq 1 30); do
     UTIL=$("${KC[@]}" get hpa api -o jsonpath='{.status.currentMetrics[0].resource.current.averageUtilization}' 2>/dev/null)
@@ -578,7 +609,7 @@ if "${KC[@]}" get hpa api >/dev/null 2>&1; then
   if [ -n "$UTIL" ]; then
     ok "HPA: a API de métricas responde (utilização atual ${UTIL}%)"
   else
-    bad "HPA em <unknown> — falta metrics-server ou requests.cpu na api"
+    bad "HPA em <unknown> com a API de métricas respondendo — falta requests.cpu na api"
   fi
 
   if [ "${SKIP_HPA:-}" = "1" ]; then
