@@ -239,6 +239,24 @@ describe("cobertura de exercício", () => {
   });
 });
 
+describe("os primitivos didáticos recebem o que precisam", () => {
+  it("todo Term nomeia o termo com `word`", () => {
+    // A prop se chama `word`. Escrever `term=` — que é o nome óbvio e o
+    // errado — não quebra nada: o Astro aceita a prop desconhecida, o
+    // componente recebe `undefined` e o `<summary>` sai com o rótulo "conceito"
+    // e NENHUMA palavra. Aconteceu em 12 blocos da trilha IaC, e nem o
+    // `astro check` nem o site-check pegaram, porque prop de MDX não é
+    // tipada e o elemento existe no HTML — só vazio.
+    const erros: string[] = [];
+    for (const l of lessons) {
+      for (const m of l.body.matchAll(/<Term\s([^>]*)>/g)) {
+        if (!/\bword="[^"]+"/.test(m[1])) erros.push(`${l.file}: <Term ${m[1].trim().slice(0, 40)}…>`);
+      }
+    }
+    expect(erros).toEqual([]);
+  });
+});
+
 describe("procedência do que não foi medido aqui", () => {
   it("todo FieldNote nomeia a fonte e linka para ela", () => {
     // O componente inteiro existe para marcar a fronteira entre o que esta

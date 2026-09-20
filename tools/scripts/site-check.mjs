@@ -210,7 +210,24 @@ console.log(`\n\x1b[1m── HTML gerado (${pages.length} páginas em ${relative
   else bad("lições sem nenhum exercício no HTML gerado", semExercicio);
 }
 
-// ─── 10. Imagem de terceiro sai com procedência ──────────────────────────────
+// ─── 10. Conceito aberto sai com a palavra ───────────────────────────────────
+{
+  // A contraparte, no produto final, do teste que olha a prop no MDX. Um
+  // `<Term>` com a prop errada renderiza o bloco inteiro — borda, rótulo,
+  // corpo — e só a PALAVRA sai vazia. É invisível para qualquer checagem que
+  // conte elementos, e visível para qualquer leitor.
+  const vazios = [];
+  for (const p of pages) {
+    const html = read(p);
+    for (const m of html.matchAll(/class="term__word"[^>]*>([^<]*)</g)) {
+      if (!m[1].trim()) vazios.push(page(p));
+    }
+  }
+  if (vazios.length === 0) ok("todo conceito aberto sai com a palavra preenchida");
+  else bad(`${vazios.length} <Term> renderizado sem palavra`, [...new Set(vazios)]);
+}
+
+// ─── 11. Imagem de terceiro sai com procedência ──────────────────────────────
 {
   // Um SVG daqui pinta por classe e segue o tema; uma imagem de fora não faz
   // nem uma coisa nem outra, e por isso ela paga um pedágio: alt de verdade,
