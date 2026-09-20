@@ -13,7 +13,7 @@ lado a lado só é honesta porque a aplicação é a mesma.
 |---|---|---|---|---|
 | 1 | **Docker** — imagens, Compose, hardening OWASP, observabilidade | `stack/` | `make verify` (37 checagens) | **feito** · trilhas Fundamentos (8) e Produção (6) escritas |
 | 2 | **Kubernetes** — a mesma stack portada para um cluster kind | `k8s/` | `make k8s-verify` (33 checagens) | **feito (v1)** · [ADR 0007](adr/0007-kind-e-o-porte-para-kubernetes.md) · pendências: lições 4+, Gateway API, HPA, RBAC, kind no CI |
-| 3 | **CI/CD self-hosted (Jenkins)** — o mesmo pipeline do GitHub Actions rodando num Jenkins que é seu, sobre a mesma stack | `cicd/` | `make cicd-verify` (35 checagens) | **feito (v1)** · [ADR 0011](adr/0011-como-o-agente-de-build-constroi-imagens.md) e [0012](adr/0012-jenkins-conteinerizado.md) · pendências: as 8 lições, scan e assinatura no pipeline |
+| 3 | **CI/CD self-hosted (Jenkins)** — o mesmo pipeline do GitHub Actions rodando num Jenkins que é seu, sobre a mesma stack | `cicd/` | `make cicd-verify` (35 checagens) | **feito (v1)** · [ADR 0011](adr/0011-como-o-agente-de-build-constroi-imagens.md) e [0012](adr/0012-jenkins-conteinerizado.md) · 8 lições bilíngues · pendência: GitOps |
 | 4 | **IaC (OpenTofu)** — a mesma stack declarada em HCL e provisionada contra o daemon local | `iac/` | `make iac-verify` (28 checagens) | **feito (v1)** · [ADR 0015](adr/0015-opentofu-e-o-provider-docker.md) e [0016](adr/0016-como-o-tofu-alcanca-o-daemon.md) · 8 lições bilíngues na trilha `iac` |
 | 5 | **Configuração (Ansible)** — preparar um host Fedora real: Docker, SELinux, firewall, usuários — as coisas que o módulo 1 encontrou na marra | `config/` | a definir | reservado |
 | 6 | **Observabilidade** — o profile `obs` que já existia, agora com regras de SLO que rodam e alerta de burn rate que dispara | `stack/` (profile) | `make verify` (passo 9, 9 checagens) | **feito (v1)** · [ADR 0018](adr/0018-slo-como-regra-que-roda.md) · 7 lições bilíngues na trilha `observabilidade` · pendências: Alertmanager e tracing |
@@ -105,11 +105,14 @@ estendê-la para as outras trilhas é trabalho declarado, não esquecido.
   citar concorrência sem medi-la, e o espelho do módulo 2 — provisionar o
   cluster kind pelo OpenTofu, que é o arranjo mais comum na prática (a
   ferramenta provisiona o cluster, e o cluster reconcilia o que roda dentro).
-- **Módulo 3:** a infraestrutura está de pé e o portão verde (32 checagens).
-  Faltam **as 8 lições** da trilha `cicd`, e dois estágios no pipeline: `scan`
-  (Trivy) e `sign` (cosign). A assinatura é a parte interessante — no GitHub
-  Actions ela é keyless pelo OIDC do workflow; num Jenkins self-hosted custa
-  uma chave gerenciada, e essa assimetria é o assunto de uma das lições.
+- **Módulo 3:** de pé, verde (**35 checagens**) e com as **8 lições escritas**,
+  incluindo os estágios `scan` (Trivy) e `sign` (cosign) — que este item dizia
+  faltar até setembro de 2026, muito depois de existirem. Ficou de fora:
+  **GitOps** (ArgoCD ou Flux), que é o chip de mercado que o módulo não cobre.
+
+  A assimetria da assinatura continua sendo a parte interessante e está na
+  lição `cicd-07`: no GitHub Actions ela é keyless pelo OIDC do workflow; num
+  Jenkins self-hosted custa uma chave gerenciada.
 - **Segurança:** as 6 lições estão escritas e o portão está verde (10 ataques
   repelidos, o passo 6 vazando de propósito). Ficou para depois: um ataque de
   força bruta com taxa medida (hoje o passo 4 prova a recusa, não a velocidade),

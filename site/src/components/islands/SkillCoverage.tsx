@@ -14,7 +14,7 @@ import { inline } from "./QuizBoard";
  * tempo de build: a ilha não tem como consultar a URL.
  */
 
-export type Status = "coberto" | "parcial" | "ausente";
+export type Status = "coberto" | "citado" | "parcial" | "ausente";
 
 export interface Evidence {
   lessons: Array<{ key: string; title: string; href: string }>;
@@ -47,7 +47,8 @@ const COPY = {
     checks: "checagens de portão",
     measurements: "medições",
     nothing: "nada ainda — é uma lacuna declarada",
-    status: { coberto: "coberto", parcial: "parcial", ausente: "ausente" },
+    cited: "não há checagem possível: exige conta em nuvem, licença de SaaS ou uma fatura",
+    status: { coberto: "coberto", citado: "citado", parcial: "parcial", ausente: "ausente" },
     expand: "ver detalhe",
     collapse: "fechar",
   },
@@ -59,7 +60,8 @@ const COPY = {
     checks: "gate checks",
     measurements: "measurements",
     nothing: "nothing yet — a declared gap",
-    status: { coberto: "covered", parcial: "partial", ausente: "absent" },
+    cited: "no check is possible: it needs a cloud account, a SaaS licence or an invoice",
+    status: { coberto: "covered", citado: "cited", parcial: "partial", ausente: "absent" },
     expand: "see detail",
     collapse: "close",
   },
@@ -113,6 +115,9 @@ export default function SkillCoverage({
                   </p>
 
                   <p className="skills__evidence-title">{t.proves}</p>
+                  {d.status === "citado" && (
+                    <p className="skills__cited">{t.cited}</p>
+                  )}
                   {n === 0 ? (
                     <p className="skills__none">{t.nothing}</p>
                   ) : (

@@ -25,7 +25,7 @@ const demands = data.demands.map((d) => {
     id: d.id,
     label: side.label,
     demand: d.demand,
-    status: d.status as "coberto" | "parcial" | "ausente",
+    status: d.status as "coberto" | "citado" | "parcial" | "ausente",
     gap: side.gap,
     quadrant: d.quadrant,
     evidence: {
@@ -43,7 +43,7 @@ const quadrants = data.quadrants.map((q) => ({
   label: (q as Record<string, any>)[lang] as string,
   items: q.items.map((i) => ({
     name: i.name,
-    status: i.status as "coberto" | "parcial" | "ausente",
+    status: i.status as "coberto" | "citado" | "parcial" | "ausente",
     note: (i as Record<string, any>)[`note_${lang}`] as string | undefined,
   })),
 }));

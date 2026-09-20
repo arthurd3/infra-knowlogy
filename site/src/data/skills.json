@@ -19,6 +19,10 @@
         "pt": "coberto — há lição, checagem ou medição que prova",
         "en": "covered — a lesson, gate check or measurement proves it"
       },
+      "citado": {
+        "pt": "citado — há lição com fonte, e NENHUMA checagem é possível aqui",
+        "en": "cited — a lesson teaches it with sources, and NO gate check is possible here"
+      },
       "parcial": {
         "pt": "parcial — parte está provada, parte não",
         "en": "partial — some of it is proven, some is not"
@@ -27,7 +31,9 @@
         "pt": "ausente — o repositório não prova nada disto ainda",
         "en": "absent — the repository proves none of this yet"
       }
-    }
+    },
+    "citado_nota_pt": "O quarto estado existe porque cinco itens deste cartaz — EKS/GKE/AKS, Datadog, New Relic, Dynatrace e FinOps — exigem conta em nuvem, licença de SaaS proprietário ou uma fatura. Nenhum deles pode ser provado por um comando NESTA máquina, que é o padrão do repositório. Chamá-los de `ausente` confundiria 'ninguém escreveu' com 'não dá para medir aqui', e é exatamente a distinção que o ADR 0009 criou entre afirmação medida e afirmação citada. Um item `citado` precisa apontar para lição que existe nos dois idiomas E que carrega um FieldNote — e NÃO pode ter checagem de portão: se dá para checar, é `coberto`.",
+    "citado_nota_en": "The fourth state exists because five items on this poster — EKS/GKE/AKS, Datadog, New Relic, Dynatrace and FinOps — require a cloud account, a proprietary SaaS licence, or an invoice. None can be proven by a command ON THIS MACHINE, which is the repository's standard. Calling them `absent` would conflate 'nobody wrote it' with 'it cannot be measured here', which is exactly the distinction ADR 0009 drew between a measured claim and a cited one. A `cited` item must point at a lesson existing in both languages AND carrying a FieldNote — and it may NOT have a gate check: if you can check it, it is `covered`."
   },
   "demands": [
     {

@@ -25,7 +25,7 @@ const DATA = join(HERE, "../src/data");
 const LESSONS = join(HERE, "../src/content/lessons");
 const SCRIPTS = join(HERE, "../../tools/scripts");
 
-type Status = "coberto" | "parcial" | "ausente";
+type Status = "coberto" | "citado" | "parcial" | "ausente";
 
 interface Evidence { lessons: string[]; checks: string[]; measurements: string[] }
 interface Side { label: string; gap: string }
@@ -33,7 +33,7 @@ interface Demand {
   id: string; demand: number; quadrant: string; status: Status;
   pt: Side; en: Side; evidence: Evidence;
 }
-interface Item { name: string; status: Status; note_pt?: string; note_en?: string }
+interface Item { name: string; status: Status; lesson?: string; note_pt?: string; note_en?: string }
 interface Quadrant { id: string; pt: string; en: string; items: Item[] }
 
 const doc = JSON.parse(readFileSync(join(DATA, "skills.json"), "utf8")) as {
@@ -43,17 +43,30 @@ const doc = JSON.parse(readFileSync(join(DATA, "skills.json"), "utf8")) as {
   quadrants: Quadrant[];
 };
 
-/** Chaves de lição que existem, por idioma. */
-function keysOf(lang: "pt" | "en"): Set<string> {
+/**
+ * Chaves de lição que existem, por idioma — e se cada uma carrega `FieldNote`.
+ *
+ * O FieldNote importa aqui por causa do estado `citado`: ele é a afirmação
+ * CITADA e não medida (ADR 0009), e é o único jeito honesto de ensinar o que
+ * esta máquina não consegue provar. Um item `citado` sem FieldNote seria
+ * prosa sem procedência — exatamente o que o ADR 0009 existe para impedir.
+ */
+function scanOf(lang: "pt" | "en") {
   const dir = join(LESSONS, lang);
   const keys = new Set<string>();
+  const comFieldNote = new Set<string>();
   for (const f of readdirSync(dir).filter((n) => n.endsWith(".mdx"))) {
-    const m = readFileSync(join(dir, f), "utf8").match(/^key:\s*(\S+)\s*$/m);
-    if (m) keys.add(m[1]);
+    const raw = readFileSync(join(dir, f), "utf8");
+    const m = raw.match(/^key:\s*(\S+)\s*$/m);
+    if (!m) continue;
+    keys.add(m[1]);
+    if (/<FieldNote[\s>]/.test(raw)) comFieldNote.add(m[1]);
   }
-  return keys;
+  return { keys, comFieldNote };
 }
-const KEYS = { pt: keysOf("pt"), en: keysOf("en") };
+const PT = scanOf("pt");
+const EN = scanOf("en");
+const KEYS = { pt: PT.keys, en: EN.keys };
 
 /** Todo o texto dos portões, concatenado. É onde uma checagem tem que existir. */
 const GATES = readdirSync(SCRIPTS)
@@ -114,6 +127,48 @@ describe("o status é honesto nos dois sentidos", () => {
       if (d.evidence.lessons.length === 0) erros.push(`${d.id}: coberto sem lição nenhuma`);
       if (d.evidence.checks.length + d.evidence.measurements.length === 0) {
         erros.push(`${d.id}: coberto sem checagem nem medição`);
+      }
+    }
+    expect(erros).toEqual([]);
+  });
+
+  it("'citado' exige lição bilíngue COM FieldNote, e proíbe checagem", () => {
+    // As duas metades da regra fazem trabalhos diferentes.
+    //
+    // Exigir lição com FieldNote impede que `citado` vire um jeito elegante de
+    // dizer "não fiz": para usá-lo, alguém precisa ter escrito a lição e
+    // apurado a fonte.
+    //
+    // PROIBIR checagem é o que dá sentido ao estado. Se existe comando que
+    // prova, o item é `coberto` — e deixar os dois conviverem transformaria
+    // `citado` num refúgio para não escrever a checagem que daria trabalho.
+    const erros: string[] = [];
+    for (const d of doc.demands.filter((x) => x.status === "citado")) {
+      if (d.evidence.lessons.length === 0) erros.push(`${d.id}: citado sem lição`);
+      if (d.evidence.checks.length > 0) {
+        erros.push(`${d.id}: citado COM checagem — se dá para checar, é coberto`);
+      }
+      for (const k of d.evidence.lessons) {
+        if (!PT.comFieldNote.has(k) || !EN.comFieldNote.has(k)) {
+          erros.push(`${d.id}: a lição "${k}" não tem FieldNote nos dois idiomas`);
+        }
+      }
+    }
+    expect(erros).toEqual([]);
+  });
+
+  it("todo chip 'citado' nomeia a lição que o ensina", () => {
+    // O chip não tem bloco `evidence` como a demanda tem — ele ganha um campo
+    // `lesson`. Sem ele, `citado` num chip seria uma afirmação sem endereço.
+    const erros: string[] = [];
+    for (const q of doc.quadrants) {
+      for (const i of q.items.filter((x) => x.status === "citado")) {
+        if (!i.lesson) { erros.push(`${q.id}/${i.name}: citado sem campo lesson`); continue; }
+        if (!PT.keys.has(i.lesson) || !EN.keys.has(i.lesson)) {
+          erros.push(`${q.id}/${i.name}: lição "${i.lesson}" não existe nos dois idiomas`);
+        } else if (!PT.comFieldNote.has(i.lesson) || !EN.comFieldNote.has(i.lesson)) {
+          erros.push(`${q.id}/${i.name}: a lição "${i.lesson}" não tem FieldNote`);
+        }
       }
     }
     expect(erros).toEqual([]);

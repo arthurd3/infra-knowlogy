@@ -1026,3 +1026,14 @@ blockquote {
   font-family: var(--font-mono);
 }
 .deeper__why { margin: 0.4rem 0 0; font-size: 0.875rem; line-height: 1.65; }
+
+/* O quarto estado do mapa (ADR 0020). Ele NÃO reaproveita a cor de `coberto`:
+   o leitor precisa distinguir "provado por comando" de "ensinado com fonte,
+   sem checagem possível" à primeira vista, que é o ponto do estado existir. */
+.skills__status--citado { color: var(--track-k8s); border-color: color-mix(in srgb, var(--track-k8s) 35%, transparent); }
+.skills__row--citado .skills__fill { background: var(--track-k8s); }
+.skills__chip--citado { color: var(--track-k8s); border-color: color-mix(in srgb, var(--track-k8s) 40%, transparent); }
+.skills__cited {
+  margin: 0 0 0.6rem; font-size: 0.85rem; line-height: 1.6; font-style: italic;
+  color: var(--text-muted);
+}

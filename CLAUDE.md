@@ -389,6 +389,16 @@ lição inexistente ou checagem de portão que ninguém escreveu. **Se você
 renomear uma checagem de um `*-verify.sh`, o teste quebra** — de propósito:
 quem renomeou é obrigado a olhar o mapa.
 
+Ele tem **quatro** estados, e o quarto é o que torna "100%" alcançável sem
+mentir (ADR 0020). `citado` é para o que NÃO DÁ para medir aqui — EKS/GKE,
+Datadog, New Relic, Dynatrace, FinOps exigem conta, licença ou fatura. Duas
+regras o mantêm honesto: ele **exige** lição bilíngue com `FieldNote`, e
+**proíbe** checagem de portão. Se dá para checar, é `coberto` — e deixar os dois
+conviverem faria de `citado` um refúgio para não escrever a checagem difícil.
+
+Os cinco itens continuam em `ausente` até a lição que os ensina existir. O
+estado é mecanismo, não anistia.
+
 Trilha nova no site exige editar **3 pontos**, e não 5 como esta seção dizia
 antes: `TRACKS` em `i18n/ui.ts` (que é a fonte única da lista e da ordem), o
 enum em `content.config.ts` e a cor em `global.css` (três blocos de tema mais
