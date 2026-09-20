@@ -33,6 +33,7 @@
   --track-cicd:    #a82a63;
   --track-iac:     #1f6f3f;
   --track-obs:     #8a6510;
+  --track-ops:     #1f6f6b;
 
   --radius:        8px;
   --radius-lg:     14px;
@@ -97,6 +98,8 @@
     --track-cicd:    #ef92ba;
     --track-iac:     #64c98a;
     --track-obs:     #e3b23c;
+  --track-ops:     #4fd1c5;
+    --track-ops:     #4fd1c5;
 
     --shadow:        0 1px 2px rgb(0 0 0 / 0.4), 0 4px 14px rgb(0 0 0 / 0.25);
 
@@ -129,6 +132,7 @@
   --track-cicd:    #ef92ba;
   --track-iac:     #64c98a;
   --track-obs:     #e3b23c;
+  --track-ops:     #4fd1c5;
   --shadow:        0 1px 2px rgb(0 0 0 / 0.4), 0 4px 14px rgb(0 0 0 / 0.25);
   color-scheme: dark;
 }
@@ -354,6 +358,7 @@ blockquote {
 .badge--cicd { color: var(--track-cicd); border-color: color-mix(in srgb, var(--track-cicd) 35%, transparent); }
 .badge--iac { color: var(--track-iac); border-color: color-mix(in srgb, var(--track-iac) 35%, transparent); }
 .badge--obs { color: var(--track-obs); border-color: color-mix(in srgb, var(--track-obs) 35%, transparent); }
+.badge--ops { color: var(--track-ops); border-color: color-mix(in srgb, var(--track-ops) 35%, transparent); }
 
 .card {
   display: block; text-decoration: none; color: inherit;

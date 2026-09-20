@@ -55,6 +55,7 @@ export const ui = {
     "track.cicd": "CI/CD",
     "track.iac": "IaC",
     "track.observabilidade": "Observabilidade",
+    "track.operacao": "Operação",
     "track.fundamentos.desc":
       "O que um container realmente é, como uma imagem é montada e por que o cache de build se comporta assim.",
     "track.producao.desc":
@@ -69,6 +70,8 @@ export const ui = {
       "A mesma stack declarada em HCL e provisionada por OpenTofu: estado, grafo de dependências, idempotência e drift — medidos aqui, sem conta em nuvem nenhuma.",
     "track.observabilidade.desc":
       "O que a stack já expõe e quase ninguém lê: pull em vez de push, o histograma que engana, cardinalidade que derruba o monitoramento — e o SLO com alerta de burn rate disparando de verdade.",
+    "track.operacao.desc":
+      "O que acontece depois do deploy: o Linux por baixo do container (/proc, cgroup v2, o OOM killer), a rede que falha de um jeito só, o Postgres que você opera — e as práticas de plantão que este repositório cita mas não pode medir.",
     "lesson.minutes": "min de leitura",
     "lesson.sources": "Fontes",
     "deeper.title": "Para ir mais fundo",
@@ -172,6 +175,7 @@ export const ui = {
     "track.cicd": "CI/CD",
     "track.iac": "IaC",
     "track.observabilidade": "Observability",
+    "track.operacao": "Operations",
     "track.fundamentos.desc":
       "What a container actually is, how an image is assembled, and why the build cache behaves the way it does.",
     "track.producao.desc":
@@ -186,6 +190,8 @@ export const ui = {
       "The same stack declared in HCL and provisioned by OpenTofu: state, dependency graph, idempotence and drift — all measured here, with no cloud account at all.",
     "track.observabilidade.desc":
       "What the stack already exposes and almost nobody reads: pull instead of push, the histogram that misleads, cardinality that takes monitoring down — and an SLO with burn-rate alerting that actually fires.",
+    "track.operacao.desc":
+      "What happens after the deploy: the Linux underneath the container (/proc, cgroup v2, the OOM killer), the network that fails in exactly one way, the Postgres you operate — and the on-call practices this repository cites but cannot measure.",
     "lesson.minutes": "min read",
     "lesson.sources": "Sources",
     "deeper.title": "Going deeper",
@@ -274,7 +280,7 @@ export function otherLang(lang: Lang): Lang {
  * mapa de badge da página da lição e os testes todos derivam daqui. Antes,
  * cada um repetia a lista à mão e acrescentar uma trilha era caçar literais.
  */
-export const TRACKS = ["fundamentos", "producao", "seguranca", "kubernetes", "cicd", "iac", "observabilidade"] as const;
+export const TRACKS = ["fundamentos", "producao", "seguranca", "kubernetes", "cicd", "iac", "observabilidade", "operacao"] as const;
 export type Track = (typeof TRACKS)[number];
 
 /** Rótulo localizado de uma trilha. */
@@ -296,5 +302,6 @@ export function trackBadge(track: Track): string {
     cicd: "badge--cicd",
     iac: "badge--iac",
     observabilidade: "badge--obs",
+    operacao: "badge--ops",
   }[track];
 }

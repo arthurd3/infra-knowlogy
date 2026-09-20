@@ -354,6 +354,15 @@ justamente por isso.
     resto do script. Use `pgrep -af` para conferir antes, ou restrinja com
     `pkill -f -- "-x nome-exato"`.
 
+59. **Substituição de texto que não casa falha em SILÊNCIO** — e num script de
+    edição isso é pior do que um erro, porque o script segue e imprime
+    "pronto". Aconteceu quatro vezes num dia só: um `replace` de bloco do
+    `k8s-verify` que errou por um espaço deixou a checagem versionada sem o
+    portão que a chama; outro deixou as medições novas fora do JSON com os
+    valores certos na mão; um terceiro errou o recuo de um objeto de i18n por
+    dois espaços. **Toda edição programática precisa de `assert` da âncora
+    ANTES e de conferência do resultado DEPOIS.**
+
 ## Ao mexer na stack
 
 - Rode `make verify` antes de considerar qualquer coisa pronta. Para iterar
@@ -383,7 +392,9 @@ justamente por isso.
   `tofu` alcança o daemon sob SELinux (ver ADR 0016 e as armadilhas 33–36).
   A stack dele atende em **8082**, ao lado do Compose (8080) e do kind (8081).
 - O módulo Kubernetes tem portão próprio: `make k8s-verify` (estado bom:
-  **33 passaram · 0 falharam**). Para iterar sem recriar o cluster:
+  **65 passaram · 0 falharam**). Para pular as partes caras:
+  `SKIP_HPA=1` (a medição de carga real, ~6 min) e `SKIP_GATEWAY=1` (baixa
+  ~4 MB de CRDs e sobe o Envoy Gateway). Para iterar sem recriar o cluster:
   `KEEP_CLUSTER=1 make k8s-verify`. Os portões são independentes de propósito
   (ADR 0007) — mexeu em `k8s/`, rode os dois; o smoke test é compartilhado
   (`tools/scripts/lib/smoke.sh`), então mudanças nele afetam ambos.
