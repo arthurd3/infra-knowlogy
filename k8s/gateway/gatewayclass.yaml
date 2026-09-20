@@ -1,0 +1,81 @@
+# A Gateway API em três objetos, e a razão de serem três.
+#
+# O Ingress era UM objeto: host, caminho, TLS, serviço de destino e — na
+# prática — vinte anotações específicas do controlador, tudo no mesmo YAML,
+# editado pela mesma pessoa. Isso não escalava organizacionalmente. Quem opera
+# o cluster não quer que um time de produto edite o certificado curinga; o time
+# de produto não quer abrir ticket para acrescentar um caminho.
+#
+# A Gateway API parte o problema em três papéis, e cada objeto pertence a um:
+#
+#   GatewayClass  ← quem fornece a infraestrutura (a plataforma, a nuvem)
+#                   "existe uma implementação chamada assim, e é este
+#                    controlador que a atende"
+#   Gateway       ← quem OPERA o cluster
+#                   "há um ponto de entrada na porta 80, com este certificado,
+#                    e aceita rotas destes namespaces"
+#   HTTPRoute     ← quem DESENVOLVE a aplicação
+#                   "/api vai para o serviço api; / vai para o web"
+#
+# A separação é real, não decorativa: dá para dar RBAC de HTTPRoute a um time
+# sem dar RBAC de Gateway. Era exatamente o que não dava para fazer com Ingress.
+#
+# ─── Por que Envoy Gateway ──────────────────────────────────────────────────
+# O `ingress-nginx` foi aposentado em março de 2026 e o sucessor que os
+# próprios mantenedores anunciaram (InGate) foi aposentado junto. Os candidatos
+# vivos incluem o NGINX Gateway Fabric e o Envoy Gateway. Escolhi o segundo por
+# uma razão operacional e não técnica: o NGF v2 só publica chart Helm, enquanto
+# o Envoy Gateway publica um `install.yaml` único que `kubectl apply` resolve —
+# uma peça a menos entre o leitor e a rota funcionando. Ver ADR 0021.
+
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: stack
+spec:
+  controllerName: gateway.envoyproxy.io/gatewayclass-controller
+  # `parametersRef` é a válvula de escape da especificação: tudo o que é
+  # específico de UMA implementação mora num objeto dela, e não como anotação
+  # no Gateway. É a diferença entre `nginx.ingress.kubernetes.io/...` espalhada
+  # pelos manifests de todo mundo e um objeto com schema, que o API server
+  # valida.
+  parametersRef:
+    group: gateway.envoyproxy.io
+    kind: EnvoyProxy
+    name: stack-proxy
+    namespace: envoy-gateway-system
+---
+# E aqui está o que é específico do Envoy Gateway: como expor o proxy.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyProxy
+metadata:
+  name: stack-proxy
+  namespace: envoy-gateway-system
+spec:
+  provider:
+    type: Kubernetes
+    kubernetes:
+      envoyService:
+        # NodePort e não LoadBalancer: num kind não há provedor de nuvem para
+        # atender um LoadBalancer, e o Service ficaria `Pending` para sempre —
+        # com o Gateway parecendo saudável. É a mesma classe de erro da
+        # armadilha 12: a API aceita e nada acontece.
+        type: NodePort
+        patch:
+          type: StrategicMerge
+          value:
+            spec:
+              ports:
+                - name: http-80
+                  port: 80
+                  # Fixa, porque o kind mapeia porta de nó para porta de host
+                  # na CRIAÇÃO do cluster: uma porta sorteada não teria como
+                  # ser mapeada depois.
+                  nodePort: 30081
+      envoyDeployment:
+        replicas: 1
+        container:
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}

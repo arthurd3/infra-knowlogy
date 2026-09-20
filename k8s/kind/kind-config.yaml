@@ -22,3 +22,16 @@ nodes:
         hostPort: 8081
         listenAddress: "127.0.0.1"
         protocol: TCP
+      # E o Service NodePort do Envoy Gateway (30081) vira 127.0.0.1:8083.
+      # A stack aparece em DUAS portas de propósito: 8081 entra pelo `edge`
+      # (o caminho do módulo 1, um Caddy que a stack carrega consigo) e 8083
+      # entra pelo Gateway (o caminho nativo do Kubernetes). As lições
+      # comparam os dois servindo a MESMA aplicação ao mesmo tempo.
+      #
+      # O mapeamento é declarado na CRIAÇÃO do cluster e não dá para
+      # acrescentar depois — é por isso que o `nodePort` do Envoy é fixo em
+      # 30081 no EnvoyProxy, em vez de sorteado.
+      - containerPort: 30081
+        hostPort: 8083
+        listenAddress: "127.0.0.1"
+        protocol: TCP

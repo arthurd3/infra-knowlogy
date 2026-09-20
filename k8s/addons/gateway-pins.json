@@ -1,0 +1,21 @@
+{
+  "_comentario": [
+    "A Gateway API precisa de CRDs e de um controlador, e nenhum dos dois cabe",
+    "versionado aqui: o install.yaml do Envoy Gateway tem ~4 MB (CRDs inclusos)",
+    "e os CRDs avulsos da Gateway API, 1,17 MB. Versionar quatro megabytes de",
+    "YAML gerado para provar uma rota n\u00e3o \u00e9 um bom neg\u00f3cio.",
+    "",
+    "A alternativa NAO e baixar da internet e confiar. E baixar e CONFERIR: o",
+    "sha256 abaixo faz para um manifesto exatamente o que o digest faz para uma",
+    "imagem (ADR 0004) - o conteudo e o mesmo ou o portao para. Sem isso,",
+    "'v1.9.1' e uma tag, e tag e mutavel.",
+    "",
+    "Atualizar: baixe a versao nova, rode sha256sum, cole aqui, rode",
+    "make k8s-verify. Nunca edite o hash sem ter baixado o arquivo."
+  ],
+  "envoyGateway": {
+    "version": "v1.9.1",
+    "url": "https://github.com/envoyproxy/gateway/releases/download/v1.9.1/install.yaml",
+    "sha256": "72b3971364f172eb0b9636c7142cc84ff695467bc065897958bde85a3c06cfd5"
+  }
+}

@@ -1,0 +1,58 @@
+# A HTTPRoute — o objeto de quem DESENVOLVE a aplicação.
+#
+# É o mesmo roteamento que o Caddyfile do `edge` já faz, escrito na linguagem
+# do cluster. As duas coisas coexistem de propósito: o edge continua sendo o
+# caminho do módulo 1 (e o que o `k8s-verify` exerce em 8081), e o Gateway é o
+# caminho nativo do Kubernetes (8083). A lição compara os dois lado a lado.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: stack
+  namespace: infra-knowlogy
+spec:
+  parentRefs:
+    - name: stack
+      sectionName: http
+  rules:
+    # A ORDEM não decide nada aqui, e é a diferença mais importante em relação
+    # ao Ingress e ao Caddy. A Gateway API especifica a precedência: prefixo
+    # mais longo ganha, e empate desempata por critérios declarados (método,
+    # header, query) — nunca pela posição no arquivo. Duas pessoas editando o
+    # mesmo arquivo não conseguem quebrar o roteamento uma da outra por
+    # descuido de ordenação.
+    - matches:
+        - path: {type: PathPrefix, value: /api}
+      backendRefs:
+        - name: api
+          port: 8080
+    # ─── A regra que não funcionou de primeira, e por quê ───────────────────
+    # O Caddyfile do `edge` trata os links curtos com `handle_path /r/*`, e o
+    # `handle_path` do Caddy REMOVE o prefixo: a api recebe `/wuWrpSz`, não
+    # `/r/wuWrpSz`.
+    #
+    # Uma HTTPRoute com `PathPrefix: /r` casa a requisição e encaminha o
+    # caminho INTACTO. O resultado foi um 404 vindo da api — com o Gateway
+    # perfeitamente verde, a rota casando (o log de acesso do Envoy mostrava
+    # `rule/1`) e o upstream certo escolhido. Casar não é reescrever.
+    #
+    # `URLRewrite` é um filtro de nível **Extended** na conformidade da Gateway
+    # API, e não Core: uma implementação pode ser conforme sem oferecê-lo. É a
+    # diferença mais prática entre a especificação e o Ingress — aqui existe um
+    # nome para "esta funcionalidade é opcional", em vez de uma anotação que
+    # funciona num controlador e é ignorada calada noutro.
+    - matches:
+        - path: {type: PathPrefix, value: /r}
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplacePrefixMatch
+              replacePrefixMatch: /
+      backendRefs:
+        - name: api
+          port: 8080
+    - matches:
+        - path: {type: PathPrefix, value: /}
+      backendRefs:
+        - name: web
+          port: 8080

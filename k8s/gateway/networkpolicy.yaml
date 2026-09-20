@@ -1,0 +1,71 @@
+# A policy que faz o Gateway funcionar — e a razão de ela ser um arquivo à parte.
+#
+# ─── O sintoma ──────────────────────────────────────────────────────────────
+# Com o Envoy Gateway instalado e sem esta policy, TODO sinal fica verde:
+#
+#   $ kubectl -n infra-knowlogy get gateway stack
+#   NAME    CLASS   ADDRESS      PROGRAMMED   AGE
+#   stack   stack   172.23.0.2   True         12s
+#
+#   listener http  attachedRoutes=1  Programmed=True Accepted=True ResolvedRefs=True
+#   HTTPRoute      Accepted=True     ResolvedRefs=True
+#
+# …e nenhuma requisição completa. O curl fica pendurado até o timeout.
+#
+# ─── A causa ────────────────────────────────────────────────────────────────
+# O log de acesso do Envoy é quem conta a verdade:
+#
+#   "response_code": 0, "response_flags": "DC", "duration": 8002,
+#   "upstream_host": "10.244.0.7:8080", "bytes_received": 0
+#
+# O Envoy casou a rota e ESCOLHEU o upstream certo. Quem não respondeu foi o
+# upstream: a policy `api` só aceita ingresso de `podSelector: {app: edge}`, e
+# o proxy do Gateway roda noutro namespace inteiro (`envoy-gateway-system`).
+# O pacote é DESCARTADO, não recusado — por isso o cliente pendura em vez de
+# levar "connection refused", e por isso não há erro em log nenhum do lado da
+# api.
+#
+# É a armadilha 13 do CLAUDE.md outra vez: o status do objeto mede o plano de
+# controle, nunca o caminho de dados. Nada no Gateway sabe que existe
+# NetworkPolicy.
+#
+# ─── Por que arquivo separado, e não uma regra a mais na policy da api ──────
+# Porque `k8s/base` tem que continuar aplicável SEM a Gateway API instalada.
+# Acrescentar aqui a permissão para o namespace do Envoy faria a stack base
+# carregar uma referência a uma peça opcional — e quem estuda só o porte
+# (lições 1 a 3) instalaria 4 MB de CRDs sem precisar.
+#
+# NetworkPolicies são ADITIVAS: duas policies selecionando o mesmo pod somam
+# suas permissões, nunca se anulam. Então esta aqui acrescenta uma origem
+# permitida sem tocar na de `k8s/base`.
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: gateway-ingress
+  namespace: infra-knowlogy
+spec:
+  # Seleciona os dois destinos que a HTTPRoute nomeia.
+  podSelector:
+    matchExpressions:
+      - {key: app, operator: In, values: [api, web]}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        # `namespaceSelector` e não `podSelector`: o proxy vive fora deste
+        # namespace, e é por isso que a policy original não o alcançava.
+        # O rótulo `kubernetes.io/metadata.name` é posto pelo próprio API
+        # server em todo namespace desde o Kubernetes 1.22 — não depende de
+        # ninguém ter lembrado de rotular.
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: envoy-gateway-system
+          # E ainda assim restringe ao pod do proxy: o namespace do Envoy
+          # também hospeda o controlador, que não tem por que falar com a
+          # aplicação. Quando as duas chaves aparecem no MESMO item da lista
+          # `from`, elas são um E lógico.
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: envoy
+      ports:
+        - {protocol: TCP, port: 8080}

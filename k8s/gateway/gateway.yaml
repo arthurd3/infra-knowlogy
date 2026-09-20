@@ -1,0 +1,22 @@
+# O Gateway — o objeto de quem OPERA o cluster.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: stack
+  namespace: infra-knowlogy
+spec:
+  gatewayClassName: stack
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 80
+      # `allowedRoutes` é o controle que o Ingress não tinha: o operador do
+      # cluster decide QUAIS namespaces podem pendurar rota neste ponto de
+      # entrada. Aqui, só o próprio — a stack não empresta o Gateway a ninguém.
+      #
+      # `Same` em vez de `All` importa num cluster compartilhado: com `All`,
+      # qualquer namespace poderia criar uma HTTPRoute para `/` e sequestrar a
+      # raiz do site.
+      allowedRoutes:
+        namespaces:
+          from: Same

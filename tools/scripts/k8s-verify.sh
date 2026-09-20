@@ -9,6 +9,7 @@
 #
 #   SKIP_LINT=1      pula o lint estático (kustomize + kubeconform)
 #   SKIP_HPA=1       pula a medição de reação do HPA (~2 min de carga real)
+#   SKIP_GATEWAY=1   pula a instalação e as provas da Gateway API (~4 MB + 1 min)
 #   KEEP_CLUSTER=1   reaproveita o cluster existente e não o destrói no final
 #                    (para iterar; a medição de criação do cluster fica de fora)
 set -uo pipefail
@@ -40,7 +41,7 @@ M_NETPOL_WINDOW_MS=""; M_HPA_CEGA=""; M_HPA_CEGA_MIN=""
 M_HPA_BOOT=""; M_HPA_DEPOIS=""; M_HPA_TEORICO=""
 
 # ─── 1. Pré-requisitos e lint estático ───────────────────────────────────────
-step "1/10 Pré-requisitos e lint dos manifests"
+step "1/11 Pré-requisitos e lint dos manifests"
 if bash tools/scripts/k8s-prereqs.sh >/tmp/k8s-pre.txt 2>&1; then
   ok "pré-requisitos (docker, kind >= 0.23, kubectl)"
 else
@@ -64,7 +65,7 @@ else
 fi
 
 # ─── 2. Build + cluster ──────────────────────────────────────────────────────
-step "2/10 Build das imagens e criação do cluster kind"
+step "2/11 Build das imagens e criação do cluster kind"
 if docker compose -f stack/compose.yaml -f stack/compose.prod.yaml build >/tmp/k8s-build.txt 2>&1; then
   ok "docker compose build (as mesmas imagens do módulo Docker)"
 else
@@ -94,7 +95,7 @@ else
 fi
 
 # ─── 3. Secret/ConfigMaps gerados + apply + rollout ──────────────────────────
-step "3/10 Aplicar manifests e esperar todos os rollouts"
+step "3/11 Aplicar manifests e esperar todos os rollouts"
 t0=$(now_ms)
 bash tools/scripts/init-secrets.sh >/dev/null 2>&1
 if kubectl apply -f k8s/base/namespace.yaml >/dev/null 2>&1 \
@@ -133,7 +134,7 @@ else
 fi
 
 # ─── 4. Smoke test do fluxo completo ─────────────────────────────────────────
-step "4/10 Smoke test: criar link -> redirecionar -> enriquecer (via :8081)"
+step "4/11 Smoke test: criar link -> redirecionar -> enriquecer (via :8081)"
 
 # Rollout completo não significa caminho de rede pronto: num cluster recém-
 # criado, o agente de NetworkPolicy ainda está programando as regras e o
@@ -157,7 +158,7 @@ smoke_logs() {
 run_smoke
 
 # ─── 5. NetworkPolicy: a topologia declarada precisa VALER ───────────────────
-step "5/10 NetworkPolicy (o espelho das redes edge/data/egress)"
+step "5/11 NetworkPolicy (o espelho das redes edge/data/egress)"
 
 # A prova-espelho do módulo 1: o proxy não alcança o banco.
 if "${KC[@]}" exec deploy/edge -- nc -z -w 2 db 5432 >/dev/null 2>&1; then
@@ -191,7 +192,7 @@ else
 fi
 
 # ─── 6. Endurecimento ────────────────────────────────────────────────────────
-step "6/10 Provas de endurecimento (o mesmo OWASP, agora em securityContext)"
+step "6/11 Provas de endurecimento (o mesmo OWASP, agora em securityContext)"
 
 if "${KC[@]}" exec deploy/worker -- sh -c 'echo x > /provaescrita' >/dev/null 2>&1; then
   bad "rootfs do worker é GRAVÁVEL (readOnlyRootFilesystem não está valendo)"
@@ -234,7 +235,7 @@ else
 fi
 
 # ─── 7. Desligamento gracioso ────────────────────────────────────────────────
-step "7/10 Desligamento gracioso por workload"
+step "7/11 Desligamento gracioso por workload"
 # O mesmo limite de 3s do módulo 1 para o processo, mais uma folga fixa de 2s
 # para o que é do Kubernetes (chamada de API + remoção do pod). O
 # discriminador é claro: um processo que IGNORA o SIGTERM só morre no
@@ -264,7 +265,7 @@ fi
 rollout_all || bad "a stack não voltou a ficar Ready após os deletes"
 
 # ─── 8. As provas que o Compose não faz ──────────────────────────────────────
-step "8/10 O que o ADR 0001 listou como limite do Compose, medido aqui"
+step "8/11 O que o ADR 0001 listou como limite do Compose, medido aqui"
 
 # (a) Auto-cura: deletar um pod e medir até o substituto ficar Ready.
 pod=$("${KC[@]}" get pod -l app=api -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
@@ -368,7 +369,7 @@ else
 fi
 
 # ─── 9. RBAC, HPA e a janela em que a NetworkPolicy ainda não vale ───────────
-step "9/10 RBAC, HPA e a janela da NetworkPolicy"
+step "9/11 RBAC, HPA e a janela da NetworkPolicy"
 
 # ── RBAC, primeiro pelo barato: a impersonação.
 # `auth can-i --as=` pergunta ao API server o que ELE faria. Não precisa de pod
@@ -551,8 +552,97 @@ else
   bad "o HorizontalPodAutoscaler 'api' não existe"
 fi
 
-# ─── 10. Medições + teardown ─────────────────────────────────────────────────
-step "10/10 Gravar medições e derrubar o cluster"
+# ─── 10. Gateway API: o sucessor do Ingress, e o que fica verde mentindo ─────
+step "10/11 Gateway API (Envoy Gateway) e a rota nativa do cluster"
+
+GWURL="http://127.0.0.1:8083"
+if [ "${SKIP_GATEWAY:-}" = "1" ]; then
+  skip "Gateway API (SKIP_GATEWAY=1)"
+elif ! bash tools/scripts/k8s-gateway-install.sh >/tmp/gw-install.log 2>&1; then
+  bad "a instalação do Gateway falhou — $(tail -1 /tmp/gw-install.log)"
+else
+  ok "Envoy Gateway instalado (manifesto conferido por sha256)"
+
+  # O Gateway diz que está pronto. Guarde a afirmação; ela vai ser desmentida
+  # daqui a três checagens.
+  PROG=$("${KC[@]}" get gateway stack -o jsonpath='{.status.conditions[?(@.type=="Programmed")].status}' 2>/dev/null)
+  ROTAS=$("${KC[@]}" get gateway stack -o jsonpath='{.status.listeners[0].attachedRoutes}' 2>/dev/null)
+  if [ "$PROG" = "True" ] && [ "${ROTAS:-0}" -ge 1 ]; then
+    ok "Gateway Programmed=True com ${ROTAS} rota(s) anexada(s)"
+  else
+    bad "Gateway não programado (Programmed=$PROG, attachedRoutes=$ROTAS)"
+  fi
+
+  # O MESMO fluxo do módulo 1, pela porta nativa do cluster. É o que prova que
+  # o Gateway não é um exemplo separado: é outro caminho para a mesma stack.
+  BASEURL_ANTERIOR="$BASEURL"
+  BASEURL="$GWURL"
+  run_smoke
+  BASEURL="$BASEURL_ANTERIOR"
+
+  # Precedência por prefixo mais longo, e não por ordem no arquivo: `/api`
+  # ganha de `/` mesmo aparecendo antes, depois e no meio.
+  C_RAIZ=$(curl -s -o /dev/null -w '%{http_code}' --max-time 8 "$GWURL/" 2>/dev/null)
+  C_API=$(curl -s -o /dev/null -w '%{http_code}' --max-time 8 "$GWURL/api/links" 2>/dev/null)
+  if [ "$C_RAIZ" = "200" ] && [ "$C_API" = "200" ]; then
+    ok "precedência por prefixo: / -> web e /api -> api (200 nos dois)"
+  else
+    bad "roteamento do Gateway errado (/ -> $C_RAIZ, /api/links -> $C_API)"
+  fi
+
+  # ── A prova negativa que dá nome a esta seção.
+  #
+  # Tira a NetworkPolicy que autoriza o proxy e observa: TODO o status do
+  # Gateway continua verde — Programmed, Accepted, ResolvedRefs, rota anexada —
+  # e nenhuma requisição completa. O pacote é descartado, não recusado, então
+  # o cliente pendura até o timeout em vez de levar "connection refused".
+  #
+  # É a armadilha 13 do CLAUDE.md na escala do Gateway: status de objeto mede
+  # o plano de CONTROLE. Nada no Gateway sabe que NetworkPolicy existe.
+  "${KC[@]}" delete netpol gateway-ingress >/dev/null 2>&1
+  sleep 3
+  C_SEM=$(curl -s -o /dev/null -w '%{http_code}' --max-time 6 "$GWURL/api/links" 2>/dev/null)
+  PROG_SEM=$("${KC[@]}" get gateway stack -o jsonpath='{.status.conditions[?(@.type=="Programmed")].status}' 2>/dev/null)
+  "${KC[@]}" apply -f k8s/gateway/networkpolicy.yaml >/dev/null 2>&1
+  if [ "$C_SEM" != "200" ] && [ "$PROG_SEM" = "True" ]; then
+    ok "sem a policy: Gateway ainda Programmed=True e a requisição NÃO completa (${C_SEM:-timeout})"
+  else
+    bad "a prova negativa da policy não reproduziu (código $C_SEM, Programmed=$PROG_SEM)"
+  fi
+  # E volta a funcionar, para não deixar o cluster quebrado atrás de si.
+  sleep 3
+  C_VOLTA=$(curl -s -o /dev/null -w '%{http_code}' --max-time 8 "$GWURL/api/links" 2>/dev/null)
+  if [ "$C_VOLTA" = "200" ]; then
+    ok "com a policy de volta: 200 outra vez (a policy é a variável isolada)"
+  else
+    bad "a stack não voltou depois de restaurar a policy (código $C_VOLTA)"
+  fi
+
+  # ── `allowedRoutes: from: Same` não é decoração: uma rota de fora é RECUSADA.
+  # É o controle que o Ingress não tinha — sem ele, qualquer namespace poderia
+  # pendurar uma rota para `/` neste ponto de entrada e sequestrar a raiz.
+  kubectl create namespace gw-intruso --dry-run=client -o yaml 2>/dev/null | kubectl apply -f - >/dev/null 2>&1
+  cat <<'ROTA' | kubectl apply -f - >/dev/null 2>&1
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata: {name: intruso, namespace: gw-intruso}
+spec:
+  parentRefs: [{name: stack, namespace: infra-knowlogy, sectionName: http}]
+  rules: [{matches: [{path: {type: PathPrefix, value: /}}], backendRefs: [{name: nada, port: 80}]}]
+ROTA
+  sleep 5
+  MOTIVO=$(kubectl -n gw-intruso get httproute intruso \
+    -o jsonpath='{.status.parents[0].conditions[?(@.type=="Accepted")].reason}' 2>/dev/null)
+  if [ "$MOTIVO" = "NotAllowedByListeners" ]; then
+    ok "rota de outro namespace RECUSADA ($MOTIVO) — allowedRoutes: Same vale"
+  else
+    bad "rota de fora não foi recusada como esperado (reason=${MOTIVO:-vazio})"
+  fi
+  kubectl delete namespace gw-intruso --wait=false >/dev/null 2>&1
+fi
+
+# ─── 11. Medições + teardown ─────────────────────────────────────────────────
+step "11/11 Gravar medições e derrubar o cluster"
 
 if K8S_MEASURED_OUT="site/src/data/k8s-measured.json" \
    M_CLUSTER_CREATE_S="$M_CLUSTER_CREATE_S" M_STACK_READY_S="$M_STACK_READY_S" \
