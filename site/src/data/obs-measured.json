@@ -1,0 +1,118 @@
+{
+  "generatedAt": "2026-09-20T19:24:25Z",
+  "prometheusVersion": "3.7.3",
+  "targets": {
+    "total": 7,
+    "up": 7,
+    "jobs": [
+      "api",
+      "cadvisor",
+      "node",
+      "postgres",
+      "prometheus",
+      "redis",
+      "worker"
+    ]
+  },
+  "tsdb": {
+    "activeSeries": 4749,
+    "samplesPerSecond": 295.2,
+    "residentBytes": 108765184
+  },
+  "collection": {
+    "perJob": [
+      {
+        "job": "api",
+        "scraped": 127,
+        "kept": 127,
+        "dropped": 0
+      },
+      {
+        "job": "cadvisor",
+        "scraped": 1227,
+        "kept": 47,
+        "dropped": 1180
+      },
+      {
+        "job": "node",
+        "scraped": 2381,
+        "kept": 2381,
+        "dropped": 0
+      },
+      {
+        "job": "postgres",
+        "scraped": 593,
+        "kept": 593,
+        "dropped": 0
+      },
+      {
+        "job": "prometheus",
+        "scraped": 816,
+        "kept": 816,
+        "dropped": 0
+      },
+      {
+        "job": "redis",
+        "scraped": 414,
+        "kept": 414,
+        "dropped": 0
+      },
+      {
+        "job": "worker",
+        "scraped": 36,
+        "kept": 36,
+        "dropped": 0
+      }
+    ],
+    "scrapedTotal": 5594,
+    "keptTotal": 4414,
+    "droppedTotal": 1180
+  },
+  "apiTraffic": {
+    "byRoute": [
+      {
+        "route": "/healthz",
+        "method": "GET",
+        "status": "200",
+        "total": 19
+      },
+      {
+        "route": "/readyz",
+        "method": "GET",
+        "status": "200",
+        "total": 19
+      },
+      {
+        "route": "/metrics",
+        "method": "GET",
+        "status": "200",
+        "total": 12
+      },
+      {
+        "route": "/{code}",
+        "method": "GET",
+        "status": "302",
+        "total": 10
+      },
+      {
+        "route": "/api/links",
+        "method": "POST",
+        "status": "201",
+        "total": 10
+      }
+    ],
+    "infrastructureTotal": 50,
+    "userTotal": 20,
+    "infraPerUserRequest": 2.5,
+    "infrastructurePerMinute": 16.0
+  },
+  "rules": {
+    "recording": 7,
+    "alerting": 3
+  },
+  "latency": {
+    "p50Seconds": 0.0025,
+    "p90Seconds": 0.00451,
+    "p99Seconds": 0.00496
+  }
+}

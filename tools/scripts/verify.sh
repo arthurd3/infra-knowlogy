@@ -219,6 +219,70 @@ elif docker compose "${OBS[@]}" --profile obs up -d --wait --wait-timeout 240 >/
   down=$(curl -fsS "http://127.0.0.1:${PPORT}/api/v1/targets?state=active" 2>/dev/null \
     | python3 -c 'import sys,json; print(",".join(t["labels"].get("job","?") for t in json.load(sys.stdin)["data"]["activeTargets"] if t["health"]!="up"))' 2>/dev/null)
   if [ -z "$down" ]; then ok "todos os alvos do prometheus estão up"; else bad "alvos fora do ar: $down"; fi
+
+  # ── As regras de SLO ───────────────────────────────────────────────────────
+  # Sem esta checagem, um erro de sintaxe no slo.yml faz o Prometheus subir
+  # normalmente e simplesmente NÃO avaliar regra nenhuma. O painel continua
+  # bonito, o alerta nunca dispara, e ninguém descobre até o incidente.
+  RULES=$(curl -fsS "http://127.0.0.1:${PPORT}/api/v1/rules" 2>/dev/null)
+  case "$RULES" in
+    *OrcamentoDeErroQueimandoRapido*)
+      nrec=$(printf '%s' "$RULES" | python3 -c 'import sys,json; g=json.load(sys.stdin)["data"]["groups"]; print(sum(1 for x in g for r in x["rules"] if r["type"]=="recording"))' 2>/dev/null)
+      nalert=$(printf '%s' "$RULES" | python3 -c 'import sys,json; g=json.load(sys.stdin)["data"]["groups"]; print(sum(1 for x in g for r in x["rules"] if r["type"]=="alerting"))' 2>/dev/null)
+      ok "regras de SLO carregadas (${nrec:-?} de gravação, ${nalert:-?} de alerta)" ;;
+    *) bad "as regras de SLO não foram carregadas pelo prometheus" ;;
+  esac
+
+  # Regra com erro de avaliação fica `health: err` e não produz série. Ela
+  # aparece como carregada na checagem acima — por isso esta segunda.
+  ruins=$(printf '%s' "$RULES" | python3 -c 'import sys,json; g=json.load(sys.stdin)["data"]["groups"]; print(",".join(r.get("name","?") for x in g for r in x["rules"] if r.get("health")!="ok"))' 2>/dev/null)
+  if [ -z "$ruins" ]; then ok "toda regra de SLO avalia sem erro"; else bad "regras com erro de avaliação: $ruins"; fi
+
+  # ── O SLI tem denominador de USUÁRIO ───────────────────────────────────────
+  # A série só existe se o `route!~` do slo.yml casar com rótulo de verdade.
+  # Renomear uma rota na api quebraria o SLI em silêncio: a query continua
+  # válida, o resultado vira vazio, e um alerta sobre vazio nunca dispara.
+  sli=$(curl -fsS --get "http://127.0.0.1:${PPORT}/api/v1/query" \
+        --data-urlencode 'query=api:sli_disponibilidade:ratio5m' 2>/dev/null \
+        | python3 -c 'import sys,json; d=json.load(sys.stdin)["data"]["result"]; print(d[0]["value"][1] if d else "")' 2>/dev/null)
+  if [ -n "$sli" ]; then
+    ok "o SLI de disponibilidade tem valor ($sli)"
+  else
+    bad "api:sli_disponibilidade:ratio5m não produziu valor — o rótulo de rota mudou?"
+  fi
+
+  # ── A cardinalidade que o relabel corta ────────────────────────────────────
+  # A lição afirma que o metric_relabel_configs do cAdvisor descarta a maior
+  # parte do que ele publica. Se alguém remover o filtro, a afirmação vira
+  # mentira e a stack vira GB de RAM — as duas coisas nesta única checagem.
+  dropped=$(curl -fsS --get "http://127.0.0.1:${PPORT}/api/v1/query" \
+        --data-urlencode 'query=scrape_samples_scraped{job="cadvisor"} - scrape_samples_post_metric_relabeling{job="cadvisor"}' 2>/dev/null \
+        | python3 -c 'import sys,json; d=json.load(sys.stdin)["data"]["result"]; print(int(float(d[0]["value"][1])) if d else 0)' 2>/dev/null)
+  if [ "${dropped:-0}" -gt 100 ]; then
+    ok "o relabel do cAdvisor descarta ${dropped} amostras por raspagem"
+  else
+    bad "o filtro de cardinalidade do cAdvisor não está cortando (${dropped:-0} amostras)"
+  fi
+
+  # ── E as medições, que as lições citam ─────────────────────────────────────
+  # Antes de medir, um pouco de tráfego de USUÁRIO. O `up -d --wait` do profile
+  # obs recria a api, e com ela os contadores zeram — sem isto o denominador do
+  # SLI é zero, a razão infraestrutura/usuário sai `null` e o diagrama que lê o
+  # arquivo publica a palavra "null" para o leitor.
+  for _ in 1 2 3 4 5 6 7 8 9 10; do
+    code=$(curl -fsS -X POST "$BASEURL/api/links" -H 'content-type: application/json' \
+           -d '{"url":"https://example.com/"}' 2>/dev/null \
+           | python3 -c 'import sys,json; print(json.load(sys.stdin)["code"])' 2>/dev/null)
+    [ -n "$code" ] && curl -fsS -o /dev/null "$BASEURL/r/$code" 2>/dev/null
+  done
+  sleep 20
+
+  if python3 tools/scripts/obs-measure.py >/tmp/obsm.txt 2>&1; then
+    ok "medições gravadas -> site/src/data/obs-measured.json"
+    sed 's/^/    /' /tmp/obsm.txt | tail -4
+  else
+    bad "medição da observabilidade falhou"; tail -5 /tmp/obsm.txt | sed 's/^/       /'
+  fi
 else
   bad "stack de observabilidade não subiu"; tail -20 /tmp/obs.txt | sed 's/^/       /'
 fi

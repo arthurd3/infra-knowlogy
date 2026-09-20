@@ -52,6 +52,26 @@ loki.process "parse" {
   stage.json {
     expressions = {level = "level"}
   }
+
+  // Normaliza a CAIXA antes de virar rótulo.
+  //
+  // Medido nesta stack antes desta linha existir: o rótulo `level` tinha SEIS
+  // valores — ERROR, INFO, error, info, warn, warning — porque a api em Go, o
+  // worker em Python e o Caddy escrevem o nível cada um do seu jeito, e o
+  // `stage.labels` guarda o que vier.
+  //
+  // O efeito prático é pior do que parecer feio: `{level="error"}` não casa
+  // `ERROR`, então a consulta que alguém escreve num incidente perde parte dos
+  // erros sem avisar. E cada grafia extra é um stream a mais no Loki.
+  //
+  // O que esta linha NÃO resolve: `warn` e `warning` continuam sendo duas
+  // palavras diferentes. Normalizar isso exigiria um mapa de sinônimos, e a
+  // decisão honesta é deixar declarado em vez de esconder num regex.
+  stage.template {
+    source   = "level"
+    template = "{{ ToLower .Value }}"
+  }
+
   stage.labels {
     values = {level = ""}
   }

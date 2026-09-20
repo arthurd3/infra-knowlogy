@@ -8,6 +8,12 @@ global:
   external_labels:
     stack: infra-knowlogy
 
+# As regras de SLO. Separadas do scrape de propósito: o que raspar é
+# configuração de coleta; o que é "bom" e quanto de ruim se tolera é decisão de
+# produto, e decisão de produto merece arquivo próprio.
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
 scrape_configs:
   # A própria API Go, instrumentada com prometheus/client_golang.
   - job_name: api

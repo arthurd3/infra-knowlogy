@@ -1,0 +1,128 @@
+# Regras de SLO — o que transforma métrica em decisão.
+#
+# Um painel bonito não decide nada. O que decide é um NÚMERO com um alvo e uma
+# consequência: quanto do orçamento de erro já foi gasto, e o que isso autoriza
+# ou proíbe. Estas regras produzem esse número.
+#
+# ─── O denominador, que é onde quase todo SLI nasce errado ──────────────────
+# Medido nesta stack, com a aplicação parada e só o monitoramento rodando:
+#
+#   /healthz    1714 requisições
+#   /readyz     1708
+#   /metrics    1142
+#   tráfego de USUÁRIO de verdade     132
+#
+# Ou seja: 97% das requisições que a api atende são ela respondendo ao próprio
+# monitoramento. Um SLI calculado sobre TODAS as requisições diluiria uma queda
+# total do serviço em "97% de sucesso" — e o alerta nunca dispararia.
+#
+# Por isso o `route!~` abaixo não é detalhe de implementação: é a diferença
+# entre medir o usuário e medir a si mesmo.
+#
+# ─── O numerador ────────────────────────────────────────────────────────────
+# Só 5xx conta como erro. Um 404 é o cliente pedindo o que não existe — pôr 4xx
+# no orçamento de erro faz o erro de digitação do usuário gastar o orçamento da
+# sua equipe, e é o jeito mais rápido de a organização parar de confiar no SLO.
+
+groups:
+  # ── O SLI, em várias janelas ───────────────────────────────────────────────
+  # Janelas diferentes existem porque o alerta de burn rate precisa das duas
+  # pontas: uma longa, que diz se o problema é sustentado, e uma curta, que diz
+  # se ele ainda está acontecendo AGORA. Ver o grupo `slo-alertas`.
+  - name: sli-api
+    interval: 15s
+    rules:
+      - record: api:trafego_usuario:rate5m
+        expr: sum(rate(api_http_requests_total{route!~"/healthz|/readyz|/metrics"}[5m]))
+      - record: api:erros_usuario:rate5m
+        expr: sum(rate(api_http_requests_total{route!~"/healthz|/readyz|/metrics",status=~"5.."}[5m]))
+
+      # A razão de erro. `or vector(0)` porque sem tráfego nenhum a divisão é
+      # 0/0 = NaN, e um alerta que compara NaN não dispara nem se recusa: ele
+      # simplesmente não existe, e você descobre isso no incidente.
+      - record: api:sli_erro:ratio5m
+        expr: >
+          (api:erros_usuario:rate5m / api:trafego_usuario:rate5m) or vector(0)
+
+      - record: api:sli_erro:ratio30m
+        expr: >
+          (sum(rate(api_http_requests_total{route!~"/healthz|/readyz|/metrics",status=~"5.."}[30m]))
+           / sum(rate(api_http_requests_total{route!~"/healthz|/readyz|/metrics"}[30m]))) or vector(0)
+
+      - record: api:sli_erro:ratio1h
+        expr: >
+          (sum(rate(api_http_requests_total{route!~"/healthz|/readyz|/metrics",status=~"5.."}[1h]))
+           / sum(rate(api_http_requests_total{route!~"/healthz|/readyz|/metrics"}[1h]))) or vector(0)
+
+      - record: api:sli_erro:ratio6h
+        expr: >
+          (sum(rate(api_http_requests_total{route!~"/healthz|/readyz|/metrics",status=~"5.."}[6h]))
+           / sum(rate(api_http_requests_total{route!~"/healthz|/readyz|/metrics"}[6h]))) or vector(0)
+
+      # A disponibilidade, que é só o complemento — existe para o painel, onde
+      # "99,5%" comunica e "0,005" não.
+      - record: api:sli_disponibilidade:ratio5m
+        expr: 1 - api:sli_erro:ratio5m
+
+  # ── Os alertas de burn rate ────────────────────────────────────────────────
+  # Receita do SRE Workbook, capítulo "Alerting on SLOs": multi-janela,
+  # multi-burn-rate. A ideia é alertar sobre a VELOCIDADE com que o orçamento
+  # está sendo gasto, e não sobre a taxa de erro em si.
+  #
+  # Com SLO de 99,5% em 30 dias, o orçamento é 0,5% das requisições.
+  # Burn rate 1 = gastar o orçamento em exatamente 30 dias.
+  #
+  #   14,4×  em 1h  = 2% do orçamento em uma hora     -> página alguém
+  #    6×    em 6h  = 5% do orçamento em seis horas   -> página alguém
+  #    1×    em 3d  = 10% do orçamento em três dias   -> abre um ticket
+  #
+  # A janela CURTA em `and` é o que evita alerta preso: sem ela, um pico de
+  # cinco minutos mantém a janela de 1h acima do limiar por uma hora inteira,
+  # muito depois de o problema ter passado.
+  - name: slo-alertas
+    rules:
+      - alert: OrcamentoDeErroQueimandoRapido
+        expr: >
+          api:sli_erro:ratio1h > (14.4 * 0.005)
+          and
+          api:sli_erro:ratio5m > (14.4 * 0.005)
+        for: 2m
+        labels:
+          severity: page
+          slo: api-disponibilidade
+        annotations:
+          summary: "A api está gastando o orçamento de erro 14,4× mais rápido que o permitido"
+          description: >
+            Nesta velocidade, os 0,5% de orçamento de 30 dias acabam em ~2 dias.
+            Janela longa 1h e janela curta 5m, as duas acima do limiar.
+
+      - alert: OrcamentoDeErroQueimandoMedio
+        expr: >
+          api:sli_erro:ratio6h > (6 * 0.005)
+          and
+          api:sli_erro:ratio30m > (6 * 0.005)
+        for: 15m
+        labels:
+          severity: page
+          slo: api-disponibilidade
+        annotations:
+          summary: "A api está gastando o orçamento de erro 6× mais rápido que o permitido"
+          description: >
+            5% do orçamento de 30 dias em seis horas. Mais lento que o alerta
+            anterior e igualmente insustentável.
+
+      # E o alerta que NÃO acorda ninguém. Ele existe porque a maior parte do
+      # orçamento é gasta assim: devagar, sem nenhum incidente, por semanas.
+      - alert: OrcamentoDeErroEmRitmoDeTicket
+        expr: >
+          api:sli_erro:ratio6h > (1 * 0.005)
+          and
+          api:sli_erro:ratio30m > (1 * 0.005)
+        for: 1h
+        labels:
+          severity: ticket
+          slo: api-disponibilidade
+        annotations:
+          summary: "A api gasta o orçamento de erro em ritmo de 30 dias"
+          description: >
+            Não é urgente e não é aceitável. Vira trabalho planejado, não página.

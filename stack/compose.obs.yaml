@@ -103,6 +103,7 @@ services:
       - --web.enable-lifecycle
     volumes:
       - ./services/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro,z
+      - ./services/observability/rules:/etc/prometheus/rules:ro,z
       - prometheus_data:/prometheus
     ports:
       - "127.0.0.1:${PROMETHEUS_PORT:-9090}:9090"
