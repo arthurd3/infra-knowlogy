@@ -43,6 +43,19 @@ O `db` reiniciou e ganhou outro IP? O DNS já sabe. É isso que torna
 mude. Nenhuma aplicação desta stack conhece um IP.
 </Callout>
 
+<Term word="bridge e par veth" alt="bridge and veth pair" open>
+Uma **bridge** é um switch de rede implementado em software, dentro do kernel.
+Tudo que está ligado nela se enxerga, como se estivesse no mesmo cabo.
+
+Um **par veth** é um cabo virtual com duas pontas: o que entra numa sai na
+outra. Cada container ganha um par — uma ponta fica dentro do namespace de rede
+dele e vira a `eth0`, a outra fica no host e é plugada na bridge.
+
+É literalmente isso que o Docker monta quando você cria uma rede. Não há
+tecnologia de rede exclusiva de container: é `ip link` e `ip netns`, com um
+script muito bom por cima.
+</Term>
+
 ## Os drivers
 
 | Driver | Para quê |
@@ -127,6 +140,19 @@ sudo iptables -t nat -L DOCKER -n | head
 ```
 
 <LinkLab client:visible lang="pt" />
+
+<Term word="NAT e DNAT" alt="NAT and DNAT">
+**NAT** é reescrever endereço dentro do pacote enquanto ele passa. **DNAT** é a
+variante que reescreve o endereço de **destino** — é ela que faz um pacote que
+chegou na porta 8080 do host terminar na porta 8080 de um container que tem um
+IP privado que o mundo não alcança.
+
+Quem executa isso no Linux é o **netfilter**, o subsistema do kernel que o
+`iptables` configura. E é aí que mora a armadilha desta lição: a regra de DNAT
+que o Docker escreve é avaliada numa tabela que vem **antes** das regras que o
+seu firewall usa — por isso publicar sem o prefixo `127.0.0.1` abre a porta para
+a internet inteira com o firewall "ativo e bloqueando".
+</Term>
 
 ## Portas: as três coisas diferentes
 

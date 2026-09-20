@@ -68,6 +68,24 @@ As maiores lacunas hoje, em ordem de demanda:
 | Bancos & redes | 55% | falta operação do Postgres e DNS a fundo |
 | Resiliência & operação | — | **0%**: SLO, error budget, postmortem, on-call, FinOps, IAM |
 
+## A dívida didática, medida
+
+Os primitivos de ensino foram inventados em ordem cronológica, e as trilhas
+escritas antes nunca voltaram para usá-los. O retrato, em setembro de 2026,
+depois de a trilha de Fundamentos ser retrabalhada (ADR 0017):
+
+| trilha | lições | `Term` | `Tradeoff` | `FieldNote` |
+|---|---|---|---|---|
+| fundamentos | 8 | 15 | 1 | 1 |
+| seguranca | 6 | 13 | 3 | 9 |
+| **kubernetes** | 3 | **0** | **0** | **0** |
+| **cicd** | 8 | **0** | 1 | 1 |
+| iac | 8 | 6 | 7 | 7 |
+
+O Kubernetes é o pior caso e é também a trilha mais curta — as duas coisas pelo
+mesmo motivo. A `library.json` hoje cobre só os conceitos de Fundamentos;
+estendê-la para as outras trilhas é trabalho declarado, não esquecido.
+
 ## Itens dentro dos módulos já abertos
 
 - **Módulo 1:** Trilha Produção — 12 lições sobre o código que já existe

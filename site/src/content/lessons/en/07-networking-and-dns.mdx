@@ -43,6 +43,19 @@ POSTGRES_HOST: db     // resolved by embedded DNS, not by /etc/hosts
 address does. No application in this stack knows an IP address.
 </Callout>
 
+<Term word="bridge and veth pair" alt="bridge and veth pair" open>
+A **bridge** is a network switch implemented in software, inside the kernel.
+Everything attached to it can see everything else, as if on the same cable.
+
+A **veth pair** is a virtual cable with two ends: what goes in one comes out the
+other. Each container gets a pair — one end sits inside its network namespace
+and becomes `eth0`, the other stays on the host and is plugged into the bridge.
+
+That is literally what Docker builds when you create a network. There is no
+container-exclusive networking technology: it is `ip link` and `ip netns`, with
+a very good script on top.
+</Term>
+
 ## The drivers
 
 | Driver | What for |
@@ -127,6 +140,19 @@ sudo iptables -t nat -L DOCKER -n | head
 ```
 
 <LinkLab client:visible lang="en" />
+
+<Term word="NAT and DNAT" alt="NAT and DNAT">
+**NAT** is rewriting an address inside a packet as it passes through. **DNAT**
+is the variant that rewrites the **destination** address — it is what makes a
+packet arriving on the host's port 8080 end up on port 8080 of a container whose
+private IP the world cannot reach.
+
+On Linux this is done by **netfilter**, the kernel subsystem that `iptables`
+configures. And that is where this lesson's trap lives: the DNAT rule Docker
+writes is evaluated in a table that comes **before** the rules your firewall
+uses — which is why publishing without the `127.0.0.1` prefix opens the port to
+the whole internet with the firewall "active and blocking".
+</Term>
 
 ## Ports: three different things
 

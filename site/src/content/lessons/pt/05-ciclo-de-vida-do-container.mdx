@@ -62,6 +62,23 @@ o container parado continua ocupando disco com sua camada gravável. É o que o
 
 <Lifecycle />
 
+<Term word="sinal" alt="signal" open>
+A forma mais antiga de um processo ser avisado de alguma coisa pelo kernel ou
+por outro processo. Não carrega dados: é só um número, e o processo decide o que
+fazer com ele.
+
+Os dois que importam aqui:
+
+- **SIGTERM (15)** — "por favor, termine". O processo pode interceptar, fechar
+  conexões, gravar o que faltava, e só então sair. É um **pedido**.
+- **SIGKILL (9)** — "morra agora". Não há interceptação possível; quem executa é
+  o kernel, e o processo não roda mais nenhuma linha. É uma **ordem**.
+
+A distinção é a lição inteira: entre os dois existe uma janela — dez segundos,
+por padrão — e é nela que cabe terminar de responder a requisição que estava no
+meio.
+</Term>
+
 ## O que o `docker stop` realmente faz
 
 1. Manda **SIGTERM** ao PID 1.
@@ -99,6 +116,19 @@ existe quase sempre significa **binário dinamicamente linkado numa imagem sem
 libc**. É o motivo de `CGO_ENABLED=0` no Dockerfile do `api-go`: sem ele o Go
 linka contra a musl do Alpine e o binário não roda no `scratch`.
 </Callout>
+
+<Term word="processo zumbi" alt="zombie process">
+Um processo que já terminou e cuja entrada na tabela de processos ainda existe,
+porque ninguém leu o código de saída dele.
+
+Quem deveria ler é o pai. Quando o pai morre antes, o órfão é adotado pelo
+**PID 1** — e é aí que o container entra na história: se o seu PID 1 é a sua
+aplicação, e ela não sabe recolher filho adotado, a tabela vai enchendo de
+entradas mortas até estourar o limite de PIDs.
+
+`docker run --init` insere um init mínimo no PID 1 justamente para fazer essa
+coleta. É uma flag, e resolve o caso comum.
+</Term>
 
 ## Restart policies — e o que muda no reboot
 

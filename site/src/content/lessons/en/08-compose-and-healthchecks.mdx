@@ -124,6 +124,20 @@ Restarting the API **does not fix** a database that is down. The right answer to
 (liveness).
 </Callout>
 
+<Term word="healthcheck" alt="health check" open>
+A command the container itself runs, periodically, to answer a question about
+itself. If it exits 0 the container is healthy; any other code and it is not.
+
+What confuses people: **Docker does not know whether your service is well** —
+you write the question. `pg_isready` asks one thing; a `GET /readyz` that
+queries the database asks another, much stronger one. The quality of a
+healthcheck is the quality of its question.
+
+And it is not only diagnostics: `depends_on: {condition: service_healthy}` and
+`up --wait` turn that answer into **startup ordering** and into a script's exit
+code.
+</Term>
+
 ## `up --wait`: the healthcheck working for your script
 
 ```bash
@@ -214,6 +228,17 @@ stack's log limit applies to all six services without being written six times �
 without the risk of forgetting it on precisely the chattiest one.
 
 <GateRunner client:visible lang="en" />
+
+<Term word="orchestrator" alt="orchestrator">
+The program that keeps a set of containers in the state you declared —
+recreating what dies, spreading across nodes, replacing versions without
+dropping traffic.
+
+Compose is **not** one: it is a command that converges once and exits. That is
+the difference the Kubernetes track measures, and it is honest in both
+directions — the loop that recreates on its own is also the loop that undoes
+your intervention during an incident.
+</Term>
 
 ## The honest limits of Compose
 

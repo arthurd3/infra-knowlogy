@@ -62,6 +62,24 @@ is what `docker ps -a` shows and what `docker container prune` reclaims.
 
 <Lifecycle />
 
+<Term word="signal" alt="signal" open>
+The oldest way for a process to be told something by the kernel or by another
+process. It carries no data: it is just a number, and the process decides what
+to do with it.
+
+The two that matter here:
+
+- **SIGTERM (15)** — "please finish". The process may catch it, close
+  connections, write out what was pending, and only then exit. It is a
+  **request**.
+- **SIGKILL (9)** — "die now". No catching is possible; the kernel does it, and
+  the process runs no further line. It is an **order**.
+
+The distinction is the whole lesson: between the two there is a window — ten
+seconds by default — and it is where finishing the request that was in flight
+fits.
+</Term>
+
 ## What `docker stop` actually does
 
 1. Sends **SIGTERM** to PID 1.
@@ -99,6 +117,19 @@ exists almost always means a **dynamically linked binary in an image with no
 libc**. That is the reason for `CGO_ENABLED=0` in `api-go`'s Dockerfile: without
 it Go links against Alpine's musl and the binary will not run on `scratch`.
 </Callout>
+
+<Term word="zombie process" alt="zombie process">
+A process that has already exited and whose entry in the process table still
+exists, because nobody read its exit code.
+
+The one who should read it is the parent. When the parent dies first, the orphan
+is adopted by **PID 1** — and that is where containers enter the story: if your
+PID 1 is your application, and it does not know how to reap adopted children,
+the table fills with dead entries until the PID limit is hit.
+
+`docker run --init` inserts a minimal init at PID 1 precisely to do that
+reaping. It is one flag, and it covers the common case.
+</Term>
 
 ## Restart policies — and what changes at reboot
 

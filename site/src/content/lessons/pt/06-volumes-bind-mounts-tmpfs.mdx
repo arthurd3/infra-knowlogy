@@ -84,6 +84,19 @@ repositório foi escrito num Fedora, e o primeiro `docker run -v $PWD:/src` falh
 exatamente assim.
 </Callout>
 
+<Term word="ponto de montagem" alt="mount point">
+O lugar da árvore de diretórios onde outro sistema de arquivos passa a aparecer.
+
+Montar não copia nada: é o kernel passando a responder as leituras e escritas
+daquele caminho com outro dispositivo. Montar por cima de um diretório que já
+tinha conteúdo **esconde** o conteúdo antigo — ele continua lá, inacessível,
+até você desmontar.
+
+É a causa de uma confusão clássica: um bind mount sobre um diretório que a
+imagem já populava faz os arquivos da imagem sumirem, e nada na mensagem de erro
+diz que eles continuam existindo embaixo.
+</Term>
+
 ## tmpfs — memória, não disco
 
 ```yaml

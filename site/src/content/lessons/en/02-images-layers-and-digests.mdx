@@ -57,6 +57,19 @@ daemon compares digests and downloads only the layers it lacks. And why
 `docker build` on an unchanged Dockerfile does nothing — the digests match.
 </Callout>
 
+<Term word="cryptographic hash" alt="cryptographic hash">
+A function that turns any number of bytes into a fixed-size number — here, the
+256 bits of SHA-256 — with three properties that matter:
+
+- the **same** content always yields the same number;
+- different content yields a different number, in practice always;
+- and you cannot walk back: the content cannot be reconstructed from the number.
+
+It is the second property that holds this lesson up. If the digest matches, the
+bytes are the same — not "similar", the same. That is what lets a registry on
+the other side of the world prove it handed you what you asked for.
+</Term>
+
 ## A tag is a pointer; a digest is an address
 
 This is the distinction that causes the most production incidents.
@@ -88,6 +101,16 @@ never update.
 </Callout>
 
 <DigestChain />
+
+<Term word="registry" alt="registry">
+The server that stores and serves images. Docker Hub is one; GitHub's `ghcr.io`
+is another; so is the `registry:5000` that module 3 starts on your own machine.
+
+It does not store "the image" as a single file: it stores **blobs** addressed by
+digest and a **manifest** listing which blobs make up that image. That is why
+pulling a new image that shares layers with one you already have is fast — the
+registry sends only the blobs you are missing.
+</Term>
 
 ## The stack, and the writable layer
 

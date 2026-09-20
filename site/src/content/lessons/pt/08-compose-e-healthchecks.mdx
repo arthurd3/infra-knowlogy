@@ -124,6 +124,21 @@ Reiniciar a API **não conserta** um banco fora do ar. A resposta certa a "minha
 dependência caiu" é sair do balanceador (readiness), não morrer (liveness).
 </Callout>
 
+<Term word="healthcheck" alt="health check" open>
+Um comando que o próprio container roda, de tempos em tempos, para responder uma
+pergunta sobre si mesmo. Se ele sai com 0, o container está saudável; qualquer
+outro código, não.
+
+O que confunde: **não é o Docker que sabe se o seu serviço está bem** — é você
+quem escreve a pergunta. `pg_isready` pergunta uma coisa; um `GET /readyz` que
+consulta o banco pergunta outra, bem mais forte. A qualidade do healthcheck é a
+qualidade da pergunta.
+
+E ele não é só diagnóstico: `depends_on: {condition: service_healthy}` e
+`up --wait` transformam essa resposta em **ordem de subida** e em código de saída
+de script.
+</Term>
+
 ## `up --wait`: o healthcheck a serviço do seu script
 
 ```bash
@@ -215,6 +230,17 @@ limite de log desta stack vale para os seis serviços sem estar escrito seis vez
 — e sem o risco de você esquecer justamente no serviço mais tagarela.
 
 <GateRunner client:visible lang="pt" />
+
+<Term word="orquestrador" alt="orchestrator">
+O programa que mantém um conjunto de containers no estado que você declarou —
+recriando o que morre, distribuindo pelos nós, substituindo versão sem derrubar
+o tráfego.
+
+O Compose **não** é um: ele é um comando que converge uma vez e sai. É a
+diferença que a trilha de Kubernetes mede, e é honesta nos dois sentidos — o
+laço que recria sozinho é também o laço que desfaz a sua intervenção durante um
+incidente.
+</Term>
 
 ## Os limites honestos do Compose
 

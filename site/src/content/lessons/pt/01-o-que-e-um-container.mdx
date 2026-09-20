@@ -41,6 +41,17 @@ dele ali, na lista, junto com todos os outros.
 
 <ContainerVsVm />
 
+<Term word="kernel" alt="kernel" open>
+O programa que fica entre todo processo e o hardware. É ele quem decide qual
+processo roda em qual núcleo, quem pode abrir qual arquivo, e o que acontece
+quando um pacote de rede chega.
+
+Nenhum programa comum fala com o disco ou com a placa de rede direto: ele **pede
+ao kernel**, por uma chamada de sistema. É por isso que a frase "o container
+compartilha o kernel do host" é a afirmação mais importante desta lição — o
+container não tem um intermediário próprio, ele usa o mesmo de todo mundo.
+</Term>
+
 ## Prove agora, em dez segundos
 
 <RunIt title="Um container é um processo do host">
@@ -177,6 +188,19 @@ no containerd do Kubernetes ou no CRI-O sem alteração nenhuma. Você não est�
 preso ao Docker; está usando um formato aberto que o Docker também implementa.
 </Callout>
 
+<Term word="capability" alt="capability">
+O poder de root, quebrado em cerca de quarenta permissões separadas.
+
+Antes delas era tudo ou nada: ou o processo era root e podia tudo, ou não era e
+não podia quase nada. Hoje dá para dar exatamente uma: `CAP_NET_BIND_SERVICE`
+deixa abrir a porta 80 sem nenhum outro poder de root junto.
+
+É o que o `cap_drop: [ALL]` desta stack faz — tira as quarenta e devolve, uma a
+uma, só as que o binário precisa para subir. A lição 3 mostra o caso em que
+esquecer uma delas faz o container morrer com uma mensagem que não menciona
+capability nenhuma.
+</Term>
+
 ## Por que sobe em milissegundos
 
 Agora a resposta é óbvia. Uma máquina virtual precisa inicializar um kernel,
@@ -187,6 +211,19 @@ escritos em `/sys/fs/cgroup`, uma montagem OverlayFS e um `execve()`.
 Não há boot. **Já existe um kernel rodando** — o do host. Por isso o custo de
 subir um container é o custo de subir um processo, e por isso o overhead de
 memória é medido em megabytes, não em gigabytes.
+
+<Term word="hipervisor" alt="hypervisor">
+O programa que cria e gerencia máquinas virtuais, emulando hardware para que um
+sistema operacional inteiro — com **kernel próprio** — rode dentro.
+
+É essa segunda fronteira que o container não tem. Numa VM, uma falha no kernel
+convidado ainda esbarra no hipervisor antes de chegar ao host; num container,
+não há segunda parede — o kernel é a única.
+
+O preço da parede a mais é tempo de boot e memória: a VM carrega um kernel,
+inicializa serviços e monta um sistema de arquivos antes de rodar a sua primeira
+linha de código.
+</Term>
 
 ## Então quando você quer mesmo uma VM?
 

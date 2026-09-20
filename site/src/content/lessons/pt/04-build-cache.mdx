@@ -82,6 +82,18 @@ COPY . /app
 RUN uv sync --locked --no-dev
 ```
 
+<Term word="BuildKit" alt="BuildKit">
+O motor de build que substituiu o antigo construtor do Docker e hoje é o padrão.
+
+Três diferenças mudam o dia a dia: ele monta o Dockerfile como um **grafo** e
+constrói stages independentes em paralelo; ele aceita `RUN --mount`, que dá
+cache e arquivos ao comando sem deixá-los na imagem; e ele pula stages que o
+alvo pedido não precisa.
+
+É também por isso que um Dockerfile com `RUN --mount=type=cache` não constrói no
+construtor antigo: a sintaxe não existe lá.
+</Term>
+
 ## Os mounts do BuildKit
 
 Aqui está o que muita gente não sabe existir. `RUN --mount` resolve dois problemas

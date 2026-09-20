@@ -1,0 +1,101 @@
+---
+/**
+ * "Para ir mais fundo" — a trilha de estudo de uma lição.
+ *
+ * NÃO é a mesma coisa que o bloco `Fontes` logo acima. As fontes são o que foi
+ * usado para escrever a lição; um livro que ninguém leu para escrevê-la não é
+ * fonte dela, e fingir que é corrói a única coisa que dá valor à bibliografia
+ * daqui. É a mesma separação que o ADR 0009 fez entre afirmação medida e
+ * afirmação citada, aplicada à leitura.
+ *
+ * O índice é por CONCEITO e não por lição, porque conceito atravessa lição:
+ * `namespaces` aparece na 1 e reaparece na 7, e quem quer estudar namespaces
+ * quer as duas de uma vez.
+ *
+ * Sem ilha e sem JavaScript, de propósito: é conteúdo estático, e um leitor
+ * numa aba que nunca pintou (armadilha 20) precisa conseguir ler a bibliografia
+ * tanto quanto o resto da página.
+ */
+import { useTranslations, type Lang } from "../i18n/ui";
+import library from "../data/library.json";
+
+interface Props {
+  /** A `key` da lição. O componente resolve sozinho quais conceitos a tocam. */
+  lessonKey: string;
+  lang: Lang;
+}
+const { lessonKey, lang } = Astro.props;
+const t = useTranslations(lang);
+
+const kinds = library.kinds as Record<string, Record<string, string>>;
+
+// Uma referência boa serve a mais de um conceito — a palestra do Petazzoni
+// cobre namespaces E cgroups, e a lição 1 toca quatro conceitos. Sem
+// deduplicar, o leitor via a mesma palestra três vezes na mesma página, o que
+// é o jeito mais rápido de ensinar alguém a ignorar a seção inteira.
+//
+// Fica sob o PRIMEIRO conceito que a cita, que é também a ordem em que a
+// lição apresenta os assuntos.
+const vistas = new Set<string>();
+
+const concepts = library.concepts
+  .filter((c) => c.lessons.includes(lessonKey))
+  .map((c) => {
+    const side = (c as Record<string, any>)[lang];
+    return {
+      id: c.id,
+      label: side.label as string,
+      what: side.what as string,
+      refs: c.refs
+        .filter((r) => !vistas.has(r.url) && vistas.add(r.url))
+        .map((r) => ({
+          ...r,
+          kindLabel: kinds[r.kind]?.[lang] ?? r.kind,
+          why: (r as Record<string, any>)[`why_${lang}`] as string,
+        })),
+    };
+  })
+  // Conceito que perdeu todas as indicações para a deduplicação não vira um
+  // cabeçalho órfão seguido de nada.
+  .filter((c) => c.refs.length > 0);
+---
+{concepts.length > 0 && (
+  <section class="deeper">
+    <h2>{t("deeper.title")}</h2>
+    <p class="deeper__lead">{t("deeper.lead")}</p>
+
+    {concepts.map((c) => (
+      <article class="deeper__concept">
+        <h3 class="deeper__label">{c.label}</h3>
+        <p class="deeper__what">{c.what}</p>
+
+        <ul class="deeper__refs">
+          {c.refs.map((r) => (
+            <li class="deeper__ref">
+              <div class="deeper__head">
+                <span class={`tag deeper__kind deeper__kind--${r.kind}`}>{r.kindLabel}</span>
+                <a class="deeper__title" href={r.url} rel="noopener noreferrer" target="_blank">
+                  {r.title}
+                </a>
+                {/* Gratuito é informação de primeira classe: uma bibliografia
+                    só de livro pago exclui exatamente quem mais precisa dela. */}
+                {r.free
+                  ? <span class="deeper__free">{t("deeper.free")}</span>
+                  : <span class="deeper__paid">{t("deeper.paid")}</span>}
+                {r.lang === "pt" && <span class="deeper__lang">PT-BR</span>}
+              </div>
+
+              <div class="deeper__meta">
+                {r.author} · {r.where} · {r.year}
+                {"minutes" in r && r.minutes ? ` · ${r.minutes} min` : ""}
+                {"isbn" in r && r.isbn ? ` · ISBN ${r.isbn}` : ""}
+              </div>
+
+              <p class="deeper__why">{r.why}</p>
+            </li>
+          ))}
+        </ul>
+      </article>
+    ))}
+  </section>
+)}

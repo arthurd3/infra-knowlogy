@@ -27,3 +27,4 @@ não material didático.
 | [0014](0014-o-mapa-de-mercado-como-dado.md) | O mapa de mercado como dado verificável | aceita |
 | [0015](0015-opentofu-e-o-provider-docker.md) | OpenTofu, e provisionar a própria stack em vez de nuvem | aceita |
 | [0016](0016-como-o-tofu-alcanca-o-daemon.md) | Como o `tofu` alcança o daemon, e o que isso custa | aceita |
+| [0017](0017-a-trilha-de-estudo-e-as-fontes.md) | A trilha de estudo, e por que ela não é o `sources:` | aceita |

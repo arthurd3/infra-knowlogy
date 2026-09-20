@@ -41,6 +41,17 @@ there in the list, alongside everything else.
 
 <ContainerVsVm />
 
+<Term word="kernel" alt="kernel" open>
+The program that sits between every process and the hardware. It decides which
+process runs on which core, who may open which file, and what happens when a
+network packet arrives.
+
+No ordinary program talks to the disk or the network card directly: it **asks
+the kernel**, through a system call. That is why "the container shares the
+host's kernel" is the most important statement in this lesson — a container has
+no intermediary of its own, it uses the same one as everybody else.
+</Term>
+
 ## Prove it in ten seconds
 
 <RunIt title="A container is a host process">
@@ -176,6 +187,20 @@ under Podman, under Kubernetes' containerd, or under CRI-O. You are not locked
 into Docker; you are using an open format that Docker also implements.
 </Callout>
 
+<Term word="capability" alt="capability">
+Root's power, broken into roughly forty separate permissions.
+
+Before them it was all or nothing: either the process was root and could do
+everything, or it was not and could do almost nothing. Today you can grant
+exactly one: `CAP_NET_BIND_SERVICE` allows binding port 80 with no other root
+power attached.
+
+That is what this stack's `cap_drop: [ALL]` does — it removes all forty and
+hands back, one at a time, only the ones the binary needs to start. Lesson 3
+shows the case where forgetting one makes the container die with a message that
+mentions no capability at all.
+</Term>
+
 ## Why it starts in milliseconds
 
 The answer is now obvious. A virtual machine has to boot a kernel, probe virtual
@@ -186,6 +211,18 @@ OverlayFS mount, and an `execve()`.
 There is no boot. **A kernel is already running** — the host's. That is why
 starting a container costs what starting a process costs, and why the memory
 overhead is measured in megabytes rather than gigabytes.
+
+<Term word="hypervisor" alt="hypervisor">
+The program that creates and manages virtual machines, emulating hardware so
+that a whole operating system — with a **kernel of its own** — runs inside.
+
+That second boundary is what a container does not have. In a VM, a flaw in the
+guest kernel still runs into the hypervisor before reaching the host; in a
+container there is no second wall — the kernel is the only one.
+
+The price of the extra wall is boot time and memory: a VM loads a kernel, starts
+services and mounts a filesystem before running your first line of code.
+</Term>
 
 ## So when do you actually want a VM?
 

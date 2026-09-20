@@ -81,6 +81,18 @@ COPY . /app
 RUN uv sync --locked --no-dev
 ```
 
+<Term word="BuildKit" alt="BuildKit">
+The build engine that replaced Docker's old builder and is the default today.
+
+Three differences change daily work: it models the Dockerfile as a **graph** and
+builds independent stages in parallel; it accepts `RUN --mount`, which gives a
+command cache and files without leaving them in the image; and it skips stages
+the requested target does not need.
+
+It is also why a Dockerfile using `RUN --mount=type=cache` will not build on the
+old builder: the syntax does not exist there.
+</Term>
+
 ## The BuildKit mounts
 
 Here is the part many people do not know exists. `RUN --mount` solves two problems

@@ -84,6 +84,19 @@ repository was written on Fedora, and the first `docker run -v $PWD:/src` failed
 in exactly this way.
 </Callout>
 
+<Term word="mount point" alt="mount point">
+The place in the directory tree where another filesystem starts to appear.
+
+Mounting copies nothing: it is the kernel starting to answer reads and writes on
+that path with a different device. Mounting over a directory that already had
+content **hides** the old content — it is still there, unreachable, until you
+unmount.
+
+It causes a classic confusion: a bind mount over a directory the image already
+populated makes the image's files vanish, and nothing in the error message says
+they still exist underneath.
+</Term>
+
 ## tmpfs — memory, not disk
 
 ```yaml

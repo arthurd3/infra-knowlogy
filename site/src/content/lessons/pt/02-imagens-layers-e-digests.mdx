@@ -57,6 +57,19 @@ o daemon compara digests e baixa só as camadas que ainda não tem. E é por iss
 `docker build` num Dockerfile inalterado não faz nada — os digests batem.
 </Callout>
 
+<Term word="hash criptográfico" alt="cryptographic hash">
+Uma função que transforma qualquer quantidade de bytes num número de tamanho
+fixo — aqui, os 256 bits do SHA-256 — com três propriedades que importam:
+
+- o **mesmo** conteúdo sempre dá o mesmo número;
+- conteúdo diferente dá número diferente, na prática sempre;
+- e não dá para andar de volta: do número não se reconstrói o conteúdo.
+
+É a segunda propriedade que sustenta esta lição. Se o digest bate, os bytes são
+os mesmos — não "parecidos", os mesmos. É o que permite a um registry do outro
+lado do mundo provar que te entregou o que você pediu.
+</Term>
+
 ## Tag é um ponteiro; digest é o endereço
 
 Esta é a distinção que mais causa incidente em produção.
@@ -88,6 +101,16 @@ para nunca atualizar.
 </Callout>
 
 <DigestChain />
+
+<Term word="registry" alt="registry">
+O servidor que guarda e entrega imagens. O Docker Hub é um; o `ghcr.io` do
+GitHub é outro; o `registry:5000` que o módulo 3 sobe na sua máquina também é.
+
+Ele não guarda "a imagem" como um arquivo só: guarda **blobs** endereçados por
+digest e um **manifest** que lista quais blobs formam aquela imagem. É por isso
+que puxar uma imagem nova que compartilha camadas com outra já baixada é rápido
+— o registry manda só os blobs que faltam.
+</Term>
 
 ## A pilha, e a camada gravável
 

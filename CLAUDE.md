@@ -223,6 +223,17 @@ justamente por isso.
     o que o daemon abre. Daí a variável `host_repo_root`. Rodando o `tofu` no
     host os dois coincidem — e é por isso que o erro só aparece na outra via.
 
+41. **Prop errada num componente MDX não quebra nada — some calada.** O `Term`
+    recebe `word`; escrever `term=` (que é o nome óbvio) faz o Astro aceitar a
+    prop desconhecida, o componente receber `undefined` e o `<summary>` sair com
+    o rótulo "conceito" e NENHUMA palavra. Aconteceu em **12 blocos** da trilha
+    IaC e passou por `astro check` (prop de MDX não é tipada), pelos testes de
+    conteúdo (que contavam o componente, não a prop) e pelo `site-check` (o
+    elemento existe no HTML — só vazio). Hoje há guarda nos dois níveis: o teste
+    olha a prop no MDX, o `site-check` olha se a palavra sobreviveu à
+    renderização. Ao criar componente didático novo, pergunte o que acontece se
+    a prop obrigatória faltar.
+
 ## Ao mexer na stack
 
 - Rode `make verify` antes de considerar qualquer coisa pronta. Para iterar
@@ -434,13 +445,33 @@ e todos pegam o idioma da URL:
   original deixa o leitor sem o termo de busca. O teste conta `<Term>` nos dois
   idiomas: um a mais em pt é um conceito que o leitor inglês ficou sem.
 
+**A trilha de estudo** (ADR 0017). `site/src/data/library.json` é a camada que
+o `sources:` **não** é: as fontes de uma lição são o que foi usado para
+escrevê-la; a biblioteca é para onde ir depois, indexada por **conceito**
+(porque conceito atravessa lição). O `Deeper.astro` é injetado pela página e
+resolve sozinho pela `key` — MDX nenhum importa nada, e lição sem conceito
+mapeado não renderiza bloco algum.
+
+Três regras editoriais, em `library.test.ts`: **toda referência diz por que ELA**
+(mínimo de 120 caracteres, nos dois idiomas), **todo conceito tem ao menos uma
+opção gratuita** (bibliografia só de livro pago exclui quem mais precisa) e
+**todo conceito tem ao menos uma indicação audiovisual**. Mais: livro com ISBN
+ou link de editora, vídeo apontando para o YouTube, e toda lição de Fundamentos
+coberta por algum conceito.
+
+**Referência nunca entra sem ser conferida.** ISBN ou link de YouTube inventado
+envenena a credibilidade que o resto do repositório constrói; o campo `accessed`
+registra a data da checagem. Quando não achei vídeo confiável para um conceito,
+reusei palestra verificada que de fato o cobre — e a justificativa diz o que ela
+entrega ali.
+
 **Imagens** (ADR 0010). `Figure` aceita `src`/`credit`/`creditUrl`/`license` e
 a prop `plate="light"` para diagrama de terceiro desenhado para fundo branco.
 Sem licença apurada, redesenhe em SVG e use `redrawnFrom`. O slot `legend` é o
 formato "figura anotada": lista numerada amarrando cada peça do desenho a algo
 que este repositório mede.
 
-**Testes** (`site/tests/`, 70 casos, `make site-test`). Cobrem a lógica do
+**Testes** (`site/tests/`, 95 casos, `make site-test`). Cobrem a lógica do
 portão, o fluxo do laboratório, a fidelidade da gravação, a paridade das chaves
 de i18n e as invariantes do conteúdo bilíngue — inclusive a que os diagramas
 tornaram necessária: **as duas versões de uma lição usam os mesmos

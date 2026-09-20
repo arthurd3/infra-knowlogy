@@ -983,3 +983,42 @@ blockquote {
 .skills__chip--parcial { color: var(--warn);   border-color: color-mix(in srgb, var(--warn) 40%, transparent); }
 .skills__chip--ausente { opacity: 0.75; }
 .skills__chip-note { display: none; }
+
+/* ─── "Para ir mais fundo": a trilha de estudo (library.json) ───────────────
+   Visualmente separado do bloco de Fontes logo acima, porque são coisas
+   diferentes: fonte é o que sustenta a lição, isto é para onde ir depois. A
+   borda à esquerda faz o mesmo papel que a borda tracejada do FieldNote —
+   sinalizar, sem texto, que a natureza do conteúdo mudou. */
+
+.deeper { margin-top: 3rem; padding-top: 2rem; border-top: 1px solid var(--border); }
+.deeper > h2 { margin: 0 0 0.35rem; }
+.deeper__lead { margin: 0 0 1.75rem; color: var(--text-muted); font-size: 0.9rem; line-height: 1.6; }
+
+.deeper__concept { margin-bottom: 2rem; padding-left: 1rem; border-left: 3px solid var(--accent); }
+.deeper__label { margin: 0 0 0.3rem; font-size: 1.02rem; }
+.deeper__what { margin: 0 0 1rem; font-size: 0.9rem; line-height: 1.65; color: var(--text-muted); }
+
+.deeper__refs { list-style: none; margin: 0; padding: 0; display: grid; gap: 1rem; }
+.deeper__ref { }
+
+.deeper__head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.45rem; }
+.deeper__title { font-weight: 620; font-size: 0.95rem; }
+
+.deeper__kind { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; }
+.deeper__kind--book, .deeper__kind--zine { color: var(--track-prod); }
+.deeper__kind--talk, .deeper__kind--video { color: var(--track-seg); }
+.deeper__kind--spec, .deeper__kind--docs { color: var(--track-k8s); }
+.deeper__kind--article { color: var(--track-fund); }
+
+.deeper__free, .deeper__paid, .deeper__lang {
+  font-size: 0.68rem; padding: 0.1rem 0.4rem; border-radius: 999px; border: 1px solid var(--border);
+}
+.deeper__free { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
+.deeper__paid { color: var(--text-faint); }
+.deeper__lang { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 40%, transparent); }
+
+.deeper__meta {
+  margin-top: 0.2rem; font-size: 0.78rem; color: var(--text-faint);
+  font-family: var(--font-mono);
+}
+.deeper__why { margin: 0.4rem 0 0; font-size: 0.875rem; line-height: 1.65; }

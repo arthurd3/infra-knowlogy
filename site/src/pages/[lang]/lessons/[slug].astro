@@ -9,6 +9,7 @@ import LabExercise from "../../../components/LabExercise.astro";
 import Term from "../../../components/Term.astro";
 import Quiz from "../../../components/Quiz.astro";
 import Figure from "../../../components/Figure.astro";
+import Deeper from "../../../components/Deeper.astro";
 import { useTranslations, otherLang, repoUrl, TRACKS, trackBadge, type Lang, type Track } from "../../../i18n/ui";
 
 export async function getStaticPaths() {
@@ -132,6 +133,12 @@ const sourcesField = entry.data.sources.filter((s) => !DOCS.has(s.kind));
           ))}
         </section>
       )}
+
+      <!-- A trilha de estudo, resolvida pela `key` da lição. Fica DEPOIS das
+           fontes de propósito: primeiro o que sustenta o que você acabou de
+           ler, depois para onde ir. Lição sem conceito mapeado não renderiza
+           nada — o componente some sozinho. -->
+      <Deeper lessonKey={entry.data.key} lang={lang} />
 
       <nav class="pager" aria-label={t("nav.tracks")}>
         {prev ? (

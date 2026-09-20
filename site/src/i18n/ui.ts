@@ -68,6 +68,11 @@ export const ui = {
       "A mesma stack declarada em HCL e provisionada por OpenTofu: estado, grafo de dependências, idempotência e drift — medidos aqui, sem conta em nuvem nenhuma.",
     "lesson.minutes": "min de leitura",
     "lesson.sources": "Fontes",
+    "deeper.title": "Para ir mais fundo",
+    "deeper.lead":
+      "Não são as fontes desta lição — são o caminho para além dela, por conceito. Cada indicação diz por que ELA, e se custa dinheiro.",
+    "deeper.free": "gratuito",
+    "deeper.paid": "pago",
     "lesson.sources.docs": "Documentação e especificação",
     "lesson.sources.field": "Relatos de campo",
     "lesson.next": "Próxima",
@@ -177,6 +182,11 @@ export const ui = {
       "The same stack declared in HCL and provisioned by OpenTofu: state, dependency graph, idempotence and drift — all measured here, with no cloud account at all.",
     "lesson.minutes": "min read",
     "lesson.sources": "Sources",
+    "deeper.title": "Going deeper",
+    "deeper.lead":
+      "These are not this lesson's sources — they are the path beyond it, by concept. Every entry says why THAT one, and whether it costs money.",
+    "deeper.free": "free",
+    "deeper.paid": "paid",
     "lesson.sources.docs": "Documentation and specification",
     "lesson.sources.field": "Field reports",
     "lesson.next": "Next",

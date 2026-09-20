@@ -1,0 +1,806 @@
+{
+  "note_pt": "A trilha de estudo — e o que ela NÃO é. As fontes de cada lição, no rodapé dela, são o que foi usado para escrevê-la; isto aqui é outra coisa: o caminho para ir além, por CONCEITO, porque conceito atravessa lição. Toda referência diz por que ELA e não outra, declara se é gratuita, e foi conferida na data do campo `accessed`. Lista sem justificativa é lista que ninguém segue.",
+  "note_en": "The study path — and what it is NOT. Each lesson's sources, in its footer, are what was used to write it; this is a different thing: the way to go further, by CONCEPT, because concepts cut across lessons. Every reference says why THAT one and not another, declares whether it is free, and was checked on the date in its `accessed` field. A list without justification is a list nobody follows.",
+  "kinds": {
+    "book": {
+      "pt": "livro",
+      "en": "book"
+    },
+    "zine": {
+      "pt": "zine",
+      "en": "zine"
+    },
+    "talk": {
+      "pt": "palestra",
+      "en": "talk"
+    },
+    "video": {
+      "pt": "vídeo",
+      "en": "video"
+    },
+    "article": {
+      "pt": "artigo",
+      "en": "article"
+    },
+    "spec": {
+      "pt": "especificação",
+      "en": "specification"
+    },
+    "docs": {
+      "pt": "documentação",
+      "en": "documentation"
+    }
+  },
+  "concepts": [
+    {
+      "id": "namespaces",
+      "lessons": [
+        "what-is-a-container",
+        "networking-and-dns"
+      ],
+      "pt": {
+        "label": "Namespaces do Linux",
+        "what": "O mecanismo que dá a cada processo uma visão própria de PIDs, montagens, rede, hostname, IPC e usuários. É o que faz o processo dentro do container achar que é o PID 1 de uma máquina só dele."
+      },
+      "en": {
+        "label": "Linux namespaces",
+        "what": "The mechanism that gives each process its own view of PIDs, mounts, network, hostname, IPC and users. It is what makes the process inside a container believe it is PID 1 of a machine of its own."
+      },
+      "refs": [
+        {
+          "kind": "article",
+          "title": "Namespaces in operation, part 1: namespaces overview",
+          "author": "Michael Kerrisk",
+          "where": "LWN.net",
+          "year": 2013,
+          "lang": "en",
+          "url": "https://lwn.net/Articles/531114/",
+          "free": true,
+          "accessed": "2026-09-20",
+          "why_pt": "A série de referência sobre o assunto, escrita pelo mantenedor das man pages do Linux. Começa pelo panorama e desce até a API; as partes 3 e 4 sobre PID namespaces explicam exatamente por que matar o PID 1 de dentro do container não funciona.",
+          "why_en": "The reference series on the subject, written by the maintainer of the Linux man pages. It starts from the overview and descends into the API; parts 3 and 4 on PID namespaces explain exactly why killing PID 1 from inside a container does not work."
+        },
+        {
+          "kind": "docs",
+          "title": "namespaces(7) — Linux manual page",
+          "author": "Michael Kerrisk (mantenedor)",
+          "where": "man7.org",
+          "year": 2025,
+          "lang": "en",
+          "url": "https://man7.org/linux/man-pages/man7/namespaces.7.html",
+          "free": true,
+          "accessed": "2026-09-20",
+          "why_pt": "A fonte normativa, e o lugar certo para conferir quais namespaces existem na sua versão de kernel. Man page é seca de propósito: use depois do artigo da LWN, não antes.",
+          "why_en": "The normative source, and the right place to check which namespaces exist in your kernel version. A man page is dry by design: use it after the LWN article, not before."
+        },
+        {
+          "kind": "talk",
+          "title": "Containers From Scratch",
+          "author": "Liz Rice",
+          "where": "GOTO 2018",
+          "year": 2018,
+          "lang": "en",
+          "url": "https://www.youtube.com/watch?v=8fi7uSYlOdc",
+          "free": true,
+          "accessed": "2026-09-20",
+          "why_pt": "Ela constrói um container ao vivo, em Go, em pouco mais de cem linhas — e cada namespace entra na tela no momento em que passa a fazer diferença. É o caminho mais curto entre 'container é um processo isolado' e ver o isolamento acontecer.",
+          "why_en": "She builds a container live, in Go, in a little over a hundred lines — and each namespace appears on screen at the moment it starts to matter. It is the shortest path between 'a container is an isolated process' and watching the isolation happen.",
+          "minutes": 43
+        },
+        {
+          "kind": "talk",
+          "title": "Cgroups, namespaces, and beyond: what are containers made from?",
+          "author": "Jérôme Petazzoni",
+          "where": "DockerCon Europe 2015",
+          "year": 2015,
+          "lang": "en",
+          "url": "https://www.youtube.com/watch?v=sK5i-N34im8",
+          "free": true,
+          "accessed": "2026-09-20",
+          "why_pt": "Ele faz À MÃO o que o Docker faz: descompacta a imagem, cria os namespaces, monta a rede. Tem dez anos e envelheceu bem porque o assunto é o kernel, não a ferramenta — e é a demonstração que mostra que não há mágica nenhuma ali.",
+          "why_en": "He does BY HAND what Docker does: unpacks the image, creates the namespaces, wires up the network. It is ten years old and has aged well because the subject is the kernel, not the tool — and it is the demo that shows there is no magic involved.",
+          "minutes": 45
+        },
+        {
+          "kind": "zine",
+          "title": "How Containers Work!",
+          "author": "Julia Evans",
+          "where": "Wizard Zines",
+          "year": 2020,
+          "lang": "en",
+          "url": "https://wizardzines.com/zines/containers/",
+          "free": false,
+          "accessed": "2026-09-20",
+          "why_pt": "Vinte páginas de quadrinhos cobrindo namespaces, cgroups, capabilities, pivot_root e overlay. É a porta de entrada mais gentil que existe para quem trava na primeira página de um man page — e as tirinhas de amostra no site já ensinam sozinhas.",
+          "why_en": "Twenty pages of comics covering namespaces, cgroups, capabilities, pivot_root and overlay. It is the gentlest entry point there is for anyone who stalls on the first page of a man page — and the sample comics on the site already teach on their own."
+        },
+        {
+          "kind": "book",
+          "title": "The Linux Programming Interface",
+          "author": "Michael Kerrisk",
+          "where": "No Starch Press",
+          "year": 2010,
+          "lang": "en",
+          "url": "https://man7.org/tlpi/",
+          "free": false,
+          "accessed": "2026-09-20",
+          "why_pt": "Mil e quinhentas páginas, e a referência definitiva de chamada de sistema no Linux — escrita pelo mantenedor das man pages. Não é para ler de capa a capa: é o livro que você abre no capítulo certo quando precisa entender um comportamento e a documentação não basta.",
+          "why_en": "Fifteen hundred pages, and the definitive reference on Linux system calls — written by the maintainer of the man pages. Not a cover-to-cover read: it is the book you open at the right chapter when you need to understand a behaviour and the docs are not enough.",
+          "isbn": "978-1-59327-220-3"
+        }
+      ]
+    },
+    {
+      "id": "cgroups",
+      "lessons": [
+        "what-is-a-container",
+        "container-lifecycle"
+      ],
+      "pt": {
+        "label": "cgroups (control groups)",
+        "what": "O mecanismo que limita e contabiliza CPU, memória, I/O e número de processos de um grupo. Namespace decide o que o processo VÊ; cgroup decide o quanto ele PODE consumir."
+      },
+      "en": {
+        "label": "cgroups (control groups)",
+        "what": "The mechanism that limits and accounts CPU, memory, I/O and process count for a group. A namespace decides what a process SEES; a cgroup decides how much it may CONSUME."
+      },
+      "refs": [
+        {
+          "kind": "docs",
+          "title": "Control Group v2",
+          "author": "Tejun Heo e outros",
+          "where": "Documentação do kernel Linux",
+          "year": 2025,
+          "lang": "en",
+          "url": "https://docs.kernel.org/admin-guide/cgroup-v2.html",
+          "free": true,
+          "accessed": "2026-09-20",
+          "why_pt": "A documentação do próprio kernel, e a única fonte que separa direito `memory.high` de `memory.max` — a diferença entre 'o kernel te segura' e 'o OOM killer te mata'. Quase todo tutorial de limite de memória erra essa distinção.",
+          "why_en": "The kernel's own documentation, and the only source that properly separates `memory.high` from `memory.max` — the difference between 'the kernel throttles you' and 'the OOM killer kills you'. Almost every memory-limit tutorial gets that distinction wrong."
+        },
+        {
+          "kind": "talk",
+          "title": "Cgroups, namespaces, and beyond: what are containers made from?",
+          "author": "Jérôme Petazzoni",
+          "where": "DockerCon Europe 2015",
+          "year": 2015,
+          "lang": "en",
+          "url": "https://www.youtube.com/watch?v=sK5i-N34im8",
+          "free": true,
+          "accessed": "2026-09-20",
+          "why_pt": "Ele faz À MÃO o que o Docker faz: descompacta a imagem, cria os namespaces, monta a rede. Tem dez anos e envelheceu bem porque o assunto é o kernel, não a ferramenta — e é a demonstração que mostra que não há mágica nenhuma ali.",
+          "why_en": "He does BY HAND what Docker does: unpacks the image, creates the namespaces, wires up the network. It is ten years old and has aged well because the subject is the kernel, not the tool — and it is the demo that shows there is no magic involved.",
+          "minutes": 45
+        },
+        {
+          "kind": "talk",
+          "title": "Containers From Scratch",
+          "author": "Liz Rice",
+          "where": "GOTO 2018",
+          "year": 2018,
+          "lang": "en",
+          "url": "https://www.youtube.com/watch?v=8fi7uSYlOdc",
+          "free": true,
+          "accessed": "2026-09-20",
+          "why_pt": "Ela constrói um container ao vivo, em Go, em pouco mais de cem linhas — e cada namespace entra na tela no momento em que passa a fazer diferença. É o caminho mais curto entre 'container é um processo isolado' e ver o isolamento acontecer.",
+          "why_en": "She builds a container live, in Go, in a little over a hundred lines — and each namespace appears on screen at the moment it starts to matter. It is the shortest path between 'a container is an isolated process' and watching the isolation happen.",
+          "minutes": 43
+        },
+        {
+          "kind": "book",
+          "title": "Systems Performance, 2nd Edition",
+          "author": "Brendan Gregg",
+          "where": "Addison-Wesley",
+          "year": 2020,
+          "lang": "en",
+          "url": "https://www.brendangregg.com/systems-performance-2nd-edition-book.html",
+          "free": false,
+          "accessed": "2026-09-20",
+          "why_pt": "O capítulo sobre containers e o método USE (utilização, saturação, erros) são o que transforma 'o container está lento' numa investigação com ordem. Está aqui porque limite de cgroup só vira conhecimento útil quando você sabe medir a saturação dele.",
+          "why_en": "The chapter on containers and the USE method (utilisation, saturation, errors) are what turn 'the container is slow' into an investigation with an order to it. It is here because a cgroup limit only becomes useful knowledge once you can measure its saturation.",
+          "isbn": "978-0-13-682015-4"
+        }
+      ]
+    },
+    {
+      "id": "capabilities",
+      "lessons": [
+        "what-is-a-container",
+        "dockerfile-instruction-by-instruction"
+      ],
+      "pt": {
+        "label": "Capabilities",
+        "what": "A quebra do poder de root em ~40 permissões separadas. É o que permite um processo abrir a porta 80 sem ser root inteiro — e o que o `cap_drop: [ALL]` desta stack devolve uma a uma, só quando o binário não sobe sem."
+      },
+      "en": {
+        "label": "Capabilities",
+        "what": "Root's power broken into ~40 separate permissions. It is what lets a process bind port 80 without being full root — and what this stack's `cap_drop: [ALL]` hands back one at a time, only when the binary will not start without it."
+      },
+      "refs": [
+        {
+          "kind": "docs",
+          "title": "capabilities(7) — Linux manual page",
+          "author": "Michael Kerrisk (mantenedor)",
+          "where": "man7.org",
+          "year": 2025,
+          "lang": "en",
+          "url": "https://man7.org/linux/man-pages/man7/capabilities.7.html",
+          "free": true,
+          "accessed": "2026-09-20",
+          "why_pt": "A lista completa, com o que cada capability de fato autoriza — e a seção *File capabilities*, que explica a armadilha 6 deste repositório: o binário do Caddy tem `cap_net_bind_service=+ep` gravada nele, e o kernel recusa o `exec()` se ela não estiver no bounding set, mesmo publicando em porta alta.",
+          "why_en": "The complete list, with what each capability actually authorises — and the *File capabilities* section, which explains this repository's trap 6: the Caddy binary carries `cap_net_bind_service=+ep` written into it, and the kernel refuses the `exec()` if it is not in the bounding set, even when publishing on a high port."
+        },
+        {
+          "kind": "book",
+          "title": "Container Security",
+          "author": "Liz Rice",
+          "where": "O'Reilly",
+          "year": 2020,
+          "lang": "en",
+          "url": "https://www.oreilly.com/library/view/container-security/9781492056690/",
+          "free": false,
+          "accessed": "2026-09-20",
+          "why_pt": "Ele explica os mecanismos do Linux a partir da pergunta 'o que isto permite a um invasor?', que é a ordem certa para quem já usa container e quer entender o que está confiando. A 2ª edição saiu depois; esta é a que os capítulos citados aqui seguem.",
+          "why_en": "It explains the Linux mechanisms starting from 'what does this allow an attacker to do?', which is the right order for someone already using containers and wanting to understand what they are trusting. A 2nd edition exists; this is the one the chapters cited here follow.",
+          "isbn": "978-1-4920-5670-6"
+        },
+        {
+          "kind": "video",
+          "title": "Container Security with Liz Rice — DevOps and Docker Live Show (Ep 69)",
+          "author": "Liz Rice, entrevistada por Bret Fisher",
+          "where": "YouTube — Bret Fisher DevOps",
+          "year": 2020,
+          "lang": "en",
+          "url": "https://www.youtube.com/watch?v=UMtyHmu3_Do",
+          "free": true,
+          "accessed": "2026-09-20",
+          "why_pt": "Uma conversa longa com a autora do livro citado acima, e não uma aula estruturada — vale saber disso antes de abrir. É o caminho de menor esforço para quem não vai abrir uma man page hoje: ela explica em linguagem simples por que container rodar como root por padrão é o comportamento inseguro mais comum do ecossistema.",
+          "why_en": "A long conversation with the author of the book cited above, not a structured lecture — worth knowing before you open it. It is the lowest-effort way in for someone who is not going to open a man page today: she explains in plain language why containers running as root by default is the ecosystem's most common insecure behaviour."
+        },
+        {
+          "kind": "zine",
+          "title": "How Containers Work!",
+          "author": "Julia Evans",
+          "where": "Wizard Zines",
+          "year": 2020,
+          "lang": "en",
+          "url": "https://wizardzines.com/zines/containers/",
+          "free": false,
+          "accessed": "2026-09-20",
+          "why_pt": "Vinte páginas de quadrinhos cobrindo namespaces, cgroups, capabilities, pivot_root e overlay. É a porta de entrada mais gentil que existe para quem trava na primeira página de um man page — e as tirinhas de amostra no site já ensinam sozinhas.",
+          "why_en": "Twenty pages of comics covering namespaces, cgroups, capabilities, pivot_root and overlay. It is the gentlest entry point there is for anyone who stalls on the first page of a man page — and the sample comics on the site already teach on their own."
+        }
+      ]
+    },
+    {
+      "id": "union-filesystems",
+      "lessons": [
+        "images-layers-and-digests",
+        "storage-volumes-and-mounts"
+      ],
+      "pt": {
+        "label": "Sistema de arquivos em união e copy-on-write",
+        "what": "Como várias camadas somente-leitura viram um sistema de arquivos único e gravável. É o que explica por que apagar um arquivo numa camada nova não diminui a imagem — e por que o segredo continua lá."
+      },
+      "en": {
+        "label": "Union filesystems and copy-on-write",
+        "what": "How several read-only layers become one writable filesystem. It is what explains why deleting a file in a new layer does not shrink the image — and why the secret is still in there."
+      },
+      "refs": [
+        {
+          "kind": "docs",
+          "title": "Overlay Filesystem",
+          "author": "Miklos Szeredi e outros",
+          "where": "Documentação do kernel Linux",
+          "year": 2025,
+          "lang": "en",
+          "url": "https://docs.kernel.org/filesystems/overlayfs.html",
+          "free": true,
+          "accessed": "2026-09-20",
+          "why_pt": "Onde `lowerdir`, `upperdir` e `copy_up` estão definidos de verdade. Ler a seção de copy-up é o que faz cair a ficha de por que escrever um byte num arquivo de 2 GB copia os 2 GB inteiros para a camada gravável.",
+          "why_en": "Where `lowerdir`, `upperdir` and `copy_up` are actually defined. Reading the copy-up section is what makes it click why writing one byte into a 2 GB file copies the entire 2 GB into the writable layer."
+        },
+        {
+          "kind": "zine",
+          "title": "How Containers Work!",
+          "author": "Julia Evans",
+          "where": "Wizard Zines",
+          "year": 2020,
+          "lang": "en",
+          "url": "https://wizardzines.com/zines/containers/",
+          "free": false,
+          "accessed": "2026-09-20",
+          "why_pt": "Vinte páginas de quadrinhos cobrindo namespaces, cgroups, capabilities, pivot_root e overlay. É a porta de entrada mais gentil que existe para quem trava na primeira página de um man page — e as tirinhas de amostra no site já ensinam sozinhas.",
+          "why_en": "Twenty pages of comics covering namespaces, cgroups, capabilities, pivot_root and overlay. It is the gentlest entry point there is for anyone who stalls on the first page of a man page — and the sample comics on the site already teach on their own."
+        },
+        {
+          "kind": "talk",
+          "title": "Cgroups, namespaces, and beyond: what are containers made from?",
+          "author": "Jérôme Petazzoni",
+          "where": "DockerCon Europe 2015",
+          "year": 2015,
+          "lang": "en",
+          "url": "https://www.youtube.com/watch?v=sK5i-N34im8",
+          "free": true,
+          "accessed": "2026-09-20",
+          "why_pt": "Ele faz À MÃO o que o Docker faz: descompacta a imagem, cria os namespaces, monta a rede. Tem dez anos e envelheceu bem porque o assunto é o kernel, não a ferramenta — e é a demonstração que mostra que não há mágica nenhuma ali.",
+          "why_en": "He does BY HAND what Docker does: unpacks the image, creates the namespaces, wires up the network. It is ten years old and has aged well because the subject is the kernel, not the tool — and it is the demo that shows there is no magic involved.",
+          "minutes": 45
+        },
+        {
+          "kind": "book",
+          "title": "Descomplicando o Docker",
+          "author": "Jeferson Fernando e Marcus André",
+          "where": "Brasport / LINUXtips",
+          "year": 2019,
+          "lang": "pt",
+          "url": "https://livro.descomplicandodocker.com.br/",
+          "free": true,
+          "accessed": "2026-09-20",
+          "why_pt": "O livro de container mais acessível em português, e liberado de graça pelo autor junto com a editora. Está aqui por uma razão editorial: recomendar só bibliografia em inglês exclui exatamente o leitor que mais precisa começar.",
+          "why_en": "The most accessible container book in Portuguese, released for free by the author together with the publisher. It is here for an editorial reason: recommending English-only bibliography excludes precisely the reader who most needs to start."
+        }
+      ]
+    },
+    {
+      "id": "content-addressing",
+      "lessons": [
+        "images-layers-and-digests"
+      ],
+      "pt": {
+        "label": "Endereçamento por conteúdo e digest",
+        "what": "Identificar um artefato pelo hash do que ele É, e não pelo nome que alguém deu. É a diferença entre `:latest` — um ponteiro que muda debaixo de você — e um `sha256:` que nunca aponta para outra coisa."
+      },
+      "en": {
+        "label": "Content addressing and digests",
+        "what": "Identifying an artifact by the hash of what it IS, rather than by a name someone gave it. It is the difference between `:latest` — a pointer that moves under you — and a `sha256:` that never points anywhere else."
+      },
+      "refs": [
+        {
+          "kind": "spec",
+          "title": "OCI Image Format Specification",
+          "author": "Open Container Initiative",
+          "where": "GitHub / OCI",
+          "year": 2025,
+          "lang": "en",
+          "url": "https://github.com/opencontainers/image-spec",
+          "free": true,
+          "accessed": "2026-09-20",
+          "why_pt": "A especificação que define manifest, índice, camadas e configuração — e o motivo de uma imagem ser a mesma coisa em qualquer runtime. Curta o suficiente para ler inteira numa tarde, o que quase nenhuma especificação é.",
+          "why_en": "The specification that defines manifest, index, layers and config — and the reason an image is the same thing in any runtime. Short enough to read end to end in an afternoon, which almost no specification is."
+        },
+        {
+          "kind": "spec",
+          "title": "OCI Specifications (image, runtime, distribution)",
+          "author": "Open Container Initiative",
+          "where": "specs.opencontainers.org",
+          "year": 2025,
+          "lang": "en",
+          "url": "https://specs.opencontainers.org/image-spec/",
+          "free": true,
+          "accessed": "2026-09-20",
+          "why_pt": "As três especificações renderizadas para leitura. Vale ver as três juntas uma vez: a de imagem diz o que é o artefato, a de runtime o que é executá-lo, e a de distribuição como ele viaja até o registry.",
+          "why_en": "The three specifications rendered for reading. Worth seeing all three together once: the image spec says what the artifact is, the runtime spec what executing it means, and the distribution spec how it travels to a registry."
+        },
+        {
+          "kind": "book",
+          "title": "Docker Deep Dive",
+          "author": "Nigel Poulton",
+          "where": "edição do autor (Leanpub)",
+          "year": 2025,
+          "lang": "en",
+          "url": "https://leanpub.com/dockerdeepdive",
+          "free": false,
+          "accessed": "2026-09-20",
+          "why_pt": "O livro de Docker mais atualizado em circulação, revisado a cada ano. Está aqui pela parte de imagens e registry, que é onde ele é mais forte — e por ser o único da lista que acompanha mudança de versão da ferramenta.",
+          "why_en": "The most up-to-date Docker book in circulation, revised every year. It is here for the images and registry material, where it is strongest — and for being the only one on this list that keeps pace with tool releases."
+        },
+        {
+          "kind": "book",
+          "title": "Descomplicando o Docker",
+          "author": "Jeferson Fernando e Marcus André",
+          "where": "Brasport / LINUXtips",
+          "year": 2019,
+          "lang": "pt",
+          "url": "https://livro.descomplicandodocker.com.br/",
+          "free": true,
+          "accessed": "2026-09-20",
+          "why_pt": "O livro de container mais acessível em português, e liberado de graça pelo autor junto com a editora. Está aqui por uma razão editorial: recomendar só bibliografia em inglês exclui exatamente o leitor que mais precisa começar.",
+          "why_en": "The most accessible container book in Portuguese, released for free by the author together with the publisher. It is here for an editorial reason: recommending English-only bibliography excludes precisely the reader who most needs to start."
+        },
+        {
+          "kind": "video",
+          "title": "Descomplicando o Docker (playlist do curso)",
+          "author": "LINUXtips (Jeferson Fernando)",
+          "where": "YouTube",
+          "year": 2016,
+          "lang": "pt",
+          "url": "https://www.youtube.com/playlist?list=PLf-O3X2-mxDn1VpyU2q3fuI6YYeIWp5rR",
+          "free": true,
+          "accessed": "2026-09-20",
+          "why_pt": "As aulas de imagem, tag e registry cobrem exatamente este conceito, em português e de graça. A sintaxe mudou desde 2016 em alguns comandos, mas a distinção entre tag (ponteiro que se move) e digest (endereço do conteúdo) não muda com versão de ferramenta.",
+          "why_en": "The lessons on images, tags and registries cover exactly this concept, in Portuguese and for free. Some command syntax has changed since 2016, but the distinction between a tag (a pointer that moves) and a digest (the content's address) does not change with a tool release."
+        }
+      ]
+    },
+    {
+      "id": "pid1-and-signals",
+      "lessons": [
+        "container-lifecycle",
+        "dockerfile-instruction-by-instruction"
+      ],
+      "pt": {
+        "label": "PID 1, sinais e o fim do container",
+        "what": "Por que o container morre quando o PID 1 morre, por que o kernel trata o PID 1 diferente de todo outro processo, e por que um `docker stop` às vezes espera dez segundos e mata à força."
+      },
+      "en": {
+        "label": "PID 1, signals and the end of a container",
+        "what": "Why the container dies when PID 1 dies, why the kernel treats PID 1 differently from every other process, and why a `docker stop` sometimes waits ten seconds and then kills."
+      },
+      "refs": [
+        {
+          "kind": "docs",
+          "title": "signal(7) — Linux manual page",
+          "author": "Michael Kerrisk (mantenedor)",
+          "where": "man7.org",
+          "year": 2025,
+          "lang": "en",
+          "url": "https://man7.org/linux/man-pages/man7/signal.7.html",
+          "free": true,
+          "accessed": "2026-09-20",
+          "why_pt": "A tabela de ações padrão por sinal, que é o dado que falta na maioria das explicações. A regra que importa está no parágrafo sobre PID 1: o kernel NÃO aplica ação padrão ao PID 1 de um namespace — só chega o que o processo trata explicitamente.",
+          "why_en": "The table of default actions per signal, which is the fact missing from most explanations. The rule that matters is in the paragraph about PID 1: the kernel does NOT apply default actions to a namespace's PID 1 — only what the process explicitly handles gets through."
+        },
+        {
+          "kind": "article",
+          "title": "Docker and the PID 1 zombie reaping problem",
+          "author": "Phusion",
+          "where": "blog.phusion.nl",
+          "year": 2015,
+          "lang": "en",
+          "url": "https://blog.phusion.nl/docker-and-the-pid-1-zombie-reaping-problem/",
+          "free": true,
+          "accessed": "2026-09-20",
+          "why_pt": "O artigo que popularizou o problema e o vocabulário. Leia com uma ressalva: ele é de 2015 e vende a solução do autor; hoje o `docker run --init` (com tini) resolve o caso comum em uma flag. O diagnóstico envelheceu bem, a receita nem tanto.",
+          "why_en": "The article that popularised the problem and its vocabulary. Read it with a caveat: it is from 2015 and sells the author's solution; today `docker run --init` (with tini) covers the common case in one flag. The diagnosis aged well, the prescription less so."
+        },
+        {
+          "kind": "talk",
+          "title": "Containers From Scratch",
+          "author": "Liz Rice",
+          "where": "GOTO 2018",
+          "year": 2018,
+          "lang": "en",
+          "url": "https://www.youtube.com/watch?v=8fi7uSYlOdc",
+          "free": true,
+          "accessed": "2026-09-20",
+          "why_pt": "Vale por um trecho específico: quando ela cria o namespace de PID, o processo dentro passa a se ver como PID 1 — e dá para observar na tela o que isso muda. É a forma mais direta de entender que o 'PID 1' do container não é o init da máquina.",
+          "why_en": "Worth it for one specific stretch: when she creates the PID namespace, the process inside starts seeing itself as PID 1 — and you can watch on screen what that changes. It is the most direct way to grasp that the container's 'PID 1' is not the machine's init.",
+          "minutes": 43
+        },
+        {
+          "kind": "book",
+          "title": "The Linux Programming Interface",
+          "author": "Michael Kerrisk",
+          "where": "No Starch Press",
+          "year": 2010,
+          "lang": "en",
+          "url": "https://man7.org/tlpi/",
+          "free": false,
+          "accessed": "2026-09-20",
+          "why_pt": "Mil e quinhentas páginas, e a referência definitiva de chamada de sistema no Linux — escrita pelo mantenedor das man pages. Não é para ler de capa a capa: é o livro que você abre no capítulo certo quando precisa entender um comportamento e a documentação não basta.",
+          "why_en": "Fifteen hundred pages, and the definitive reference on Linux system calls — written by the maintainer of the man pages. Not a cover-to-cover read: it is the book you open at the right chapter when you need to understand a behaviour and the docs are not enough.",
+          "isbn": "978-1-59327-220-3"
+        },
+        {
+          "kind": "book",
+          "title": "Operating Systems: Three Easy Pieces",
+          "author": "Remzi e Andrea Arpaci-Dusseau",
+          "where": "University of Wisconsin-Madison",
+          "year": 2018,
+          "lang": "en",
+          "url": "https://www.ostep.org",
+          "free": true,
+          "accessed": "2026-09-20",
+          "why_pt": "O livro-texto de sistemas operacionais que os autores deixaram livre em PDF, organizado em virtualização, concorrência e persistência. É a base de baixo: quem entende processo, memória virtual e sistema de arquivos aqui para de achar container estranho.",
+          "why_en": "The operating systems textbook the authors made freely available as a PDF, organised around virtualisation, concurrency and persistence. It is the layer underneath: once you understand processes, virtual memory and filesystems here, containers stop looking strange."
+        }
+      ]
+    },
+    {
+      "id": "container-networking",
+      "lessons": [
+        "networking-and-dns",
+        "compose-and-healthchecks"
+      ],
+      "pt": {
+        "label": "Rede de container: bridge, veth, NAT",
+        "what": "O par veth que liga o namespace de rede do container à bridge do host, e as regras de netfilter que fazem a porta publicada aparecer. É também onde mora a regra de DNAT que atravessa o seu firewall."
+      },
+      "en": {
+        "label": "Container networking: bridge, veth, NAT",
+        "what": "The veth pair linking the container's network namespace to the host bridge, and the netfilter rules that make a published port appear. It is also where the DNAT rule that walks straight past your firewall lives."
+      },
+      "refs": [
+        {
+          "kind": "talk",
+          "title": "Linux Bridges, IP Tables, and CNI Plug-Ins — A Container Networking Deepdive",
+          "author": "NetDevOps Live",
+          "where": "Cisco DevNet",
+          "year": 2020,
+          "lang": "en",
+          "url": "https://www.youtube.com/watch?v=z-ITjDQT7DU",
+          "free": true,
+          "accessed": "2026-09-20",
+          "why_pt": "Ele monta a rede de container do zero com `ip netns` e `iptables`, sem Docker no caminho. É o jeito mais rápido de entender que a 'rede do Docker' é rede do Linux com um script bom em cima.",
+          "why_en": "It builds container networking from scratch with `ip netns` and `iptables`, with no Docker in the way. It is the fastest way to grasp that 'Docker networking' is Linux networking with a good script on top."
+        },
+        {
+          "kind": "book",
+          "title": "TCP/IP Illustrated, Volume 1: The Protocols, 2nd Edition",
+          "author": "Kevin R. Fall e W. Richard Stevens",
+          "where": "Addison-Wesley",
+          "year": 2011,
+          "lang": "en",
+          "url": "https://www.informit.com/store/tcp-ip-illustrated-volume-1-the-protocols-9780321336316",
+          "free": false,
+          "accessed": "2026-09-20",
+          "why_pt": "O clássico, e a única referência desta lista que explica o protocolo no nível do pacote. Está aqui porque toda depuração de rede de container termina em 'o pacote saiu e não voltou', e responder isso exige saber o que é um pacote.",
+          "why_en": "The classic, and the only reference on this list that explains the protocol at packet level. It is here because every container networking debug session ends at 'the packet left and did not come back', and answering that requires knowing what a packet is.",
+          "isbn": "978-0-321-33631-6"
+        },
+        {
+          "kind": "talk",
+          "title": "Cgroups, namespaces, and beyond: what are containers made from?",
+          "author": "Jérôme Petazzoni",
+          "where": "DockerCon Europe 2015",
+          "year": 2015,
+          "lang": "en",
+          "url": "https://www.youtube.com/watch?v=sK5i-N34im8",
+          "free": true,
+          "accessed": "2026-09-20",
+          "why_pt": "Ele faz À MÃO o que o Docker faz: descompacta a imagem, cria os namespaces, monta a rede. Tem dez anos e envelheceu bem porque o assunto é o kernel, não a ferramenta — e é a demonstração que mostra que não há mágica nenhuma ali.",
+          "why_en": "He does BY HAND what Docker does: unpacks the image, creates the namespaces, wires up the network. It is ten years old and has aged well because the subject is the kernel, not the tool — and it is the demo that shows there is no magic involved.",
+          "minutes": 45
+        },
+        {
+          "kind": "book",
+          "title": "How Linux Works, 3rd Edition",
+          "author": "Brian Ward",
+          "where": "No Starch Press",
+          "year": 2021,
+          "lang": "en",
+          "url": "https://nostarch.com/howlinuxworks3",
+          "free": false,
+          "accessed": "2026-09-20",
+          "why_pt": "O meio-termo entre tutorial e referência: explica boot, processos, rede e systemd na profundidade de quem opera, sem exigir C. A 3ª edição acrescentou um capítulo sobre virtualização e containers.",
+          "why_en": "The middle ground between tutorial and reference: it explains boot, processes, networking and systemd at operator depth, without requiring C. The 3rd edition added a chapter on virtualisation and containers.",
+          "isbn": "978-1-7185-0040-2"
+        }
+      ]
+    },
+    {
+      "id": "dns",
+      "lessons": [
+        "networking-and-dns"
+      ],
+      "pt": {
+        "label": "DNS e descoberta de serviço",
+        "what": "Como um nome vira endereço, e por que o resolvedor embutido em 127.0.0.11 só existe em rede criada por você. É o assunto mais subestimado de infraestrutura: quase todo incidente 'intermitente' passa por aqui."
+      },
+      "en": {
+        "label": "DNS and service discovery",
+        "what": "How a name becomes an address, and why the embedded resolver at 127.0.0.11 only exists on a user-defined network. It is the most underestimated subject in infrastructure: nearly every 'intermittent' incident runs through it."
+      },
+      "refs": [
+        {
+          "kind": "spec",
+          "title": "RFC 1034 — Domain names: concepts and facilities",
+          "author": "P. Mockapetris",
+          "where": "IETF",
+          "year": 1987,
+          "lang": "en",
+          "url": "https://www.rfc-editor.org/rfc/rfc1034",
+          "free": true,
+          "accessed": "2026-09-20",
+          "why_pt": "O documento fundador, de 1987, e ainda a melhor explicação de por que o DNS é hierárquico e cacheado. Ler as vinte primeiras páginas explica mais sobre TTL e propagação do que qualquer post de blog.",
+          "why_en": "The founding document, from 1987, and still the best explanation of why DNS is hierarchical and cached. Reading the first twenty pages explains more about TTL and propagation than any blog post."
+        },
+        {
+          "kind": "docs",
+          "title": "resolv.conf(5) — Linux manual page",
+          "author": "mantenedores das man pages do Linux",
+          "where": "man7.org",
+          "year": 2025,
+          "lang": "en",
+          "url": "https://man7.org/linux/man-pages/man5/resolv.conf.5.html",
+          "free": true,
+          "accessed": "2026-09-20",
+          "why_pt": "A página que documenta `ndots` e `search`, que é onde nasce a armadilha de DNS mais cara do Kubernetes: com `ndots:5`, um nome externo vira quatro consultas antes de alguém acertar. Vale ler antes de precisar.",
+          "why_en": "The page documenting `ndots` and `search`, which is where Kubernetes' most expensive DNS trap is born: with `ndots:5`, one external name becomes four queries before anyone gets it right. Worth reading before you need it."
+        },
+        {
+          "kind": "book",
+          "title": "How Linux Works, 3rd Edition",
+          "author": "Brian Ward",
+          "where": "No Starch Press",
+          "year": 2021,
+          "lang": "en",
+          "url": "https://nostarch.com/howlinuxworks3",
+          "free": false,
+          "accessed": "2026-09-20",
+          "why_pt": "O meio-termo entre tutorial e referência: explica boot, processos, rede e systemd na profundidade de quem opera, sem exigir C. A 3ª edição acrescentou um capítulo sobre virtualização e containers.",
+          "why_en": "The middle ground between tutorial and reference: it explains boot, processes, networking and systemd at operator depth, without requiring C. The 3rd edition added a chapter on virtualisation and containers.",
+          "isbn": "978-1-7185-0040-2"
+        },
+        {
+          "kind": "video",
+          "title": "Descomplicando o Docker (playlist do curso)",
+          "author": "LINUXtips (Jeferson Fernando)",
+          "where": "YouTube",
+          "year": 2016,
+          "lang": "pt",
+          "url": "https://www.youtube.com/playlist?list=PLf-O3X2-mxDn1VpyU2q3fuI6YYeIWp5rR",
+          "free": true,
+          "accessed": "2026-09-20",
+          "why_pt": "O curso completo, em português, liberado no YouTube pelo próprio autor. A sintaxe do Docker mudou desde 2016 em alguns pontos, mas a explicação dos conceitos continua válida — e é material audiovisual gratuito em português, que é raro.",
+          "why_en": "The complete course, in Portuguese, released on YouTube by the author himself. Docker syntax has changed in places since 2016, but the conceptual explanation still holds — and free audiovisual material in Portuguese is rare."
+        }
+      ]
+    },
+    {
+      "id": "build-cache",
+      "lessons": [
+        "build-cache",
+        "dockerfile-instruction-by-instruction"
+      ],
+      "pt": {
+        "label": "Cache de build e reprodutibilidade",
+        "what": "Como a chave de cache de cada instrução é calculada, por que mudar uma linha invalida tudo o que vem depois, e o que o BuildKit acrescentou com mounts de cache e execução em paralelo."
+      },
+      "en": {
+        "label": "Build cache and reproducibility",
+        "what": "How each instruction's cache key is computed, why changing one line invalidates everything after it, and what BuildKit added with cache mounts and parallel execution."
+      },
+      "refs": [
+        {
+          "kind": "docs",
+          "title": "Docker build cache",
+          "author": "Docker Inc.",
+          "where": "docs.docker.com",
+          "year": 2025,
+          "lang": "en",
+          "url": "https://docs.docker.com/build/cache/",
+          "free": true,
+          "accessed": "2026-09-20",
+          "why_pt": "A documentação oficial do que entra na chave de cache. Está aqui porque a regra é simples e quase sempre mal explicada: o `COPY` usa checksum do conteúdo, e o `RUN` usa o TEXTO do comando — um `apt-get update` idêntico acerta o cache de seis meses atrás.",
+          "why_en": "The official documentation of what goes into the cache key. It is here because the rule is simple and almost always badly explained: `COPY` uses a checksum of the content, while `RUN` uses the command TEXT — an identical `apt-get update` will hit a six-month-old cache."
+        },
+        {
+          "kind": "docs",
+          "title": "Dockerfile reference — RUN --mount",
+          "author": "Docker Inc. / Moby BuildKit",
+          "where": "docs.docker.com",
+          "year": 2025,
+          "lang": "en",
+          "url": "https://docs.docker.com/reference/dockerfile/#run---mount",
+          "free": true,
+          "accessed": "2026-09-20",
+          "why_pt": "Os mounts de cache e de bind são a diferença entre um build de dependências de três minutos e um de dez segundos. É o recurso do BuildKit com maior retorno imediato e o menos conhecido dos quatro.",
+          "why_en": "Cache and bind mounts are the difference between a three-minute dependency build and a ten-second one. It is BuildKit's highest-immediate-return feature and the least known of the four."
+        },
+        {
+          "kind": "book",
+          "title": "Docker Deep Dive",
+          "author": "Nigel Poulton",
+          "where": "edição do autor (Leanpub)",
+          "year": 2025,
+          "lang": "en",
+          "url": "https://leanpub.com/dockerdeepdive",
+          "free": false,
+          "accessed": "2026-09-20",
+          "why_pt": "Pela parte de multi-stage e BuildKit, que ele acompanha versão a versão. Um livro de Docker que não acompanha o BuildKit envelhece rápido, e este é o que menos envelhece.",
+          "why_en": "For the multi-stage and BuildKit material, which it tracks release by release. A Docker book that does not follow BuildKit ages fast, and this is the one that ages least."
+        },
+        {
+          "kind": "video",
+          "title": "Descomplicando o Docker (playlist do curso)",
+          "author": "LINUXtips (Jeferson Fernando)",
+          "where": "YouTube",
+          "year": 2016,
+          "lang": "pt",
+          "url": "https://www.youtube.com/playlist?list=PLf-O3X2-mxDn1VpyU2q3fuI6YYeIWp5rR",
+          "free": true,
+          "accessed": "2026-09-20",
+          "why_pt": "O curso completo, em português, liberado no YouTube pelo próprio autor. A sintaxe do Docker mudou desde 2016 em alguns pontos, mas a explicação dos conceitos continua válida — e é material audiovisual gratuito em português, que é raro.",
+          "why_en": "The complete course, in Portuguese, released on YouTube by the author himself. Docker syntax has changed in places since 2016, but the conceptual explanation still holds — and free audiovisual material in Portuguese is rare."
+        }
+      ]
+    },
+    {
+      "id": "linux-foundations",
+      "lessons": [
+        "what-is-a-container",
+        "container-lifecycle",
+        "storage-volumes-and-mounts"
+      ],
+      "pt": {
+        "label": "A base: processo, memória e sistema de arquivos",
+        "what": "O andar de baixo de tudo nesta trilha. Container não é um conceito novo: é a combinação de mecanismos de sistema operacional que já existiam. Quem entende a base para de decorar comando."
+      },
+      "en": {
+        "label": "The foundation: processes, memory and filesystems",
+        "what": "The floor beneath everything in this track. A container is not a new concept: it is a combination of operating-system mechanisms that already existed. Understanding the foundation is what stops you memorising commands."
+      },
+      "refs": [
+        {
+          "kind": "book",
+          "title": "Operating Systems: Three Easy Pieces",
+          "author": "Remzi e Andrea Arpaci-Dusseau",
+          "where": "University of Wisconsin-Madison",
+          "year": 2018,
+          "lang": "en",
+          "url": "https://www.ostep.org",
+          "free": true,
+          "accessed": "2026-09-20",
+          "why_pt": "O livro-texto de sistemas operacionais que os autores deixaram livre em PDF, organizado em virtualização, concorrência e persistência. É a base de baixo: quem entende processo, memória virtual e sistema de arquivos aqui para de achar container estranho.",
+          "why_en": "The operating systems textbook the authors made freely available as a PDF, organised around virtualisation, concurrency and persistence. It is the layer underneath: once you understand processes, virtual memory and filesystems here, containers stop looking strange."
+        },
+        {
+          "kind": "book",
+          "title": "How Linux Works, 3rd Edition",
+          "author": "Brian Ward",
+          "where": "No Starch Press",
+          "year": 2021,
+          "lang": "en",
+          "url": "https://nostarch.com/howlinuxworks3",
+          "free": false,
+          "accessed": "2026-09-20",
+          "why_pt": "O meio-termo entre tutorial e referência: explica boot, processos, rede e systemd na profundidade de quem opera, sem exigir C. A 3ª edição acrescentou um capítulo sobre virtualização e containers.",
+          "why_en": "The middle ground between tutorial and reference: it explains boot, processes, networking and systemd at operator depth, without requiring C. The 3rd edition added a chapter on virtualisation and containers.",
+          "isbn": "978-1-7185-0040-2"
+        },
+        {
+          "kind": "book",
+          "title": "The Linux Programming Interface",
+          "author": "Michael Kerrisk",
+          "where": "No Starch Press",
+          "year": 2010,
+          "lang": "en",
+          "url": "https://man7.org/tlpi/",
+          "free": false,
+          "accessed": "2026-09-20",
+          "why_pt": "Mil e quinhentas páginas, e a referência definitiva de chamada de sistema no Linux — escrita pelo mantenedor das man pages. Não é para ler de capa a capa: é o livro que você abre no capítulo certo quando precisa entender um comportamento e a documentação não basta.",
+          "why_en": "Fifteen hundred pages, and the definitive reference on Linux system calls — written by the maintainer of the man pages. Not a cover-to-cover read: it is the book you open at the right chapter when you need to understand a behaviour and the docs are not enough.",
+          "isbn": "978-1-59327-220-3"
+        },
+        {
+          "kind": "book",
+          "title": "Descomplicando o Docker",
+          "author": "Jeferson Fernando e Marcus André",
+          "where": "Brasport / LINUXtips",
+          "year": 2019,
+          "lang": "pt",
+          "url": "https://livro.descomplicandodocker.com.br/",
+          "free": true,
+          "accessed": "2026-09-20",
+          "why_pt": "O livro de container mais acessível em português, e liberado de graça pelo autor junto com a editora. Está aqui por uma razão editorial: recomendar só bibliografia em inglês exclui exatamente o leitor que mais precisa começar.",
+          "why_en": "The most accessible container book in Portuguese, released for free by the author together with the publisher. It is here for an editorial reason: recommending English-only bibliography excludes precisely the reader who most needs to start."
+        },
+        {
+          "kind": "video",
+          "title": "Descomplicando o Docker (playlist do curso)",
+          "author": "LINUXtips (Jeferson Fernando)",
+          "where": "YouTube",
+          "year": 2016,
+          "lang": "pt",
+          "url": "https://www.youtube.com/playlist?list=PLf-O3X2-mxDn1VpyU2q3fuI6YYeIWp5rR",
+          "free": true,
+          "accessed": "2026-09-20",
+          "why_pt": "O curso completo, em português, liberado no YouTube pelo próprio autor. A sintaxe do Docker mudou desde 2016 em alguns pontos, mas a explicação dos conceitos continua válida — e é material audiovisual gratuito em português, que é raro.",
+          "why_en": "The complete course, in Portuguese, released on YouTube by the author himself. Docker syntax has changed in places since 2016, but the conceptual explanation still holds — and free audiovisual material in Portuguese is rare."
+        }
+      ]
+    }
+  ]
+}

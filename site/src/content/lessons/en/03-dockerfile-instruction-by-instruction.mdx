@@ -249,6 +249,16 @@ network behaviour. Publishing is done by `-p` on `docker run` or `ports:` in
 Compose. Its only real effect is enabling `docker run -P` (which publishes the
 declared ports on random host ports) and telling the reader where the app listens.
 
+<Term word="setuid" alt="setuid">
+A bit in an executable file's permissions that makes the program run as the
+**file's owner** rather than as whoever executed it. It is how `passwd` lets an
+ordinary user change a file only root may write.
+
+It is also why `no-new-privileges:true` exists in this stack: with it, a process
+inside the container cannot gain privilege through a setuid binary, even if one
+was left behind in the image.
+</Term>
+
 ## USER — with a number, always
 
 ```dockerfile
@@ -278,6 +288,19 @@ Note the command: it calls the **binary itself**. A distroless image has no
 attach a package manager to your production image. The way out is giving your
 binary a second mode of operation — which is what this stack's `healthcheck.go`
 does, and what the Python worker does by calling `python -c`.
+
+<Term word="distroless image" alt="distroless image">
+An image containing your binary, the libraries it needs, and **nothing else** —
+no shell, no package manager, no `ls`, no `cat`.
+
+The gain is attack surface: anyone who achieves code execution inside it has
+nothing to work with. The cost shows up at the first problem — `docker exec`
+opens no shell, because there is no shell to open, and a `HEALTHCHECK` written
+in shell simply does not run.
+
+This stack's api is distroless, and the lesson solves the healthcheck with a
+subcommand of the binary itself.
+</Term>
 
 ## ENTRYPOINT vs CMD
 

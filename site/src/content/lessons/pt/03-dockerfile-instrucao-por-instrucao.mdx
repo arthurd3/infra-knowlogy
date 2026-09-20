@@ -249,6 +249,16 @@ comportamento da rede. Quem publica é `-p` no `docker run` ou `ports:` no Compo
 O único efeito real é habilitar `docker run -P` (que publica as portas declaradas
 em portas aleatórias do host) e dizer ao leitor onde a aplicação escuta.
 
+<Term word="setuid" alt="setuid">
+Um bit na permissão de um arquivo executável que faz o programa rodar com o
+**dono do arquivo**, e não com quem o executou. É como o `passwd` deixa um
+usuário comum alterar um arquivo que só o root pode escrever.
+
+É também a razão de o `no-new-privileges:true` existir nesta stack: com ele, um
+processo dentro do container não consegue ganhar privilégio por um binário
+setuid, mesmo que algum tenha sobrado na imagem.
+</Term>
+
 ## USER — com número, sempre
 
 ```dockerfile
@@ -279,6 +289,19 @@ anexaria um gerenciador de pacotes à imagem de produção. A saída é dar ao s
 binário um segundo modo de operação — é o que
 [`healthcheck.go`](https://github.com/infra-knowlogy) desta stack faz, e o que o
 worker Python faz chamando `python -c`.
+
+<Term word="imagem distroless" alt="distroless image">
+Uma imagem que contém o seu binário, as bibliotecas que ele precisa e **mais
+nada** — sem shell, sem gerenciador de pacotes, sem `ls`, sem `cat`.
+
+O ganho é de superfície de ataque: quem consegue execução de código dentro dela
+não tem com o que trabalhar. O custo aparece no primeiro problema — `docker exec`
+não abre shell nenhum, porque não existe shell para abrir, e um `HEALTHCHECK`
+escrito em shell simplesmente não roda.
+
+A api desta stack é distroless, e a lição resolve o healthcheck com um
+subcomando do próprio binário.
+</Term>
 
 ## ENTRYPOINT × CMD
 
