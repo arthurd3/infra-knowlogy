@@ -1,0 +1,75 @@
+---
+/** k8s-06 — o tempo de reação do HPA tem três parcelas, e o pod é a menor. */
+import Figure from "../Figure.astro";
+import type { Lang } from "../../i18n/ui";
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+const C = {
+  pt: {
+    carga: "a carga chega",
+    t1: "kubelet expõe contador de CPU",
+    t2: "metrics-server raspa (1ª amostra)",
+    t3: "metrics-server raspa (2ª amostra)",
+    t2sub: "ainda não há TAXA: uma amostra não é taxa",
+    t3sub: "agora sim — taxa = Δcontador / Δtempo",
+    t4: "HPA sincroniza e decide",
+    t5: "pod novo Ready",
+    cega: "JANELA CEGA — a carga aperta e nada foi feito",
+    boot: "boot",
+    conta: "2 × --metric-resolution (15 s)  +  1 × sync-period do HPA (15 s)  =  45 s de pior caso",
+    medido: "medido em 3 rodadas: 12,8 s · 29,8 s · 44,7 s  ·  boot do pod: 1 s",
+    licao: "94% do tempo de reação é o Kubernetes PERCEBER. Otimizar a imagem não compra nada aqui.",
+    caption:
+      "A parcela que quase todo mundo esquece é a do meio: <b>uso de CPU é uma taxa</b>, e taxa sai da diferença entre duas raspagens. Por isso uma mudança degrau leva DUAS janelas para estar refletida, e o limite previsto é 45 s e não 30. Medido: o pior caso deu 44,7 s. A conta fecha.",
+    alt: "Linha do tempo da reação do HPA, com a janela cega dominando o tempo de boot do pod.",
+  },
+  en: {
+    carga: "load arrives",
+    t1: "kubelet exposes the CPU counter",
+    t2: "metrics-server scrapes (1st sample)",
+    t3: "metrics-server scrapes (2nd sample)",
+    t2sub: "still no RATE: one sample is not a rate",
+    t3sub: "now yes — rate = Δcounter / Δtime",
+    t4: "HPA syncs and decides",
+    t5: "new pod Ready",
+    cega: "BLIND WINDOW — load is biting and nothing has been done",
+    boot: "boot",
+    conta: "2 × --metric-resolution (15 s)  +  1 × HPA sync-period (15 s)  =  45 s worst case",
+    medido: "measured over 3 runs: 12.8 s · 29.8 s · 44.7 s  ·  pod boot: 1 s",
+    licao: "94% of the reaction time is Kubernetes NOTICING. Optimising the image buys nothing here.",
+    caption:
+      "The term nearly everyone forgets is the middle one: <b>CPU usage is a rate</b>, and a rate comes from the difference between two scrapes. So a step change takes TWO windows to be reflected, and the predicted bound is 45 s rather than 30. Measured: worst case came in at 44.7 s. The arithmetic checks out.",
+    alt: "Timeline of the HPA reaction, with the blind window dwarfing the pod boot time.",
+  },
+}[lang];
+---
+<Figure caption={C.caption} alt={C.alt}>
+  <svg viewBox="0 0 720 268" xmlns="http://www.w3.org/2000/svg" font-size="11">
+    <line x1="40" y1="150" x2="700" y2="150" class="dg-line" />
+    {[
+      { x: 40, t: C.carga, y: 44, sub: "" },
+      { x: 190, t: C.t2, y: 74, sub: C.t2sub },
+      { x: 370, t: C.t3, y: 44, sub: C.t3sub },
+      { x: 540, t: C.t4, y: 74, sub: "" },
+      { x: 628, t: C.t5, y: 44, sub: "" },
+    ].map((p) => (
+      <g>
+        <line x1={p.x} y1={p.y + 14} x2={p.x} y2="144" class="dg-line" stroke-dasharray="2 3" />
+        <circle cx={p.x} cy="150" r="4" class="dg-fill-accent" />
+        <text x={p.x} y={p.y} text-anchor="middle" font-size="9" class="dg-muted">{p.t}</text>
+        {p.sub && <text x={p.x} y={p.y + 11} text-anchor="middle" font-size="8" class="dg-faint">{p.sub}</text>}
+      </g>
+    ))}
+
+    <rect x="40" y="166" width="500" height="22" rx="4" class="dg-box dg-box--warn" />
+    <text x="290" y="181" text-anchor="middle" class="dg-fill-warn" font-size="9.5" font-weight="620">{C.cega}</text>
+    <rect x="540" y="166" width="88" height="22" rx="4" class="dg-box" />
+    <text x="584" y="181" text-anchor="middle" class="dg-faint" font-size="9.5">{C.boot}</text>
+
+    <text x="14" y="212" class="dg-mono dg-faint" font-size="9">{C.conta}</text>
+    <text x="14" y="228" class="dg-muted" font-size="9.5">{C.medido}</text>
+    <line x1="14" y1="238" x2="706" y2="238" class="dg-line" stroke-dasharray="3 3" />
+    <text x="360" y="256" text-anchor="middle" class="dg-fill-warn" font-size="10" font-weight="640">{C.licao}</text>
+    <text x="14" y="18" class="dg-faint" font-size="8.5">{C.t1}</text>
+  </svg>
+</Figure>

@@ -1,0 +1,85 @@
+---
+/** k8s-05 — o caminho de uma requisição até ser autorizada, e o que o RBAC NÃO faz. */
+import Figure from "../Figure.astro";
+import type { Lang } from "../../i18n/ui";
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+const C = {
+  pt: {
+    req: "requisição",
+    reqSub: "GET /api/v1/namespaces/infra-knowlogy/secrets",
+    authn: "AUTENTICAÇÃO", authnSub: "quem é você?",
+    authnDet: "token da ServiceAccount → system:serviceaccount:ns:reader",
+    authz: "AUTORIZAÇÃO (RBAC)", authzSub: "você pode?",
+    authzDet: "existe alguma Role ligada a você que PERMITA este verbo neste recurso?",
+    adm: "ADMISSÃO", admSub: "o objeto é aceitável?",
+    admDet: "webhooks, quotas, defaults",
+    sim: "sim → 200", nao: "não → 403 Forbidden",
+    regra: "NÃO EXISTE REGRA DE NEGAÇÃO",
+    regraSub: "o padrão é negar, e uma Role só ACRESCENTA. Duas Roles somam permissões; nenhuma retira o que a outra deu.",
+    consequencia: "consequência prática: você nunca conserta um excesso escrevendo uma regra nova — só apagando a que concedeu",
+    caption:
+      "Três estágios, e o RBAC é só o do meio. Ele responde uma pergunta de cada vez, sobre uma tripla (verbo, recurso, namespace). O detalhe que muda como se escreve política: <b>não existe regra de negação</b>. O padrão já é negar e toda Role só acrescenta — então excesso de permissão nunca se corrige acrescentando, só removendo.",
+    alt: "Requisição passando por autenticação, autorização RBAC e admissão, com a nota de que não há regra de negação.",
+  },
+  en: {
+    req: "request",
+    reqSub: "GET /api/v1/namespaces/infra-knowlogy/secrets",
+    authn: "AUTHENTICATION", authnSub: "who are you?",
+    authnDet: "ServiceAccount token → system:serviceaccount:ns:reader",
+    authz: "AUTHORISATION (RBAC)", authzSub: "may you?",
+    authzDet: "is there any Role bound to you that ALLOWS this verb on this resource?",
+    adm: "ADMISSION", admSub: "is the object acceptable?",
+    admDet: "webhooks, quotas, defaults",
+    sim: "yes → 200", nao: "no → 403 Forbidden",
+    regra: "THERE IS NO DENY RULE",
+    regraSub: "the default is deny, and a Role only ADDS. Two Roles sum their permissions; neither removes what the other granted.",
+    consequencia: "practical consequence: you never fix over-permission by writing a new rule — only by deleting the one that granted it",
+    caption:
+      "Three stages, and RBAC is only the middle one. It answers one question at a time, about a triple (verb, resource, namespace). The detail that changes how you write policy: <b>there is no deny rule</b>. The default is already deny and every Role only adds — so over-permission is never fixed by adding, only by removing.",
+    alt: "A request passing through authentication, RBAC authorisation and admission, with the note that there is no deny rule.",
+  },
+}[lang];
+---
+<Figure caption={C.caption} alt={C.alt}>
+  <svg viewBox="0 0 720 300" xmlns="http://www.w3.org/2000/svg" font-size="11">
+    <rect x="14" y="16" width="176" height="46" rx="6" class="dg-box dg-box--dashed" />
+    <text x="102" y="36" text-anchor="middle" font-weight="620">{C.req}</text>
+    <text x="102" y="52" text-anchor="middle" class="dg-faint" font-size="8.5">{C.reqSub}</text>
+
+    <path d="M194 39 L226 39" class="dg-line" marker-end="url(#rb-arrow)" />
+
+    <rect x="230" y="16" width="220" height="46" rx="6" class="dg-box" />
+    <text x="246" y="34" font-weight="620" font-size="10">{C.authn}</text>
+    <text x="246" y="47" class="dg-muted" font-size="9">{C.authnSub}</text>
+    <text x="246" y="58" class="dg-faint" font-size="8.5">{C.authnDet}</text>
+
+    <path d="M340 66 L340 92" class="dg-line" marker-end="url(#rb-arrow)" />
+
+    <rect x="120" y="96" width="440" height="60" rx="6" class="dg-box dg-box--accent" />
+    <text x="140" y="118" font-weight="640" font-size="11">{C.authz}</text>
+    <text x="140" y="133" class="dg-muted" font-size="9.5">{C.authzSub}</text>
+    <text x="140" y="147" class="dg-faint" font-size="9">{C.authzDet}</text>
+
+    <path d="M120 126 L74 126 L74 180" class="dg-line dg-line--warn" marker-end="url(#rb-arrow)" />
+    <text x="74" y="196" text-anchor="middle" class="dg-fill-warn" font-size="9.5">{C.nao}</text>
+    <path d="M340 160 L340 186" class="dg-line" marker-end="url(#rb-arrow)" />
+
+    <rect x="230" y="190" width="220" height="46" rx="6" class="dg-box" />
+    <text x="246" y="208" font-weight="620" font-size="10">{C.adm}</text>
+    <text x="246" y="221" class="dg-muted" font-size="9">{C.admSub}</text>
+    <text x="246" y="232" class="dg-faint" font-size="8.5">{C.admDet}</text>
+    <path d="M454 213 L500 213" class="dg-line" marker-end="url(#rb-arrow)" />
+    <text x="546" y="217" class="dg-muted" font-size="9.5">{C.sim}</text>
+
+    <line x1="14" y1="254" x2="706" y2="254" class="dg-line" stroke-dasharray="3 3" />
+    <text x="14" y="272" class="dg-fill-warn" font-weight="640" font-size="10.5">{C.regra}</text>
+    <text x="14" y="286" class="dg-faint" font-size="9">{C.regraSub}</text>
+    <text x="14" y="298" class="dg-muted" font-size="9">{C.consequencia}</text>
+    <defs>
+      <marker id="rb-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+        <path d="M0 0 L10 5 L0 10 z" fill="var(--border-strong)" />
+      </marker>
+    </defs>
+  </svg>
+</Figure>

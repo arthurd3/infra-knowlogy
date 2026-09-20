@@ -1,0 +1,197 @@
+---
+key: helm-vs-kustomize
+lang: pt
+track: kubernetes
+order: 7
+title: "Helm × Kustomize, decidido por diff"
+summary: "A pergunta costuma ser respondida com adjetivos. Aqui o mesmo serviço existe nas duas formas, o portão renderiza as duas e compara campo a campo — e a única diferença que apareceu é justamente a que explica quando cada um ganha."
+minutes: 14
+tags: [kubernetes, helm, kustomize, manifests, distribuição]
+sources:
+  - label: "Helm Docs — Charts"
+    url: "https://helm.sh/docs/topics/charts/"
+    kind: docs
+  - label: "Kustomize — Introduction"
+    url: "https://kubectl.docs.kubernetes.io/guides/introduction/kustomize/"
+    kind: docs
+  - label: "Kubernetes Docs — Declarative Management with Kustomize"
+    url: "https://kubernetes.io/docs/tasks/manage-kubernetes-objects/kustomization/"
+    kind: docs
+  - label: "Helm — Chart Template Guide: values files"
+    url: "https://helm.sh/docs/chart_template_guide/values_files/"
+    kind: docs
+---
+
+import TemplateVsOverlay from "../../../components/diagrams/TemplateVsOverlay.astro";
+
+"Helm ou Kustomize?" é uma das perguntas mais respondidas e menos **medidas** da
+área. As respostas costumam ser sobre gosto: um é "mais simples", o outro é
+"mais poderoso", e quem lê sai sem critério nenhum.
+
+Este repositório faz outra coisa. O serviço `web` existe **nas duas formas** —
+`k8s/base/web/` em Kustomize e `k8s/charts/web/` em Helm — e o portão renderiza
+as duas e compara **campo a campo**:
+
+```console
+$ make k8s-diff-tools
+   idênticos: 2 objetos, 0 diferenças
+```
+
+Zero diferenças é o que dá direito de dizer "as duas ferramentas resolvem o
+mesmo problema". Com isso fora do caminho, a escolha entre elas passa a ser
+sobre a coisa certa.
+
+## O que realmente separa as duas
+
+<TemplateVsOverlay />
+
+A diferença de fundo não é sintaxe. É **quando o YAML vira estrutura**.
+
+<Term word="Motor de template" alt="template engine">
+O Helm trata os arquivos de `templates/` como **texto**. Ele expande `{{ }}`,
+resolve condicionais e laços, e só o resultado dessa expansão é entregue a um
+parser de YAML.
+
+Isso é o que dá ao Helm condicionais (`{{- if .Values.ingress.enabled }}`),
+laços e funções. E é também o que permite gerar YAML **inválido**: um recuo
+errado dentro de um `{{- if }}` produz texto que não parseia, e o erro aparece
+no `apply`, longe da linha que o causou.
+</Term>
+
+<Term word="Merge estrutural" alt="strategic merge patch">
+O Kustomize parte de YAML **já válido** e aplica patches sobre a árvore
+parseada, endereçando campos por caminho (`spec.template.spec.containers[0].image`).
+
+Por construção ele não consegue produzir YAML inválido — não há etapa de texto.
+E por construção ele não tem parâmetro com nome: para mudar algo, você precisa
+saber **onde** aquilo mora na estrutura.
+</Term>
+
+As duas escolhas são coerentes. Nenhuma é descuido, e é por isso que a discussão
+não termina.
+
+## A única diferença que o comparador achou
+
+Na primeira execução, o diff não deu zero:
+
+```console
+$ python3 tools/scripts/k8s-helm-vs-kustomize.py
+   Deployment/web.metadata.namespace: só no Kustomize ('infra-knowlogy')
+   Service/web.metadata.namespace: só no Kustomize ('infra-knowlogy')
+```
+
+O `namespace:` do `kustomization.yaml` é **assado no manifesto renderizado**. O
+Helm difere isso para a instalação — `helm install -n`, exposto ao template como
+`.Release.Namespace`.
+
+Isso parece um detalhe e é a coisa toda:
+
+> Um chart Helm pode ser **publicado para terceiros**. Um overlay de Kustomize
+> não.
+
+O chart declara uma superfície de configuração com nome (`values.yaml`) e
+difere as decisões do instalador para o momento da instalação. Quem instala não
+precisa saber que `replicaCount` mora em `.spec.replicas` de um Deployment.
+
+Num overlay, mudar o número de réplicas exige um patch que **cita o caminho do
+campo** — ou seja, exige conhecer a estrutura interna do manifesto que alguém
+escreveu. Isso funciona muito bem dentro de uma organização, onde a estrutura é
+sua; não funciona como formato de distribuição.
+
+<Tradeoff
+  a="Helm"
+  b="Kustomize"
+  whenA="Você DISTRIBUI software para quem não conhece seus manifests: um operador, um banco, uma ferramenta interna usada por outros times. Também quando há variação condicional de verdade — 'com Ingress ou sem'."
+  whenB="Os manifests são SEUS e as variações são poucas e conhecidas: dev/staging/prod do mesmo serviço. Aí o custo do motor de template não compra nada, e o YAML continua legível sem renderizar."
+>
+  <Fragment slot="a">
+    Parâmetros com nome, versionamento de chart, repositório, `helm rollback`,
+    e um ecossistema enorme de charts prontos. Em troca: o que você lê em
+    `templates/` não é o que vai para o cluster.
+  </Fragment>
+  <Fragment slot="b">
+    O que você lê é YAML de verdade, válido, que o editor autocompleta e o
+    `kubeconform` valida sem renderizar. Embutido no `kubectl`, nada a instalar.
+    Em troca: sem parâmetros, sem condicionais, sem distribuição.
+  </Fragment>
+</Tradeoff>
+
+<Callout type="note" title="Não são exclusivos, e a combinação é comum">
+`helm template` cospe YAML, e `kustomize` come YAML. Usar o Helm para trazer um
+chart de terceiro e o Kustomize para ajustar o que o chart não parametrizou é um
+arranjo frequente — e resolve exatamente o caso em que o chart não previu a
+mudança que você precisa.
+</Callout>
+
+## O comparador precisa morder
+
+Um teste que nunca reprova não prova nada. Este foi conferido mudando um campo
+do chart de propósito:
+
+```console
+$ sed -i 's/periodSeconds: 15/periodSeconds: 14/' k8s/charts/web/templates/deployment.yaml
+$ make k8s-diff-tools
+   Deployment/web.spec.template.spec.containers[0].livenessProbe.periodSeconds: 14 (Helm) vs 15 (Kustomize)
+   Deployment/web.spec.template.spec.containers[0].readinessProbe.periodSeconds: 14 (Helm) vs 15 (Kustomize)
+```
+
+Dois campos, com o caminho completo. O comparador vê a árvore inteira, não só os
+campos que alguém lembrou de listar.
+
+<Callout type="warn" title="O SELinux, de novo">
+Rodando o Helm num container, o bind mount precisa do sufixo de relabel:
+
+```bash
+docker run --rm -v "$PWD/k8s/charts:/charts:ro,z" alpine/helm:3.19.0 \
+  template web /charts/web --namespace infra-knowlogy
+```
+
+Sem o `z`, o Helm reporta **`Error: Chart.yaml file is missing`** — que manda
+você procurar o erro no chart, quando o problema é que o processo não consegue
+ler o diretório. Mensagem de erro que descreve o sintoma e não a causa é o que
+custa mais tempo.
+</Callout>
+
+<FieldNote
+  source="Kustomize — Introduction (kubectl documentation)"
+  url="https://kubectl.docs.kubernetes.io/guides/introduction/kustomize/"
+  accessed="2026-09-20"
+>
+A documentação do Kustomize declara a ausência de templates como decisão de
+projeto, não como funcionalidade faltante: o objetivo é que os arquivos-fonte
+sejam sempre YAML válido, para que ferramentas de YAML — editor, validador,
+diff — funcionem sobre eles sem uma etapa de renderização. Não medido aqui:
+comparar produtividade das duas abordagens numa equipe é o tipo de afirmação
+que um repositório de estudo não tem como sustentar.
+</FieldNote>
+
+<LabExercise
+  question="Você recebeu um chart Helm de terceiro e precisa saber o que ele VAI criar no cluster, sem instalar nada. Como?"
+  check="helm template ≡ kubectl kustomize"
+>
+  <Fragment slot="hint">
+    O subcomando que renderiza sem falar com cluster nenhum.
+  </Fragment>
+  <Fragment slot="answer">
+
+```bash
+helm template minha-release ./o-chart --namespace meu-ns > renderizado.yaml
+```
+
+`helm template` renderiza localmente e não toca no cluster. A partir daí, vale
+tratar o resultado como qualquer manifesto:
+
+```bash
+grep -c '^kind:' renderizado.yaml                 # quantos objetos
+grep -E '^kind:|  name:' renderizado.yaml         # o que e com que nome
+docker run --rm -i ghcr.io/yannh/kubeconform:v0.8.0 -strict -summary - < renderizado.yaml
+```
+
+E, o mais importante num chart de terceiro: procure `ClusterRole`,
+`ClusterRoleBinding` e `hostPath`. São os três que ampliam o raio de alcance
+para fora do namespace, e um chart que os pede deveria justificar por quê.
+
+  </Fragment>
+</LabExercise>
+
+<Quiz set="helm-vs-kustomize" />

@@ -1,0 +1,225 @@
+---
+key: rbac-and-the-negative-proof
+lang: pt
+track: kubernetes
+order: 5
+title: "RBAC, e a prova negativa"
+summary: "Provar que uma permissão existe é fácil. O que vale é provar que a permissão que NÃO deveria existir realmente não existe — e há dois jeitos de fazer isso, um barato e um honesto. Os dois rodam no portão deste módulo."
+minutes: 15
+tags: [kubernetes, rbac, serviceaccount, autorização, segurança]
+sources:
+  - label: "Kubernetes Docs — Using RBAC Authorization"
+    url: "https://kubernetes.io/docs/reference/access-authn-authz/rbac/"
+    kind: docs
+  - label: "Kubernetes Docs — Configure Service Accounts for Pods"
+    url: "https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/"
+    kind: docs
+  - label: "Kubernetes Docs — Controlling Access to the Kubernetes API"
+    url: "https://kubernetes.io/docs/concepts/security/controlling-access/"
+    kind: docs
+  - label: "NSA/CISA — Kubernetes Hardening Guide"
+    url: "https://media.defense.gov/2022/Aug/29/2003066362/-1/-1/0/CTR_KUBERNETES_HARDENING_GUIDANCE_1.2_20220829.PDF"
+    kind: docs
+    accessed: "2026-09-20"
+---
+
+import RbacResolution from "../../../components/diagrams/RbacResolution.astro";
+
+Toda lição de RBAC começa mostrando uma `Role` que concede alguma coisa e um
+`kubectl get` que funciona. Isso prova pouco: se a permissão não existisse, o
+comando falharia e você ia perceber na hora.
+
+A pergunta que importa é a outra. **Como você prova que a permissão que não
+deveria existir realmente não existe?** É ela que separa política de segurança
+de desejo de segurança, e é o que esta lição faz.
+
+## Onde o RBAC entra
+
+<RbacResolution />
+
+<Term word="RBAC" alt="Role-Based Access Control">
+*Role-Based Access Control* — controle de acesso baseado em papéis. No
+Kubernetes ele responde a uma pergunta sobre uma tripla: **verbo** (`get`,
+`list`, `create`, `delete`, `watch`…), **recurso** (`pods`, `secrets`,
+`nodes`…) e **escopo** (um namespace, ou o cluster inteiro).
+
+São quatro objetos, em dois pares:
+
+- `Role` + `RoleBinding` — valem dentro de **um namespace**;
+- `ClusterRole` + `ClusterRoleBinding` — valem no **cluster inteiro**.
+
+A Role diz *o que pode ser feito*. O Binding diz *quem pode fazer*. Separá-los
+é o que permite reusar a mesma Role para vários sujeitos.
+</Term>
+
+A propriedade mais importante do RBAC não é o que ele faz, é o que ele **não**
+tem: **não existe regra de negação**.
+
+O padrão já é negar. Uma `Role` só acrescenta. Duas Roles ligadas ao mesmo
+sujeito **somam** suas permissões, e nenhuma consegue retirar o que a outra
+concedeu.
+
+<Callout type="warn" title="A consequência prática">
+Você **nunca** conserta um excesso de permissão escrevendo uma regra nova. Só
+apagando a regra que concedeu. Isso é o oposto de um firewall, onde uma regra
+de `DENY` no topo resolve — e é a razão de auditoria de RBAC ser um trabalho de
+**remover**, não de acrescentar.
+</Callout>
+
+## A melhor permissão é a que não existe
+
+Antes de escrever qualquer Role, vale olhar o que esta stack já fazia:
+
+```console
+$ kubectl -n infra-knowlogy get pods \
+    -o custom-columns='POD:.metadata.name,TOKEN:.spec.volumes[*].projected.sources[*].serviceAccountToken.path'
+POD                       TOKEN
+api-96499c896-6c4kd       <none>
+cache-6b4d54cddf-4mbkz    <none>
+db-0                      <none>
+edge-6f49446b7d-p6htq     <none>
+web-56ffd54f9c-vzp24      <none>
+worker-54f54d8f9b-px6lp   <none>
+```
+
+Os seis workloads declaram `automountServiceAccountToken: false`. Nenhum deles
+fala com o API server — são um proxy, um site estático, uma API HTTP, um
+worker, um Redis e um Postgres. Nenhum tem motivo.
+
+Isso é mais forte do que qualquer Role apertada: **o token não está lá.** Um
+invasor que consiga executar código dentro do `worker` não encontra credencial
+de cluster para roubar, porque não existe arquivo para ler.
+
+<Tradeoff
+  a="Token montado com Role mínima"
+  b="Token não montado"
+  whenA="O processo PRECISA falar com o API server — um operator, um controlador, um agente que descobre endpoints. Aí a Role mínima é o que você tem."
+  whenB="Sempre que o processo não fala com o API server, que é a maioria esmagadora das cargas de trabalho. É o padrão que deveria ser o padrão."
+>
+  <Fragment slot="a">
+    A credencial existe no disco do container em
+    `/var/run/secrets/kubernetes.io/serviceaccount/token`. Ela é curta e
+    rotacionada, mas é uma credencial, e o raio de alcance dela é o da Role.
+  </Fragment>
+  <Fragment slot="b">
+    Não há arquivo, não há token, não há o que roubar. O raio de alcance é
+    **zero** e não depende de ninguém ter escrito a Role certa.
+  </Fragment>
+</Tradeoff>
+
+## E quando o token precisa existir
+
+A `reader` é a ServiceAccount de contraste: a única identidade deste cluster que
+tem motivo para ler o API server, e ela recebe o mínimo.
+
+```yaml
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "services", "endpoints"]
+    verbs: ["get", "list", "watch"]
+```
+
+## Prova barata: a impersonação
+
+```console
+$ SA=system:serviceaccount:infra-knowlogy:reader
+$ kubectl auth can-i list pods    --as=$SA -n infra-knowlogy
+yes
+$ kubectl auth can-i list secrets --as=$SA -n infra-knowlogy
+no
+$ kubectl auth can-i list pods    --as=$SA --all-namespaces
+no
+```
+
+A última linha é a que mais ensina: o mesmo verbo, no mesmo recurso, **sem
+namespace**, é negado. É o que separa `Role` de `ClusterRole` na prática — e é
+o erro mais comum de quem começa, porque `ClusterRole` "funciona sempre" e por
+isso parece mais fácil.
+
+Mas repare no que essa prova é: **o API server respondendo a uma hipótese sobre
+si mesmo**. Quem pergunta e quem julga são o mesmo componente. Ela não prova que
+o token foi projetado no volume, nem que o pod consegue **alcançar** o API
+server.
+
+## Prova honesta: um pod com o token de verdade
+
+O portão sobe um pod com a SA `reader`, o token montado, e faz o caminho
+inteiro — lê o token do volume, abre TLS contra `kubernetes.default.svc`
+validando a CA do cluster, e compara códigos:
+
+```json
+{"namespace": "infra-knowlogy", "tokenMontado": true,
+ "pods": 200, "services": 200,
+ "secrets": 403, "podsTodosNamespaces": 403, "nodes": 403}
+```
+
+Três `403` e dois `200`, vindos de uma requisição HTTP real. Agora a afirmação
+"a SA reader não lê secrets" tem um comando por trás.
+
+<Callout type="note" title="A sonda precisou de uma NetworkPolicy — e por um motivo que surpreende">
+A primeira versão da sonda funcionou sem policy nenhuma, e estava **errada**.
+
+Medido neste cluster: um pod recém-criado tem egresso livre por cerca de
+**0,3 segundo** antes de a `default-deny` passar a valer — as regras de
+dataplane são programadas depois de o container já estar rodando. A sonda é
+rápida e cabia nessa janela.
+
+Um portão que passa por causa de uma corrida é um portão que vai falhar sozinho
+numa máquina mais lenta. Hoje a sonda **declara** o egresso que precisa. A
+janela em si virou medição própria, na
+[lição do HPA](/pt/lessons/autoscaling-and-its-blind-window).
+</Callout>
+
+## O que o RBAC não cobre
+
+Vale dizer em voz alta, porque é onde as pessoas se enganam:
+
+- **Não é firewall.** RBAC governa o API server. Um pod falando com outro pod
+  não passa por RBAC nenhum — quem governa isso é NetworkPolicy.
+- **Não protege o API server da rede.** A `default-deny` deste namespace
+  seleciona todos os pods, e mesmo assim a sonda alcança o API server quando
+  tem a policy certa. Quem decide o que ela pode LER é o RBAC, e só ele.
+- **`get` de um Secret já é o segredo.** Não existe "ler o nome mas não o
+  valor": o objeto vem inteiro. Quem precisa saber que um Secret existe sem
+  poder lê-lo fica com `list` sobre... nada — não há esse recorte.
+
+<FieldNote
+  source="NSA/CISA — Kubernetes Hardening Guide (v1.2)"
+  url="https://media.defense.gov/2022/Aug/29/2003066362/-1/-1/0/CTR_KUBERNETES_HARDENING_GUIDANCE_1.2_20220829.PDF"
+  accessed="2026-09-20"
+>
+O guia conjunto da NSA e da CISA lista a montagem automática de token de
+ServiceAccount entre as configurações padrão a revisar, e recomenda
+`automountServiceAccountToken: false` para toda carga que não fale com o API
+server. A razão é a mesma daqui: credencial montada é credencial que um
+processo comprometido encontra. Não medido aqui — este é um cluster de estudo
+de um nó, e a escala de ataque a que o documento se refere é outra.
+</FieldNote>
+
+<LabExercise
+  question="Você desconfia que uma ServiceAccount tem mais permissão do que deveria. Como listar TUDO o que ela pode fazer, sem ler os manifests um a um?"
+  check="RBAC: a SA reader NÃO pode listar secrets (a prova negativa)"
+>
+  <Fragment slot="hint">
+    O `auth can-i` aceita uma forma que não pergunta por um verbo específico.
+  </Fragment>
+  <Fragment slot="answer">
+
+```bash
+kubectl auth can-i --list \
+  --as=system:serviceaccount:infra-knowlogy:reader \
+  -n infra-knowlogy
+```
+
+Ele imprime a tabela inteira de recursos e verbos permitidos. É o jeito certo
+de auditar, porque **soma todas as Roles ligadas ao sujeito** — e o problema
+de permissão excessiva quase nunca está numa Role; está na soma de três que
+ninguém leu juntas.
+
+Lembre que a resposta é sempre sobre um namespace: repita com
+`--all-namespaces` para ver o que vaza do escopo.
+
+  </Fragment>
+</LabExercise>
+
+<Quiz set="rbac-and-the-negative-proof" />

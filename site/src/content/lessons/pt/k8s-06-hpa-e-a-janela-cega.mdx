@@ -1,0 +1,231 @@
+---
+key: autoscaling-and-its-blind-window
+lang: pt
+track: kubernetes
+order: 6
+title: "HPA, e a janela em que ele está cego"
+summary: "O HPA escala — isso o manual já diz. O que o manual não diz é que ele leva de 13 a 45 segundos para PERCEBER, contra 1 segundo para o pod subir. Medido aqui em três rodadas, com a conta que prevê o limite batendo com o medido."
+minutes: 15
+tags: [kubernetes, hpa, autoscaling, metrics-server, capacidade]
+sources:
+  - label: "Kubernetes Docs — Horizontal Pod Autoscaling"
+    url: "https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/"
+    kind: docs
+  - label: "Kubernetes Docs — HPA walkthrough and algorithm"
+    url: "https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/#algorithm-details"
+    kind: docs
+  - label: "metrics-server — README e flags"
+    url: "https://github.com/kubernetes-sigs/metrics-server"
+    kind: docs
+    accessed: "2026-09-20"
+  - label: "Kubernetes Enhancement Proposal — Configurable scaling behavior"
+    url: "https://github.com/kubernetes/enhancements/tree/master/keps/sig-autoscaling/853-configurable-hpa-scale-velocity"
+    kind: spec
+---
+
+import HpaBlindWindow from "../../../components/diagrams/HpaBlindWindow.astro";
+
+A [auditoria dos doze fatores](/pt/lessons/twelve-factor-measured) encontrou um
+único fator que a stack Compose não cumpria: **concorrência**. Não há `replicas:`
+em Compose nenhum, e escalar de verdade exige balanceamento, descoberta e
+recolocação — que é o trabalho de um orquestrador.
+
+Este objeto é a resposta. E medi-lo produziu um número que contraria o que quase
+todo mundo otimiza.
+
+## Antes de tudo: o HPA não funcionava
+
+A primeira tentativa foi esta:
+
+```console
+$ kubectl -n infra-knowlogy get hpa api
+NAME   REFERENCE        TARGETS         MINPODS   MAXPODS   REPLICAS
+api    Deployment/api   cpu: <unknown>/60%   2    6         2
+```
+
+`<unknown>` para sempre. Nada escalava, nenhum evento explicava, e o objeto
+parecia saudável.
+
+A causa: **utilização de HPA é percentual do `requests`, nunca do `limits`.** A
+api tinha `limits: {cpu: "1"}` e nenhum `requests.cpu` — então não havia
+denominador.
+
+<Callout type="warn" title="A falha mais silenciosa desta lição">
+Um HPA em `<unknown>` não escala **e não reclama**. Não há condição vermelha,
+não há evento, não há log. Ele fica ali, na saída do `get hpa`, parecendo
+configurado.
+
+Se você tem um HPA em produção que nunca escalou, esta é a primeira coisa a
+conferir — antes de mexer no alvo, antes de suspeitar da carga.
+</Callout>
+
+```yaml
+resources:
+  limits: {cpu: "1", memory: 256Mi}
+  requests: {cpu: 50m, memory: 64Mi}   # ← sem isto, nada acontece
+```
+
+Com `requests.cpu: 50m` e `averageUtilization: 60`, o alvo é **30 milicores por
+pod**.
+
+## A medição
+
+<Term word="milicore" alt="millicore, millicpu">
+A unidade de CPU do Kubernetes. `1000m` = 1 núcleo, `50m` = 5% de um núcleo.
+
+É uma medida de **tempo de CPU por tempo de relógio**, não de velocidade: um
+pod com `50m` não é "lento", ele pode usar 5% de um núcleo ao longo de um
+segundo. Por isso o valor é uma taxa — e isso vai importar em dois parágrafos.
+</Term>
+
+O portão gera carga real pelo edge, com 24 threads, e cronometra. Três rodadas,
+com a CPU esfriando entre elas:
+
+| rodada | janela cega | boot do pod novo |
+|---|---|---|
+| 1 | 17,0 s | 1 s |
+| 2 | 29,8 s | 1 s |
+| 3 | 29,8 s | 1 s |
+
+E, numa execução posterior do portão, um pior caso de **44,7 s**.
+
+<HpaBlindWindow />
+
+## Por que varia tanto, e onde para
+
+A variação não é ruído. A carga pode chegar em qualquer ponto de dois ciclos
+independentes de 15 segundos — e o pior caso é a soma deles. A conta:
+
+```
+2 × --metric-resolution ........ 30 s   ← e aqui está o termo esquecido
+1 × sync-period do HPA ......... 15 s
+                               ───────
+                                 45 s
+```
+
+**A parcela do meio é a que quase ninguém conta.** Uso de CPU é uma **taxa**, e
+taxa não sai de uma amostra: o metrics-server calcula o valor pela diferença
+entre as **duas últimas** raspagens do contador do kubelet. Uma mudança degrau
+na carga só está inteiramente refletida depois de duas janelas.
+
+<Callout type="note" title="O portão já reprovou com o número certo na mão">
+A checagem nasceu exigindo 30 segundos — contando só a raspagem e a
+sincronização. Ela falhou contra uma medição de **44,7 s**.
+
+O errado era o limite, não a medição. Foi assim que o terceiro termo apareceu:
+o portão discordou da conta, e a conta é que estava incompleta.
+</Callout>
+
+Dá para ver a taxa se formando:
+
+```console
+$ # kubectl top pod, de 3 em 3 segundos, com a carga começando em t=0
+t= 0s  cpu total dos pods da api: 2m
+t=16s  cpu total dos pods da api: 2m      ← a carga já está lá há 16 s
+t=19s  cpu total dos pods da api: 190m    ← primeira atualização
+t=34s  cpu total dos pods da api: 121m
+t=49s  cpu total dos pods da api: 77m
+```
+
+O valor só muda de 15 em 15 segundos. Entre uma atualização e outra o HPA está
+olhando para um número **velho** — e agindo com base nele.
+
+## O número que contraria o instinto
+
+**Janela cega: 12,8 a 44,7 segundos. Boot do pod: 1 segundo.**
+
+O pod da api é um binário Go numa imagem distroless, com a imagem já no nó. Ele
+sobe abaixo da resolução dos carimbos do Kubernetes, que é de um segundo inteiro.
+
+Isso significa que **94% ou mais do tempo de reação é o Kubernetes percebendo**,
+e não a sua aplicação subindo. Reduzir o boot de 1 s para 200 ms não muda
+praticamente nada no tempo até haver capacidade nova.
+
+<Tradeoff
+  a="Otimizar o boot da aplicação"
+  b="Encurtar os laços de percepção"
+  whenA="Quando o boot é da ordem de dezenas de segundos — JVM com warm-up, migração no start, carregamento de modelo. Aí ele domina e vale cada segundo."
+  whenB="Quando o boot já é de um ou dois segundos, como aqui. Aí o ganho está em --metric-resolution menor, sync-period menor, ou em não depender de reação: margem estática."
+>
+  <Fragment slot="a">
+    Imagem menor, menos inicialização, probe com `initialDelaySeconds` menor.
+    Melhora o **último** termo da soma.
+  </Fragment>
+  <Fragment slot="b">
+    Baixar `--metric-resolution` custa CPU no metrics-server e mais raspagem nos
+    kubelets. E há um piso: taxa continua precisando de duas amostras.
+  </Fragment>
+</Tradeoff>
+
+## A assimetria deliberada
+
+```yaml
+behavior:
+  scaleUp:
+    stabilizationWindowSeconds: 0      # subir: sem espera
+  scaleDown:
+    stabilizationWindowSeconds: 300    # descer: cinco minutos
+```
+
+Subir e descer não são simétricos porque os **erros** não são simétricos.
+Escalar para mais cedo demais custa réplicas ociosas; escalar para menos cedo
+demais custa uma oscilação — a carga volta, o HPA sobe de novo, e o rollout
+constante custa mais do que as réplicas que você economizou.
+
+## O que o HPA não resolve
+
+- **Não cria capacidade.** Se não houver nó com espaço, os pods novos ficam
+  `Pending` e a escala simplesmente não acontece. Quem resolve isso é o
+  *Cluster Autoscaler*, que é outra peça e não existe num cluster de um nó.
+- **Não ajuda se o gargalo for o banco.** Mais réplicas de api contra um
+  Postgres saturado só multiplicam a fila — e pioram, porque cada réplica abre
+  seu próprio pool de conexões.
+- **Não salva de um pico curto.** Se o pico dura menos que a janela cega, ele
+  acaba antes de o HPA agir. Para isso existe margem estática, não autoscaling.
+
+<FieldNote
+  source="Kubernetes Enhancement Proposal 853 — Configurable HPA scale velocity"
+  url="https://github.com/kubernetes/enhancements/tree/master/keps/sig-autoscaling/853-configurable-hpa-scale-velocity"
+  accessed="2026-09-20"
+>
+O campo `behavior` só existe desde o `autoscaling/v2beta2` porque, antes dele, a
+velocidade de escala era fixa no controller-manager e valia para o cluster
+inteiro. A proposta cita explicitamente a oscilação em descida como o motivo: o
+padrão anterior era conservador demais para uns e agressivo demais para outros.
+Não medido aqui — comparar o comportamento com e sem `behavior` exigiria
+reconfigurar o controller-manager do cluster.
+</FieldNote>
+
+<LabExercise
+  question="Um HPA marca `cpu: <unknown>/60%` há horas. Quais são as DUAS coisas a conferir, em ordem?"
+  check="HPA: a API de métricas responde"
+>
+  <Fragment slot="hint">
+    Uma delas é sobre o cluster; a outra é sobre o Deployment que o HPA aponta.
+  </Fragment>
+  <Fragment slot="answer">
+
+**1. A API de métricas responde?**
+
+```bash
+kubectl top pod -n infra-knowlogy
+```
+
+Se der `error: Metrics API not available`, falta o metrics-server — ou ele está
+de pé e não consegue raspar os kubelets (num kind, por certificado
+self-signed; a correção é `--kubelet-insecure-tls`, e ela tem custo).
+
+**2. O container declara `requests.cpu`?**
+
+```bash
+kubectl -n infra-knowlogy get deploy api \
+  -o jsonpath='{.spec.template.spec.containers[0].resources.requests}'
+```
+
+Sem `cpu` aí, o HPA não tem denominador e fica em `<unknown>` para sempre,
+**sem emitir nenhum evento**. Foi exatamente o caso desta stack.
+
+  </Fragment>
+</LabExercise>
+
+<Quiz set="autoscaling-and-its-blind-window" />

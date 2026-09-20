@@ -1,0 +1,197 @@
+---
+key: helm-vs-kustomize
+lang: en
+track: kubernetes
+order: 7
+title: "Helm vs Kustomize, settled by diff"
+summary: "The question is usually answered with adjectives. Here the same service exists in both forms, the gate renders both and compares field by field — and the single difference that showed up is exactly the one that explains when each wins."
+minutes: 14
+tags: [kubernetes, helm, kustomize, manifests, distribution]
+sources:
+  - label: "Helm Docs — Charts"
+    url: "https://helm.sh/docs/topics/charts/"
+    kind: docs
+  - label: "Kustomize — Introduction"
+    url: "https://kubectl.docs.kubernetes.io/guides/introduction/kustomize/"
+    kind: docs
+  - label: "Kubernetes Docs — Declarative Management with Kustomize"
+    url: "https://kubernetes.io/docs/tasks/manage-kubernetes-objects/kustomization/"
+    kind: docs
+  - label: "Helm — Chart Template Guide: values files"
+    url: "https://helm.sh/docs/chart_template_guide/values_files/"
+    kind: docs
+---
+
+import TemplateVsOverlay from "../../../components/diagrams/TemplateVsOverlay.astro";
+
+"Helm or Kustomize?" is one of the most answered and least **measured**
+questions in the field. The answers tend to be about taste: one is "simpler",
+the other "more powerful", and the reader leaves with no criterion at all.
+
+This repository does something else. The `web` service exists **in both forms**
+— `k8s/base/web/` in Kustomize and `k8s/charts/web/` in Helm — and the gate
+renders both and compares them **field by field**:
+
+```console
+$ make k8s-diff-tools
+   idênticos: 2 objetos, 0 diferenças
+```
+
+Zero differences is what earns the right to say "both tools solve the same
+problem". With that out of the way, the choice between them becomes about the
+right thing.
+
+## What actually separates them
+
+<TemplateVsOverlay />
+
+The underlying difference is not syntax. It is **when YAML becomes structure**.
+
+<Term word="Template engine" alt="template engine">
+Helm treats the files under `templates/` as **text**. It expands `{{ }}`,
+resolves conditionals and loops, and only the result of that expansion is handed
+to a YAML parser.
+
+That is what gives Helm conditionals (`{{- if .Values.ingress.enabled }}`),
+loops and functions. And it is also what allows **invalid** YAML: a wrong indent
+inside a `{{- if }}` produces text that does not parse, and the error surfaces at
+`apply`, far from the line that caused it.
+</Term>
+
+<Term word="Structural merge" alt="strategic merge patch">
+Kustomize starts from **already valid** YAML and applies patches over the parsed
+tree, addressing fields by path
+(`spec.template.spec.containers[0].image`).
+
+By construction it cannot produce invalid YAML — there is no text stage. And by
+construction it has no named parameters: to change something, you must know
+**where** that something lives in the structure.
+</Term>
+
+Both choices are coherent. Neither is an oversight, which is why the argument
+never ends.
+
+## The single difference the comparator found
+
+On the first run the diff was not zero:
+
+```console
+$ python3 tools/scripts/k8s-helm-vs-kustomize.py
+   Deployment/web.metadata.namespace: só no Kustomize ('infra-knowlogy')
+   Service/web.metadata.namespace: só no Kustomize ('infra-knowlogy')
+```
+
+The `namespace:` from `kustomization.yaml` is **baked into the rendered
+manifest**. Helm defers it to installation — `helm install -n`, exposed to the
+template as `.Release.Namespace`.
+
+This looks like a detail and it is the whole thing:
+
+> A Helm chart can be **published to third parties**. A Kustomize overlay
+> cannot.
+
+The chart declares a named configuration surface (`values.yaml`) and defers the
+installer's decisions to installation time. Whoever installs it does not need to
+know that `replicaCount` lives at `.spec.replicas` of a Deployment.
+
+In an overlay, changing the replica count requires a patch that **names the
+field path** — that is, it requires knowing the internal structure of a manifest
+somebody else wrote. That works very well inside one organisation, where the
+structure is yours; it does not work as a distribution format.
+
+<Tradeoff
+  a="Helm"
+  b="Kustomize"
+  whenA="You DISTRIBUTE software to people who do not know your manifests: an operator, a database, an internal tool used by other teams. Also when there is genuine conditional variation — 'with Ingress or without'."
+  whenB="The manifests are YOURS and the variations are few and known: dev/staging/prod of the same service. There the template engine's cost buys nothing, and the YAML stays readable without rendering."
+>
+  <Fragment slot="a">
+    Named parameters, chart versioning, repositories, `helm rollback`, and a
+    huge ecosystem of ready-made charts. In exchange: what you read under
+    `templates/` is not what goes to the cluster.
+  </Fragment>
+  <Fragment slot="b">
+    What you read is real, valid YAML that your editor autocompletes and
+    `kubeconform` validates without rendering. Built into `kubectl`, nothing to
+    install. In exchange: no parameters, no conditionals, no distribution.
+  </Fragment>
+</Tradeoff>
+
+<Callout type="note" title="They are not exclusive, and the combination is common">
+`helm template` emits YAML, and `kustomize` consumes YAML. Using Helm to pull a
+third-party chart and Kustomize to adjust what the chart did not parameterise is
+a frequent arrangement — and it solves exactly the case where the chart did not
+anticipate the change you need.
+</Callout>
+
+## The comparator has to bite
+
+A test that never fails proves nothing. This one was checked by changing a chart
+field on purpose:
+
+```console
+$ sed -i 's/periodSeconds: 15/periodSeconds: 14/' k8s/charts/web/templates/deployment.yaml
+$ make k8s-diff-tools
+   Deployment/web.spec.template.spec.containers[0].livenessProbe.periodSeconds: 14 (Helm) vs 15 (Kustomize)
+   Deployment/web.spec.template.spec.containers[0].readinessProbe.periodSeconds: 14 (Helm) vs 15 (Kustomize)
+```
+
+Two fields, with the full path. The comparator sees the whole tree, not only the
+fields somebody remembered to list.
+
+<Callout type="warn" title="SELinux, again">
+Running Helm in a container, the bind mount needs the relabel suffix:
+
+```bash
+docker run --rm -v "$PWD/k8s/charts:/charts:ro,z" alpine/helm:3.19.0 \
+  template web /charts/web --namespace infra-knowlogy
+```
+
+Without the `z`, Helm reports **`Error: Chart.yaml file is missing`** — which
+sends you looking inside the chart, when the problem is that the process cannot
+read the directory. An error message describing the symptom rather than the
+cause is what costs the most time.
+</Callout>
+
+<FieldNote
+  source="Kustomize — Introduction (kubectl documentation)"
+  url="https://kubectl.docs.kubernetes.io/guides/introduction/kustomize/"
+  accessed="2026-09-20"
+>
+The Kustomize documentation states the absence of templates as a design
+decision, not a missing feature: the goal is for source files to always be valid
+YAML, so that YAML tooling — editor, validator, diff — works on them without a
+rendering step. Not measured here: comparing the two approaches' productivity
+across a team is the kind of claim a study repository cannot support.
+</FieldNote>
+
+<LabExercise
+  question="You received a third-party Helm chart and need to know what it WILL create in the cluster, without installing anything. How?"
+  check="helm template ≡ kubectl kustomize"
+>
+  <Fragment slot="hint">
+    The subcommand that renders without talking to any cluster.
+  </Fragment>
+  <Fragment slot="answer">
+
+```bash
+helm template my-release ./the-chart --namespace my-ns > rendered.yaml
+```
+
+`helm template` renders locally and never touches the cluster. From there, treat
+the result like any manifest:
+
+```bash
+grep -c '^kind:' rendered.yaml                 # how many objects
+grep -E '^kind:|  name:' rendered.yaml         # what, and under which names
+docker run --rm -i ghcr.io/yannh/kubeconform:v0.8.0 -strict -summary - < rendered.yaml
+```
+
+And, most important for a third-party chart: look for `ClusterRole`,
+`ClusterRoleBinding` and `hostPath`. Those three widen the blast radius beyond
+the namespace, and a chart asking for them should justify why.
+
+  </Fragment>
+</LabExercise>
+
+<Quiz set="helm-vs-kustomize" />

@@ -1,0 +1,152 @@
+{
+  "note_pt": "As perguntas vêm das três parcelas do tempo de reação do HPA, medidas neste cluster.",
+  "note_en": "The questions come from the three terms of the HPA's reaction time, measured on this cluster.",
+  "pt": [
+    {
+      "q": "Um HPA marca `cpu: <unknown>/60%` e nunca escalou. Qual a causa mais provável?",
+      "options": [
+        {
+          "text": "O Deployment não declara `requests.cpu`.",
+          "correct": true,
+          "why": "Utilização de HPA é percentual do REQUEST, nunca do limit. Sem `requests.cpu` não há denominador, e o HPA fica em `<unknown>` para sempre — sem condição vermelha, sem evento, sem log. Foi exatamente o caso desta stack: havia `limits: {cpu: \"1\"}` e nenhum request."
+        },
+        {
+          "text": "O alvo de 60% é alto demais para a carga atual.",
+          "why": "Um alvo alto demais faria o HPA mostrar um número BAIXO (por exemplo `2%/60%`) e não escalar — o que é diferente de `<unknown>`. `<unknown>` significa que ele não conseguiu calcular nada."
+        },
+        {
+          "text": "Faltam réplicas mínimas configuradas.",
+          "why": "`minReplicas` tem padrão 1 e o objeto nem é aceito sem `maxReplicas`. Nenhum dos dois produz `<unknown>` na coluna de métrica — essa coluna só depende de haver métrica e denominador."
+        }
+      ]
+    },
+    {
+      "q": "A carga chega em t=0 e o HPA só decide em t=29,8 s. O pod novo fica Ready 1 s depois. Onde está o ganho, se você quiser reagir mais rápido?",
+      "options": [
+        {
+          "text": "Numa imagem menor, para o pod subir mais rápido.",
+          "why": "O boot já é 1 segundo — e 1 segundo é o PISO da resolução dos carimbos do Kubernetes, não uma medida precisa. Cortá-lo para 200 ms melhoraria menos de 3% do tempo total. É o termo errado para otimizar."
+        },
+        {
+          "text": "Nos laços de percepção: `--metric-resolution` e o sync-period do HPA.",
+          "correct": true,
+          "why": "94% ou mais do tempo é o Kubernetes PERCEBER. Baixar `--metric-resolution` ajuda — com custo de CPU no metrics-server e mais raspagem nos kubelets — mas há um piso: taxa continua precisando de duas amostras."
+        },
+        {
+          "text": "Em `stabilizationWindowSeconds: 0` no scaleUp.",
+          "why": "Já está em 0, que é o padrão para subida. A janela de estabilização de SUBIDA não é o que atrasa; o que atrasa é o HPA não ter a métrica ainda."
+        }
+      ]
+    },
+    {
+      "q": "Por que o limite previsto é 45 s e não 30 s (15 de raspagem + 15 de sincronização)?",
+      "options": [
+        {
+          "text": "Porque o kubelet tem um terceiro ciclo próprio de 15 s.",
+          "why": "O kubelet expõe um CONTADOR acumulado, que está sempre atualizado quando é lido — ele não introduz uma terceira janela de 15 s. O termo que falta é outro."
+        },
+        {
+          "text": "Porque o HPA aplica uma tolerância de 10% antes de agir.",
+          "why": "A tolerância existe e evita escalar por variação pequena, mas ela decide SE escala, não QUANDO a métrica chega. Ela não acrescenta tempo à conta."
+        },
+        {
+          "text": "Porque uso de CPU é uma TAXA, e taxa sai da diferença entre duas raspagens.",
+          "correct": true,
+          "why": "O metrics-server calcula o valor pela diferença entre as duas últimas amostras do contador, então uma mudança degrau leva DUAS janelas para estar inteiramente refletida: 2×15 + 15 = 45 s. A checagem do portão nasceu com 30 s, reprovou contra 44,7 s medidos, e o errado era o limite."
+        }
+      ]
+    },
+    {
+      "q": "Por que `scaleDown` tem 300 s de estabilização e `scaleUp` tem 0?",
+      "options": [
+        {
+          "text": "Porque descer é mais caro computacionalmente do que subir.",
+          "why": "Terminar um pod é mais barato que criar um. O custo que justifica a assimetria não é computacional, é operacional."
+        },
+        {
+          "text": "Porque os erros não são simétricos: descer cedo demais causa oscilação.",
+          "correct": true,
+          "why": "Subir cedo demais custa réplicas ociosas por alguns minutos. Descer cedo demais custa um ciclo: a carga volta, o HPA sobe de novo, e o rollout constante custa mais do que as réplicas economizadas. A assimetria da configuração espelha a assimetria do prejuízo."
+        },
+        {
+          "text": "Porque o metrics-server demora mais para reportar queda do que subida.",
+          "why": "O mecanismo é o mesmo nos dois sentidos — duas amostras, mesma janela. A assimetria é uma decisão de política escrita no `behavior`, não uma propriedade da medição."
+        }
+      ]
+    }
+  ],
+  "en": [
+    {
+      "q": "An HPA shows `cpu: <unknown>/60%` and has never scaled. What is the most likely cause?",
+      "options": [
+        {
+          "text": "The Deployment does not declare `requests.cpu`.",
+          "correct": true,
+          "why": "HPA utilisation is a percentage of the REQUEST, never of the limit. With no `requests.cpu` there is no denominator, and the HPA stays at `<unknown>` forever — no red condition, no event, no log. That was exactly this stack's case: there was `limits: {cpu: \"1\"}` and no request."
+        },
+        {
+          "text": "The 60% target is too high for the current load.",
+          "why": "A target that is too high would make the HPA show a LOW number (say `2%/60%`) and not scale — which is different from `<unknown>`. `<unknown>` means it could not compute anything at all."
+        },
+        {
+          "text": "Minimum replicas are not configured.",
+          "why": "`minReplicas` defaults to 1 and the object is not even accepted without `maxReplicas`. Neither produces `<unknown>` in the metric column — that column depends only on having a metric and a denominator."
+        }
+      ]
+    },
+    {
+      "q": "Load arrives at t=0 and the HPA only decides at t=29.8 s. The new pod is Ready 1 s later. Where is the gain, if you want to react faster?",
+      "options": [
+        {
+          "text": "In a smaller image, so the pod comes up faster.",
+          "why": "Boot is already 1 second — and 1 second is the FLOOR of Kubernetes's timestamp resolution, not a precise measurement. Cutting it to 200 ms would improve less than 3% of the total. It is the wrong term to optimise."
+        },
+        {
+          "text": "In the perception loops: `--metric-resolution` and the HPA sync-period.",
+          "correct": true,
+          "why": "94% or more of the time is Kubernetes NOTICING. Lowering `--metric-resolution` helps — at the cost of CPU in metrics-server and more scraping on the kubelets — but there is a floor: a rate still needs two samples."
+        },
+        {
+          "text": "In `stabilizationWindowSeconds: 0` for scaleUp.",
+          "why": "It is already 0, which is the default for scaling up. The scale-UP stabilisation window is not what delays things; what delays them is the HPA not having the metric yet."
+        }
+      ]
+    },
+    {
+      "q": "Why is the predicted bound 45 s and not 30 s (15 of scraping + 15 of syncing)?",
+      "options": [
+        {
+          "text": "Because the kubelet has a third 15 s cycle of its own.",
+          "why": "The kubelet exposes an accumulated COUNTER, always current when read — it introduces no third 15 s window. The missing term is a different one."
+        },
+        {
+          "text": "Because the HPA applies a 10% tolerance before acting.",
+          "why": "The tolerance exists and prevents scaling on small variation, but it decides WHETHER to scale, not WHEN the metric arrives. It adds no time to the sum."
+        },
+        {
+          "text": "Because CPU usage is a RATE, and a rate comes from the difference between two scrapes.",
+          "correct": true,
+          "why": "metrics-server computes the value from the difference between the last two counter samples, so a step change takes TWO windows to be fully reflected: 2×15 + 15 = 45 s. The gate's check was born with 30 s, failed against a measured 44.7 s, and the bound was the wrong part."
+        }
+      ]
+    },
+    {
+      "q": "Why does `scaleDown` have 300 s of stabilisation while `scaleUp` has 0?",
+      "options": [
+        {
+          "text": "Because scaling down is computationally more expensive than scaling up.",
+          "why": "Terminating a pod is cheaper than creating one. The cost justifying the asymmetry is not computational, it is operational."
+        },
+        {
+          "text": "Because the errors are not symmetric: scaling down too early causes oscillation.",
+          "correct": true,
+          "why": "Scaling up too early costs idle replicas for a few minutes. Scaling down too early costs a cycle: the load returns, the HPA scales up again, and the constant rollout costs more than the replicas saved. The configuration's asymmetry mirrors the asymmetry of the damage."
+        },
+        {
+          "text": "Because metrics-server is slower to report a drop than a rise.",
+          "why": "The mechanism is identical in both directions — two samples, same window. The asymmetry is a policy decision written in `behavior`, not a property of the measurement."
+        }
+      ]
+    }
+  ]
+}

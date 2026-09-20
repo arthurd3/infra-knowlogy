@@ -1,0 +1,235 @@
+---
+key: autoscaling-and-its-blind-window
+lang: en
+track: kubernetes
+order: 6
+title: "The HPA, and the window where it is blind"
+summary: "The HPA scales — the manual says so. What the manual does not say is that it takes 13 to 45 seconds to NOTICE, against 1 second for the pod to come up. Measured here across three runs, with the arithmetic predicting the bound matching what was measured."
+minutes: 15
+tags: [kubernetes, hpa, autoscaling, metrics-server, capacity]
+sources:
+  - label: "Kubernetes Docs — Horizontal Pod Autoscaling"
+    url: "https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/"
+    kind: docs
+  - label: "Kubernetes Docs — HPA walkthrough and algorithm"
+    url: "https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/#algorithm-details"
+    kind: docs
+  - label: "metrics-server — README and flags"
+    url: "https://github.com/kubernetes-sigs/metrics-server"
+    kind: docs
+    accessed: "2026-09-20"
+  - label: "Kubernetes Enhancement Proposal — Configurable scaling behavior"
+    url: "https://github.com/kubernetes/enhancements/tree/master/keps/sig-autoscaling/853-configurable-hpa-scale-velocity"
+    kind: spec
+---
+
+import HpaBlindWindow from "../../../components/diagrams/HpaBlindWindow.astro";
+
+The [twelve-factor audit](/en/lessons/twelve-factor-measured) found exactly one
+factor the Compose stack did not satisfy: **concurrency**. There is no
+`replicas:` in any Compose file, and scaling for real demands balancing,
+discovery and rescheduling — which is an orchestrator's job.
+
+This object is the answer. And measuring it produced a number that contradicts
+what almost everybody optimises.
+
+## First of all: the HPA did not work
+
+The first attempt looked like this:
+
+```console
+$ kubectl -n infra-knowlogy get hpa api
+NAME   REFERENCE        TARGETS         MINPODS   MAXPODS   REPLICAS
+api    Deployment/api   cpu: <unknown>/60%   2    6         2
+```
+
+`<unknown>` forever. Nothing scaled, no event explained it, and the object
+looked healthy.
+
+The cause: **HPA utilisation is a percentage of `requests`, never of `limits`.**
+The api had `limits: {cpu: "1"}` and no `requests.cpu` — so there was no
+denominator.
+
+<Callout type="warn" title="The quietest failure in this lesson">
+An HPA at `<unknown>` does not scale **and does not complain**. No red
+condition, no event, no log. It sits there in the `get hpa` output, looking
+configured.
+
+If you have an HPA in production that has never scaled, this is the first thing
+to check — before touching the target, before suspecting the load.
+</Callout>
+
+```yaml
+resources:
+  limits: {cpu: "1", memory: 256Mi}
+  requests: {cpu: 50m, memory: 64Mi}   # ← without this, nothing happens
+```
+
+With `requests.cpu: 50m` and `averageUtilization: 60`, the target is
+**30 millicores per pod**.
+
+## The measurement
+
+<Term word="millicore" alt="millicore, millicpu">
+Kubernetes's CPU unit. `1000m` = 1 core, `50m` = 5% of a core.
+
+It measures **CPU time per wall-clock time**, not speed: a pod with `50m` is
+not "slow", it may use 5% of a core over the course of a second. So the value
+is a rate — and that will matter two paragraphs from now.
+</Term>
+
+The gate generates real load through the edge, with 24 threads, and times it.
+Three runs, with the CPU cooling between them:
+
+| run | blind window | new pod boot |
+|---|---|---|
+| 1 | 17.0 s | 1 s |
+| 2 | 29.8 s | 1 s |
+| 3 | 29.8 s | 1 s |
+
+And, on a later gate run, a worst case of **44.7 s**.
+
+<HpaBlindWindow />
+
+## Why it varies so much, and where it stops
+
+The variation is not noise. Load can arrive at any point within two independent
+15-second cycles — and the worst case is their sum. The arithmetic:
+
+```
+2 × --metric-resolution ........ 30 s   ← and here is the forgotten term
+1 × HPA sync-period ............ 15 s
+                               ───────
+                                 45 s
+```
+
+**The middle term is the one almost nobody counts.** CPU usage is a **rate**,
+and a rate does not come from one sample: metrics-server computes the value from
+the difference between the **last two** scrapes of the kubelet's counter. A step
+change in load is only fully reflected after two windows.
+
+<Callout type="note" title="The gate already failed holding the right number">
+The check was born demanding 30 seconds — counting only the scrape and the sync.
+It failed against a measurement of **44.7 s**.
+
+The bound was wrong, not the measurement. That is how the third term surfaced:
+the gate disagreed with the arithmetic, and the arithmetic was the incomplete
+one.
+</Callout>
+
+You can watch the rate forming:
+
+```console
+$ # kubectl top pod, every 3 seconds, with load starting at t=0
+t= 0s  total cpu across api pods: 2m
+t=16s  total cpu across api pods: 2m      ← load has been there for 16 s
+t=19s  total cpu across api pods: 190m    ← first update
+t=34s  total cpu across api pods: 121m
+t=49s  total cpu across api pods: 77m
+```
+
+The value only changes every 15 seconds. Between updates, the HPA is looking at
+a **stale** number — and acting on it.
+
+## The number that contradicts instinct
+
+**Blind window: 12.8 to 44.7 seconds. Pod boot: 1 second.**
+
+The api pod is a Go binary in a distroless image, with the image already on the
+node. It comes up below the resolution of Kubernetes's own timestamps, which is
+one whole second.
+
+That means **94% or more of the reaction time is Kubernetes noticing**, not your
+application starting. Cutting the boot from 1 s to 200 ms changes essentially
+nothing in the time until new capacity exists.
+
+<Tradeoff
+  a="Optimising the application's boot"
+  b="Shortening the perception loops"
+  whenA="When boot is on the order of tens of seconds — a JVM warming up, a migration at start, a model being loaded. There it dominates and every second counts."
+  whenB="When boot is already one or two seconds, as here. Then the gain is in a smaller --metric-resolution, a smaller sync-period, or in not depending on reaction at all: static headroom."
+>
+  <Fragment slot="a">
+    Smaller image, less initialisation, a probe with a smaller
+    `initialDelaySeconds`. It improves the **last** term of the sum.
+  </Fragment>
+  <Fragment slot="b">
+    Lowering `--metric-resolution` costs CPU in metrics-server and more scraping
+    on the kubelets. And there is a floor: a rate still needs two samples.
+  </Fragment>
+</Tradeoff>
+
+## The deliberate asymmetry
+
+```yaml
+behavior:
+  scaleUp:
+    stabilizationWindowSeconds: 0      # up: no waiting
+  scaleDown:
+    stabilizationWindowSeconds: 300    # down: five minutes
+```
+
+Up and down are not symmetric because the **errors** are not symmetric. Scaling
+up too early costs idle replicas; scaling down too early costs oscillation — the
+load returns, the HPA scales up again, and the constant rollout costs more than
+the replicas you saved.
+
+## What the HPA does not solve
+
+- **It does not create capacity.** With no node that has room, the new pods sit
+  `Pending` and the scale simply does not happen. The *Cluster Autoscaler*
+  solves that, and it is another component that does not exist in a single-node
+  cluster.
+- **It does not help when the database is the bottleneck.** More api replicas
+  against a saturated Postgres only multiply the queue — and make it worse,
+  since each replica opens its own connection pool.
+- **It does not save you from a short spike.** If the spike is shorter than the
+  blind window, it is over before the HPA acts. Static headroom exists for that,
+  not autoscaling.
+
+<FieldNote
+  source="Kubernetes Enhancement Proposal 853 — Configurable HPA scale velocity"
+  url="https://github.com/kubernetes/enhancements/tree/master/keps/sig-autoscaling/853-configurable-hpa-scale-velocity"
+  accessed="2026-09-20"
+>
+The `behavior` field only exists since `autoscaling/v2beta2` because, before it,
+scale velocity was fixed in the controller-manager and applied cluster-wide. The
+proposal cites scale-down oscillation explicitly as the motivation: the previous
+default was too conservative for some and too aggressive for others. Not
+measured here — comparing behaviour with and without `behavior` would require
+reconfiguring the cluster's controller-manager.
+</FieldNote>
+
+<LabExercise
+  question="An HPA has shown `cpu: <unknown>/60%` for hours. What are the TWO things to check, in order?"
+  check="HPA: a API de métricas responde"
+>
+  <Fragment slot="hint">
+    One is about the cluster; the other is about the Deployment the HPA targets.
+  </Fragment>
+  <Fragment slot="answer">
+
+**1. Does the metrics API answer?**
+
+```bash
+kubectl top pod -n infra-knowlogy
+```
+
+If you get `error: Metrics API not available`, metrics-server is missing — or it
+is running and cannot scrape the kubelets (in kind, because of the self-signed
+certificate; the fix is `--kubelet-insecure-tls`, and it has a cost).
+
+**2. Does the container declare `requests.cpu`?**
+
+```bash
+kubectl -n infra-knowlogy get deploy api \
+  -o jsonpath='{.spec.template.spec.containers[0].resources.requests}'
+```
+
+Without `cpu` in there, the HPA has no denominator and stays at `<unknown>`
+forever, **emitting no event at all**. That was exactly this stack's case.
+
+  </Fragment>
+</LabExercise>
+
+<Quiz set="autoscaling-and-its-blind-window" />

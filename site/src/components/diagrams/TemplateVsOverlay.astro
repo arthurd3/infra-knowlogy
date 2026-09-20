@@ -1,0 +1,78 @@
+---
+/** k8s-07 — Helm textualiza antes de parsear; Kustomize patcheia depois. */
+import Figure from "../Figure.astro";
+import type { Lang } from "../../i18n/ui";
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+const C = {
+  pt: {
+    h: "HELM", k: "KUSTOMIZE",
+    h1: "values.yaml", h1s: "parâmetros com NOME",
+    h2: "templates/*.yaml", h2s: "TEXTO com {{ }} — ainda não é YAML",
+    h3: "motor de template", h3s: "substitui, condiciona, itera",
+    h4: "YAML renderizado", h4s: "só AQUI vira estrutura",
+    k1: "base/*.yaml", k1s: "YAML válido desde o primeiro byte",
+    k2: "kustomization.yaml", k2s: "patches por CAMINHO DE CAMPO",
+    k3: "merge estrutural", k3s: "opera sobre a árvore já parseada",
+    k4: "YAML renderizado",
+    hcons: "pode gerar YAML inválido — o erro aparece no apply, não no template",
+    kcons: "não pode gerar YAML inválido — mas exige conhecer a estrutura para patchear",
+    prova: "provado aqui: os dois renderizam o MESMO Deployment `web`, campo a campo, 0 diferenças",
+    caption:
+      "A diferença de fundo não é sintaxe, é <b>quando o YAML vira estrutura</b>. O Helm manipula texto e só depois parseia — por isso ele pode condicionar, iterar e gerar YAML inválido. O Kustomize parte de YAML válido e patcheia a árvore — por isso ele nunca gera lixo, e por isso não tem parâmetro com nome. As duas escolhas são coerentes; nenhuma é descuido.",
+    alt: "Dois fluxos lado a lado: Helm substituindo texto antes de parsear, Kustomize fazendo merge sobre a árvore.",
+  },
+  en: {
+    h: "HELM", k: "KUSTOMIZE",
+    h1: "values.yaml", h1s: "NAMED parameters",
+    h2: "templates/*.yaml", h2s: "TEXT with {{ }} — not YAML yet",
+    h3: "template engine", h3s: "substitutes, branches, loops",
+    h4: "rendered YAML", h4s: "only HERE does it become structure",
+    k1: "base/*.yaml", k1s: "valid YAML from the first byte",
+    k2: "kustomization.yaml", k2s: "patches by FIELD PATH",
+    k3: "structural merge", k3s: "operates on the already-parsed tree",
+    k4: "rendered YAML",
+    hcons: "can emit invalid YAML — the error shows up at apply, not at template time",
+    kcons: "cannot emit invalid YAML — but requires knowing the structure to patch it",
+    prova: "proven here: both render the SAME `web` Deployment, field by field, 0 differences",
+    caption:
+      "The underlying difference is not syntax, it is <b>when YAML becomes structure</b>. Helm manipulates text and parses afterwards — which is why it can branch, loop and emit invalid YAML. Kustomize starts from valid YAML and patches the tree — which is why it never emits garbage, and why it has no named parameters. Both choices are coherent; neither is an oversight.",
+    alt: "Two flows side by side: Helm substituting text before parsing, Kustomize merging over the tree.",
+  },
+}[lang];
+---
+<Figure caption={C.caption} alt={C.alt}>
+  <svg viewBox="0 0 720 300" xmlns="http://www.w3.org/2000/svg" font-size="11">
+    <text x="14" y="16" class="dg-muted" font-weight="640" font-size="10.5">{C.h}</text>
+    {[[C.h1, C.h1s], [C.h2, C.h2s], [C.h3, C.h3s], [C.h4, C.h4s]].map(([t, s], i) => (
+      <g>
+        <rect x="14" y={26 + i * 56} width="326" height="42" rx="6"
+              class={i === 3 ? "dg-box dg-box--accent" : "dg-box"} />
+        <text x="30" y={44 + i * 56} font-weight="620" font-size="10">{t}</text>
+        <text x="30" y={59 + i * 56} class="dg-faint" font-size="8.5">{s}</text>
+        {i < 3 && <path d={`M177 ${70 + i * 56} L177 ${80 + i * 56}`} class="dg-line" marker-end="url(#tv-arrow)" />}
+      </g>
+    ))}
+
+    <text x="380" y="16" class="dg-muted" font-weight="640" font-size="10.5">{C.k}</text>
+    {[[C.k1, C.k1s], [C.k2, C.k2s], [C.k3, C.k3s], [C.k4, ""]].map(([t, s], i) => (
+      <g>
+        <rect x="380" y={26 + i * 56} width="326" height="42" rx="6"
+              class={i === 3 ? "dg-box dg-box--accent" : "dg-box"} />
+        <text x="396" y={44 + i * 56} font-weight="620" font-size="10">{t}</text>
+        {s && <text x="396" y={59 + i * 56} class="dg-faint" font-size="8.5">{s}</text>}
+        {i < 3 && <path d={`M543 ${70 + i * 56} L543 ${80 + i * 56}`} class="dg-line" marker-end="url(#tv-arrow)" />}
+      </g>
+    ))}
+
+    <text x="14" y="264" class="dg-fill-warn" font-size="8.5">{C.hcons}</text>
+    <text x="380" y="264" class="dg-fill-warn" font-size="8.5">{C.kcons}</text>
+    <line x1="14" y1="274" x2="706" y2="274" class="dg-line" stroke-dasharray="3 3" />
+    <text x="360" y="292" text-anchor="middle" class="dg-muted" font-size="10" font-weight="620">{C.prova}</text>
+    <defs>
+      <marker id="tv-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+        <path d="M0 0 L10 5 L0 10 z" fill="var(--border-strong)" />
+      </marker>
+    </defs>
+  </svg>
+</Figure>

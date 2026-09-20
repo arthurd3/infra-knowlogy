@@ -1,0 +1,152 @@
+{
+  "note_pt": "As perguntas vêm da diferença entre provar que uma permissão existe e provar que a que não deveria existir realmente não existe.",
+  "note_en": "The questions come from the difference between proving a permission exists and proving the one that should not really does not.",
+  "pt": [
+    {
+      "q": "Uma ServiceAccount tem duas Roles ligadas: uma concede `list secrets`, a outra não menciona secrets. Como você retira essa permissão?",
+      "options": [
+        {
+          "text": "Escrevendo uma terceira Role que negue `list secrets`.",
+          "why": "Não existe regra de negação no RBAC. Toda Role só ACRESCENTA, e o padrão já é negar — uma Role que 'nega' não é expressável. Esperar que exista é o engano mais caro de quem vem de firewall."
+        },
+        {
+          "text": "Apagando a regra que concedeu — não há outro jeito.",
+          "correct": true,
+          "why": "Permissões somam e nunca subtraem. É por isso que auditoria de RBAC é trabalho de REMOVER: você precisa achar qual das Roles ligadas ao sujeito concedeu aquilo, e o `kubectl auth can-i --list` é o que mostra a soma."
+        },
+        {
+          "text": "Trocando a RoleBinding por uma ClusterRoleBinding mais restrita.",
+          "why": "ClusterRoleBinding AMPLIA o escopo, nunca restringe — ela faz a permissão valer em todos os namespaces. E, de qualquer forma, a outra Role continuaria ligada e continuaria concedendo."
+        }
+      ]
+    },
+    {
+      "q": "`kubectl auth can-i list pods --as=$SA -n meu-ns` responde `yes`, e com `--all-namespaces` responde `no`. O que isso prova?",
+      "options": [
+        {
+          "text": "Que o token da SA expirou fora do namespace.",
+          "why": "Token não tem escopo de namespace — ele identifica o sujeito, e o mesmo token é aceito em qualquer requisição. Quem tem escopo é a autorização, não a autenticação."
+        },
+        {
+          "text": "Que existe uma NetworkPolicy separando os namespaces.",
+          "why": "NetworkPolicy governa pacote entre pods; `auth can-i` nem chega a abrir conexão para lugar nenhum — é uma pergunta ao API server sobre autorização. São camadas diferentes e essa confusão é comum."
+        },
+        {
+          "text": "Que a permissão veio de uma `Role` (namespaced) e não de uma `ClusterRole`.",
+          "correct": true,
+          "why": "É exatamente a diferença entre os dois pares de objetos, e é o erro mais comum de quem começa: `ClusterRole` 'funciona sempre' e por isso parece mais fácil. O portão checa as três respostas justamente para que a distinção não fique só na prosa."
+        }
+      ]
+    },
+    {
+      "q": "Por que a sonda com token real é melhor prova que `kubectl auth can-i --as=`?",
+      "options": [
+        {
+          "text": "Porque o `can-i` é o API server respondendo a uma hipótese sobre si mesmo.",
+          "correct": true,
+          "why": "Quem pergunta e quem julga são o mesmo componente. O `can-i` não prova que o token foi projetado no volume, nem que o pod ALCANÇA o API server — e os dois já falharam de verdade neste repositório. A sonda faz o caminho inteiro: lê o token do disco, abre TLS validando a CA, e compara códigos HTTP."
+        },
+        {
+          "text": "Porque o `can-i` ignora RoleBindings criadas depois.",
+          "why": "Não ignora: o `can-i` consulta o estado atual e reflete qualquer binding que exista naquele instante. O problema dele não é estar desatualizado, é ser uma simulação."
+        },
+        {
+          "text": "Porque só a sonda testa os verbos de escrita.",
+          "why": "O `can-i` testa qualquer verbo, inclusive `create` e `delete`. A diferença não está em QUAIS verbos, está em o caminho ser real ou simulado."
+        }
+      ]
+    },
+    {
+      "q": "Os seis workloads desta stack declaram `automountServiceAccountToken: false`. Por que isso é mais forte do que uma Role mínima?",
+      "options": [
+        {
+          "text": "Porque a credencial não existe no disco do container — não há o que roubar.",
+          "correct": true,
+          "why": "Uma Role mínima limita o raio de alcance de um token que EXISTE; não montar elimina o token. Um invasor que execute código no worker não encontra arquivo em `/var/run/secrets/kubernetes.io/serviceaccount/` porque o volume não foi projetado. É a superfície que não existe."
+        },
+        {
+          "text": "Porque o API server passa a recusar a conexão desses pods.",
+          "why": "O API server não recusa nada por causa disso — ele nem sabe. A diferença é local ao pod: sem token montado, o processo não tem com o que se autenticar, então a requisição chega como anônima e é negada por falta de identidade, não por bloqueio."
+        },
+        {
+          "text": "Porque desliga o RBAC para aqueles pods.",
+          "why": "O RBAC continua ativo e continua sendo a autoridade. O que muda é que aqueles pods não têm identidade para apresentar — e sem identidade, não há permissão a avaliar."
+        }
+      ]
+    }
+  ],
+  "en": [
+    {
+      "q": "A ServiceAccount has two Roles bound: one grants `list secrets`, the other does not mention secrets. How do you take that permission away?",
+      "options": [
+        {
+          "text": "By writing a third Role that denies `list secrets`.",
+          "why": "There is no deny rule in RBAC. Every Role only ADDS, and the default is already deny — a Role that 'denies' is not expressible. Expecting one to exist is the most expensive mistake people bring from firewalls."
+        },
+        {
+          "text": "By deleting the rule that granted it — there is no other way.",
+          "correct": true,
+          "why": "Permissions sum and never subtract. That is why auditing RBAC is work you do by REMOVING: you have to find which of the Roles bound to the subject granted it, and `kubectl auth can-i --list` is what shows the sum."
+        },
+        {
+          "text": "By swapping the RoleBinding for a more restrictive ClusterRoleBinding.",
+          "why": "A ClusterRoleBinding WIDENS the scope, never narrows it — it makes the permission apply in every namespace. And in any case the other Role would still be bound and still granting."
+        }
+      ]
+    },
+    {
+      "q": "`kubectl auth can-i list pods --as=$SA -n my-ns` answers `yes`, and with `--all-namespaces` it answers `no`. What does that prove?",
+      "options": [
+        {
+          "text": "That the SA's token expired outside the namespace.",
+          "why": "A token has no namespace scope — it identifies the subject, and the same token is accepted on any request. What has scope is authorisation, not authentication."
+        },
+        {
+          "text": "That a NetworkPolicy separates the namespaces.",
+          "why": "NetworkPolicy governs packets between pods; `auth can-i` never opens a connection anywhere — it is a question to the API server about authorisation. Different layers, and the confusion is common."
+        },
+        {
+          "text": "That the permission came from a `Role` (namespaced) and not a `ClusterRole`.",
+          "correct": true,
+          "why": "That is exactly the difference between the two object pairs, and the most common beginner mistake: `ClusterRole` 'always works' and therefore looks easier. The gate checks all three answers precisely so the distinction does not stay in prose."
+        }
+      ]
+    },
+    {
+      "q": "Why is the real-token probe a better proof than `kubectl auth can-i --as=`?",
+      "options": [
+        {
+          "text": "Because `can-i` is the API server answering a hypothesis about itself.",
+          "correct": true,
+          "why": "The component asking and the component judging are the same one. `can-i` does not prove the token was projected into the volume, nor that the pod can REACH the API server — and both have genuinely failed in this repository. The probe walks the whole path: reads the token from disk, opens TLS validating the CA, and compares HTTP status codes."
+        },
+        {
+          "text": "Because `can-i` ignores RoleBindings created afterwards.",
+          "why": "It does not: `can-i` queries current state and reflects any binding existing at that instant. Its problem is not being stale, it is being a simulation."
+        },
+        {
+          "text": "Because only the probe tests write verbs.",
+          "why": "`can-i` tests any verb, including `create` and `delete`. The difference is not WHICH verbs, it is whether the path is real or simulated."
+        }
+      ]
+    },
+    {
+      "q": "The six workloads in this stack declare `automountServiceAccountToken: false`. Why is that stronger than a minimal Role?",
+      "options": [
+        {
+          "text": "Because the credential does not exist on the container's disk — there is nothing to steal.",
+          "correct": true,
+          "why": "A minimal Role limits the blast radius of a token that EXISTS; not mounting removes the token. An attacker running code in the worker finds no file under `/var/run/secrets/kubernetes.io/serviceaccount/` because the volume was never projected. It is the surface that does not exist."
+        },
+        {
+          "text": "Because the API server starts refusing connections from those pods.",
+          "why": "The API server refuses nothing because of it — it does not even know. The difference is local to the pod: with no token mounted the process has nothing to authenticate with, so the request arrives anonymous and is denied for lack of identity, not by a block."
+        },
+        {
+          "text": "Because it turns RBAC off for those pods.",
+          "why": "RBAC stays on and stays the authority. What changes is that those pods have no identity to present — and with no identity, there is no permission to evaluate."
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,152 @@
+{
+  "note_pt": "As perguntas saem do diff: o que as duas ferramentas têm em comum, provado, e o que as separa de verdade.",
+  "note_en": "The questions come from the diff: what the two tools have in common, proven, and what actually separates them.",
+  "pt": [
+    {
+      "q": "Qual a diferença de FUNDO entre Helm e Kustomize?",
+      "options": [
+        {
+          "text": "Quando o YAML vira estrutura: o Helm manipula texto e parseia depois; o Kustomize patcheia a árvore já parseada.",
+          "correct": true,
+          "why": "Tudo o mais decorre daí. O Helm pode condicionar e iterar porque está mexendo em texto — e pode gerar YAML inválido pela mesma razão. O Kustomize não consegue gerar lixo porque nunca há etapa de texto — e por isso também não tem parâmetro com nome."
+        },
+        {
+          "text": "O Helm fala com o cluster e o Kustomize não.",
+          "why": "`helm template` renderiza localmente sem tocar no cluster, e `kubectl apply -k` aplica um overlay de kustomize. Os dois têm modos com e sem cluster; não é aí que eles se separam."
+        },
+        {
+          "text": "O Helm é imperativo e o Kustomize é declarativo.",
+          "why": "Os dois produzem manifests declarativos que o `apply` reconcilia. O `helm install` tem estado de release, o que é uma diferença real — mas não torna o modelo imperativo."
+        }
+      ]
+    },
+    {
+      "q": "Por que um chart Helm pode ser publicado para terceiros e um overlay de Kustomize não?",
+      "options": [
+        {
+          "text": "Porque o Helm tem repositório e o Kustomize não tem formato de pacote.",
+          "why": "A distribuição por repositório é consequência, não causa. Mesmo que existisse um repositório de overlays, quem instalasse ainda precisaria conhecer a estrutura para mudar qualquer coisa."
+        },
+        {
+          "text": "Porque o chart declara parâmetros COM NOME e o overlay patcheia por caminho de campo.",
+          "correct": true,
+          "why": "`--set replicaCount=3` não exige saber que o valor mora em `.spec.replicas` de um Deployment. Um patch de kustomize exige conhecer a estrutura interna do manifesto que outra pessoa escreveu — o que funciona dentro de uma organização e não funciona como formato de distribuição."
+        },
+        {
+          "text": "Porque o Kustomize não sabe lidar com múltiplos arquivos.",
+          "why": "Lida muito bem: `resources:` lista quantos arquivos você quiser, e overlays compõem bases. Não é uma limitação de quantidade."
+        }
+      ]
+    },
+    {
+      "q": "O comparador do portão encontrou UMA diferença entre as duas versões do `web`. Qual era, e por que ela é instrutiva?",
+      "options": [
+        {
+          "text": "O `namespace`: o Kustomize assa no manifesto, o Helm difere para a instalação.",
+          "correct": true,
+          "why": "É a mesma propriedade que explica a distribuição, aparecendo num campo concreto. O `.Release.Namespace` é como o chart diz 'o namespace é do instalador, não meu'. Parametrizá-lo zerou o diff e tornou o mecanismo explícito em vez de escondido."
+        },
+        {
+          "text": "Os rótulos `app.kubernetes.io/managed-by`, que só o Helm carimba.",
+          "why": "O Helm realmente carimba isso, mas o comparador os normaliza de propósito: são a assinatura de QUEM gerou, não o objeto. Comparar sem tirar seria comparar as ferramentas, não o resultado."
+        },
+        {
+          "text": "As probes, que o Helm renderiza com outro formato.",
+          "why": "Elas saem idênticas. Foram usadas justamente para provar que o comparador MORDE: mudando um `periodSeconds` de propósito, ele acusou os dois campos com o caminho completo."
+        }
+      ]
+    },
+    {
+      "q": "Quando o Kustomize é a escolha melhor?",
+      "options": [
+        {
+          "text": "Quando há variação condicional de verdade, como 'com Ingress ou sem'.",
+          "why": "É o caso do Helm: variação condicional pede condicional, e o Kustomize não tem. Com Kustomize você acabaria mantendo dois overlays quase iguais."
+        },
+        {
+          "text": "Sempre que o cluster for gerenciado, porque o Helm não funciona em nuvem.",
+          "why": "O Helm funciona em qualquer cluster conforme. Não há relação entre a escolha da ferramenta e o cluster ser gerenciado."
+        },
+        {
+          "text": "Quando os manifests são SEUS e as variações são poucas e conhecidas — dev/staging/prod.",
+          "correct": true,
+          "why": "Aí o motor de template não compra nada e cobra: o que você lê deixa de ser o que vai para o cluster. Com Kustomize, o arquivo-fonte é YAML válido que o editor autocompleta e o kubeconform valida sem renderizar."
+        }
+      ]
+    }
+  ],
+  "en": [
+    {
+      "q": "What is the UNDERLYING difference between Helm and Kustomize?",
+      "options": [
+        {
+          "text": "When YAML becomes structure: Helm manipulates text and parses afterwards; Kustomize patches the already-parsed tree.",
+          "correct": true,
+          "why": "Everything else follows from that. Helm can branch and loop because it is working on text — and can emit invalid YAML for the same reason. Kustomize cannot emit garbage because there is never a text stage — and that is also why it has no named parameters."
+        },
+        {
+          "text": "Helm talks to the cluster and Kustomize does not.",
+          "why": "`helm template` renders locally without touching the cluster, and `kubectl apply -k` applies a kustomize overlay. Both have cluster and cluster-free modes; that is not where they diverge."
+        },
+        {
+          "text": "Helm is imperative and Kustomize is declarative.",
+          "why": "Both produce declarative manifests that `apply` reconciles. `helm install` keeps release state, which is a real difference — but it does not make the model imperative."
+        }
+      ]
+    },
+    {
+      "q": "Why can a Helm chart be published to third parties and a Kustomize overlay cannot?",
+      "options": [
+        {
+          "text": "Because Helm has repositories and Kustomize has no package format.",
+          "why": "Repository distribution is a consequence, not the cause. Even with an overlay repository, whoever installed one would still need to know the structure in order to change anything."
+        },
+        {
+          "text": "Because the chart declares NAMED parameters and the overlay patches by field path.",
+          "correct": true,
+          "why": "`--set replicaCount=3` does not require knowing the value lives at `.spec.replicas` of a Deployment. A kustomize patch requires knowing the internal structure of a manifest somebody else wrote — which works inside one organisation and does not work as a distribution format."
+        },
+        {
+          "text": "Because Kustomize cannot handle multiple files.",
+          "why": "It handles them very well: `resources:` lists as many files as you like, and overlays compose bases. It is not a limitation of quantity."
+        }
+      ]
+    },
+    {
+      "q": "The gate's comparator found ONE difference between the two `web` versions. Which, and why is it instructive?",
+      "options": [
+        {
+          "text": "The `namespace`: Kustomize bakes it into the manifest, Helm defers it to installation.",
+          "correct": true,
+          "why": "It is the same property that explains distribution, showing up in a concrete field. `.Release.Namespace` is how the chart says 'the namespace belongs to the installer, not to me'. Parameterising it zeroed the diff and made the mechanism explicit rather than hidden."
+        },
+        {
+          "text": "The `app.kubernetes.io/managed-by` labels, which only Helm stamps.",
+          "why": "Helm does stamp those, but the comparator normalises them away on purpose: they are the signature of WHO generated the object, not the object. Comparing without removing them would compare the tools, not the result."
+        },
+        {
+          "text": "The probes, which Helm renders in a different format.",
+          "why": "They come out identical. They were in fact used to prove the comparator BITES: changing one `periodSeconds` on purpose made it report both fields with the full path."
+        }
+      ]
+    },
+    {
+      "q": "When is Kustomize the better choice?",
+      "options": [
+        {
+          "text": "When there is genuine conditional variation, like 'with Ingress or without'.",
+          "why": "That is Helm's case: conditional variation calls for conditionals, and Kustomize has none. With Kustomize you would end up maintaining two nearly identical overlays."
+        },
+        {
+          "text": "Whenever the cluster is managed, because Helm does not work in the cloud.",
+          "why": "Helm works on any conformant cluster. There is no relationship between the tool choice and whether the cluster is managed."
+        },
+        {
+          "text": "When the manifests are YOURS and the variations are few and known — dev/staging/prod.",
+          "correct": true,
+          "why": "There the template engine buys nothing and charges something: what you read stops being what goes to the cluster. With Kustomize the source file is valid YAML that your editor autocompletes and kubeconform validates without rendering."
+        }
+      ]
+    }
+  ]
+}
