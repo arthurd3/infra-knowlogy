@@ -19,6 +19,7 @@ resources:
   - api/deployment.yaml
   - api/service.yaml
   - hpa/api.yaml
+  - pdb/api.yaml
   - worker/deployment.yaml
   - web/deployment.yaml
   - web/service.yaml

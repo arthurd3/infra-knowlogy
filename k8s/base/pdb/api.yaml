@@ -1,0 +1,48 @@
+# PodDisruptionBudget — a única coisa que faz o cluster PARAR por sua causa.
+#
+# O rolling update já é cuidadoso: ele obedece `maxUnavailable` e espera a
+# probe de readiness. Mas rolling update é uma disrupção VOLUNTÁRIA que o
+# próprio Deployment orquestra — ele sabe quantas réplicas quer de pé.
+#
+# O PDB governa as OUTRAS disrupções voluntárias, aquelas que ninguém combinou
+# com o seu Deployment:
+#
+#   · `kubectl drain` de um nó para manutenção
+#   · o autoscaler de cluster compactando nós para economizar
+#   · a atualização da versão do Kubernetes pelo provedor gerenciado
+#
+# Sem PDB, qualquer uma delas pode despejar as duas réplicas da api ao mesmo
+# tempo. O Deployment vai recriá-las — mas entre o despejo e o `Ready` há um
+# intervalo em que não existe api nenhuma, e esse intervalo não aparece em
+# nenhum gráfico de rollout, porque não houve rollout.
+#
+# ─── O que ele NÃO cobre ────────────────────────────────────────────────────
+# Disrupção INVOLUNTÁRIA: o nó morrer, o kernel derrubar por OOM, o hardware
+# falhar. O PDB é uma regra de admissão sobre a API de eviction — ninguém pede
+# licença ao API server antes de um nó pegar fogo.
+#
+# Ele também pode BLOQUEAR uma manutenção legítima: um `drain` que não consegue
+# respeitar o orçamento fica esperando para sempre. Isso é o comportamento
+# correto (melhor travar a manutenção do que derrubar o serviço), mas quem
+# opera precisa saber que o travamento é o PDB fazendo o trabalho dele, e não
+# um bug.
+
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: api
+spec:
+  # `minAvailable: 1` e não `maxUnavailable: 1`: os dois parecem equivalentes
+  # com 2 réplicas, e divergem assim que o HPA escala.
+  #
+  # Com 6 réplicas, `maxUnavailable: 1` autoriza despejar 1 (restam 5) e
+  # `minAvailable: 1` autoriza despejar 5 (resta 1). O primeiro protege
+  # capacidade; o segundo protege apenas disponibilidade.
+  #
+  # Aqui a escolha é `minAvailable: 1` de propósito: este é um cluster de
+  # estudo de um nó, e um orçamento que protege capacidade travaria qualquer
+  # `drain` para sempre — o que é o comportamento certo num cluster de verdade
+  # com mais de um nó, e é só um estorvo aqui. A lição mede as duas coisas.
+  minAvailable: 1
+  selector:
+    matchLabels: {app: api}

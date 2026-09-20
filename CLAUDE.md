@@ -319,6 +319,23 @@ justamente por isso.
     pé, `scale --replicas=2` é desfeito no ciclo seguinte), volta à base e
     espera a utilização cair abaixo de 30%.
 
+54. **`ReadWriteOnce` é por NÓ, não por pod** — e num cluster de um nó você
+    nunca descobre. Medido aqui: o `cache` é um Deployment com PVC RWO;
+    escalado para 2, os **dois pods subiram Running no mesmo nó montando o
+    mesmo volume**, sem evento, sem aviso. O modo diz "um nó pode montar em
+    escrita", e dois pods do mesmo nó compartilham essa montagem. Quem
+    aprendeu "RWO = um pod só" descobre o contrário em produção, no dia em que
+    o segundo pod cai noutro nó e fica `Pending` em
+    `Multi-Attach error`. Existe `ReadWriteOncePod` desde o 1.27 para o que as
+    pessoas achavam que o RWO fazia.
+55. **`kubectl exec … psql -U <errado>` falha por SENHA e parece falta de
+    dado.** O erro é `fe_sendauth: no password supplied` e a saída do `SELECT`
+    vem vazia — então uma checagem que lê a saída conclui "o dado não
+    sobreviveu" quando o que não aconteceu foi a conexão. O usuário deste
+    Postgres é `links` (de `POSTGRES_USER`), não `app`, e a senha sai de
+    `/run/secrets/postgres_password`. Primo da armadilha 31: comando que sai
+    calado vira conclusão errada.
+
 ## Ao mexer na stack
 
 - Rode `make verify` antes de considerar qualquer coisa pronta. Para iterar

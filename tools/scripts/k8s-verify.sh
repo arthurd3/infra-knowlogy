@@ -380,6 +380,91 @@ else
   bad "não consegui criar o link-testemunha para o teste de rolling"
 fi
 
+# ─── 8b. StatefulSet e PodDisruptionBudget ───────────────────────────────────
+step "8b/11 Identidade estável, dado que sobrevive e despejo recusado"
+
+# ── StatefulSet: o nome é estável, o IP não. É a razão de existir o Service
+# headless — quem quer falar com UMA réplica específica precisa de um nome que
+# não mude, e endereço de pod muda a cada recriação.
+PSQL='PGPASSWORD=$(cat /run/secrets/postgres_password) psql -U links -d links -tAc'
+"${KC[@]}" exec db-0 -- sh -c "$PSQL \"CREATE TABLE IF NOT EXISTS prova_sts (v text);\"" >/dev/null 2>&1
+"${KC[@]}" exec db-0 -- sh -c "$PSQL \"TRUNCATE prova_sts;\"" >/dev/null 2>&1
+"${KC[@]}" exec db-0 -- sh -c "$PSQL \"INSERT INTO prova_sts VALUES ('sobrevivi');\"" >/dev/null 2>&1
+IP_ANTES=$("${KC[@]}" get pod db-0 -o jsonpath='{.status.podIP}' 2>/dev/null)
+PVC_ANTES=$("${KC[@]}" get pvc pgdata-db-0 -o jsonpath='{.metadata.uid}' 2>/dev/null)
+
+"${KC[@]}" delete pod db-0 --wait=true >/dev/null 2>&1
+if "${KC[@]}" wait --for=condition=Ready pod/db-0 --timeout=180s >/dev/null 2>&1; then
+  IP_DEPOIS=$("${KC[@]}" get pod db-0 -o jsonpath='{.status.podIP}' 2>/dev/null)
+  PVC_DEPOIS=$("${KC[@]}" get pvc pgdata-db-0 -o jsonpath='{.metadata.uid}' 2>/dev/null)
+  DADO=$("${KC[@]}" exec db-0 -- sh -c "$PSQL 'SELECT v FROM prova_sts;'" 2>/dev/null | tr -d '\r\n')
+  case "$DADO" in
+    *sobrevivi*) ok "StatefulSet: o dado sobreviveu ao pod ser apagado" ;;
+    *) bad "StatefulSet: o dado NÃO sobreviveu (leitura: '${DADO:-vazio}')" ;;
+  esac
+  if [ "$PVC_ANTES" = "$PVC_DEPOIS" ] && [ -n "$PVC_ANTES" ]; then
+    ok "o PVC pgdata-db-0 é o MESMO objeto (não foi recriado)"
+  else
+    bad "o PVC mudou de identidade — o volume foi recriado"
+  fi
+  # Nome estável E endereço instável, juntos. As duas metades importam: se o
+  # nome mudasse, o Service headless não teria o que nomear; se o IP fosse
+  # estável, ninguém precisaria do nome.
+  if [ "$IP_ANTES" != "$IP_DEPOIS" ]; then
+    ok "nome estável (db-0) com IP instável ($IP_ANTES → $IP_DEPOIS) ≙ DNS headless"
+  else
+    skip "o IP do db-0 não mudou nesta recriação — nada a concluir"
+  fi
+else
+  bad "o db-0 não voltou depois de apagado"
+fi
+
+# ── ReadWriteOnce é por NÓ, não por pod. Num cluster de um nó, dois pods
+# montam o MESMO PVC RWO sem reclamar — e quem aprendeu "RWO = um pod só"
+# descobre isso em produção, no dia em que o segundo pod cai noutro nó.
+"${KC[@]}" scale deploy/cache --replicas=2 >/dev/null 2>&1
+sleep 20
+RODANDO=$("${KC[@]}" get pods -l app=cache --field-selector=status.phase=Running --no-headers 2>/dev/null | wc -l)
+NOS=$("${KC[@]}" get pods -l app=cache -o jsonpath='{.items[*].spec.nodeName}' 2>/dev/null | tr ' ' '\n' | sort -u | wc -l)
+"${KC[@]}" scale deploy/cache --replicas=1 >/dev/null 2>&1
+if [ "$RODANDO" -eq 2 ] && [ "$NOS" -eq 1 ]; then
+  ok "RWO é por NÓ: 2 pods no mesmo nó montaram o mesmo PVC (não é 'um pod só')"
+else
+  skip "não deu para observar o RWO com 2 pods ($RODANDO rodando em $NOS nó(s))"
+fi
+
+# ── PDB: o primeiro despejo passa, o segundo é RECUSADO. É a única coisa que
+# faz o cluster parar por causa da sua aplicação.
+"${KC[@]}" scale deploy/api --replicas=2 >/dev/null 2>&1
+"${KC[@]}" rollout status deploy/api --timeout=120s >/dev/null 2>&1
+# Array e não `set --`: `set --` sobrescreve os parâmetros posicionais do
+# script inteiro, e um portão que mexe nos próprios argumentos é uma armadilha
+# esperando quem acrescentar uma flag aqui um dia.
+read -r -a PDB_PODS <<<"$("${KC[@]}" get pods -l app=api -o jsonpath='{.items[*].metadata.name}' 2>/dev/null)"
+if [ "${#PDB_PODS[@]}" -ge 2 ]; then
+  P1="${PDB_PODS[0]}"; P2="${PDB_PODS[1]}"
+  E1=$(kubectl -n "$NS" create -f - --raw "/api/v1/namespaces/$NS/pods/$P1/eviction" 2>&1 <<EOF
+{"apiVersion":"policy/v1","kind":"Eviction","metadata":{"name":"$P1","namespace":"$NS"}}
+EOF
+)
+  E2=$(kubectl -n "$NS" create -f - --raw "/api/v1/namespaces/$NS/pods/$P2/eviction" 2>&1 <<EOF
+{"apiVersion":"policy/v1","kind":"Eviction","metadata":{"name":"$P2","namespace":"$NS"}}
+EOF
+)
+  case "$E1" in
+    *Success*) ok "PDB: o primeiro despejo é autorizado (sobra 1 réplica)" ;;
+    *) bad "PDB: o PRIMEIRO despejo foi recusado — orçamento apertado demais" ;;
+  esac
+  case "$E2" in
+    *TooManyRequests*|*disruption\ budget*)
+      ok "PDB: o segundo despejo é RECUSADO (429) — o cluster para por sua causa" ;;
+    *) bad "PDB: o segundo despejo passou — o orçamento não está valendo" ;;
+  esac
+  "${KC[@]}" rollout status deploy/api --timeout=180s >/dev/null 2>&1
+else
+  bad "não há 2 réplicas da api para testar o PDB"
+fi
+
 # ─── 9. RBAC, HPA e a janela em que a NetworkPolicy ainda não vale ───────────
 step "9/11 RBAC, HPA e a janela da NetworkPolicy"
 
