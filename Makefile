@@ -1,4 +1,4 @@
-# infra-knowlogy — Módulo 1: Docker (stack/) · Módulo 2: Kubernetes (k8s/)
+# infra-knowlogy — Módulo 1: Docker · 2: Kubernetes · 3: CI/CD · 4: IaC
 # `make` sozinho mostra esta ajuda. / `make` alone prints this help.
 
 SHELL := /bin/bash
@@ -18,7 +18,7 @@ DOCKERFILES := $(shell find stack site cicd -name Dockerfile -not -path '*/node_
 .PHONY: help
 help: ## Mostra esta ajuda / Show this help
 	@echo ""
-	@echo "  infra-knowlogy — Módulo 1: Docker · Módulo 2: Kubernetes"
+	@echo "  infra-knowlogy — Docker · Kubernetes · CI/CD · IaC"
 	@echo ""
 	@grep -hE '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
 		| awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
@@ -159,6 +159,30 @@ cicd-verify: ## O portão do módulo CI/CD, end-to-end
 .PHONY: cicd-plugins
 cicd-plugins: ## Atualiza as versões pinadas dos plugins do Jenkins
 	@bash tools/scripts/update-jenkins-plugins.sh
+
+# ─── Módulo IaC / IaC module ─────────────────────────────────────────────────
+# Portão separado, como os dos módulos 2 e 3 (ADR 0007). O `tofu` roda
+# conteinerizado se não estiver no host — ver tools/scripts/lib/tofu.sh.
+
+.PHONY: iac-prereqs
+iac-prereqs: ## Checa o host e sonda como o tofu alcança o daemon sob SELinux
+	@bash tools/scripts/iac-prereqs.sh
+
+.PHONY: iac-up
+iac-up: init ## Provisiona a mesma stack com OpenTofu, em 127.0.0.1:8082
+	@bash tools/scripts/iac-up.sh
+
+.PHONY: iac-plan
+iac-plan: ## Mostra o que mudaria, sem mudar nada
+	@bash tools/scripts/iac-up.sh --plan-only
+
+.PHONY: iac-down
+iac-down: ## Destrói tudo o que o módulo IaC criou
+	@ROOT="$$PWD"; source tools/scripts/lib/tofu.sh; tofu destroy -auto-approve
+
+.PHONY: iac-verify
+iac-verify: ## O portão do módulo IaC, end-to-end
+	@bash tools/scripts/iac-verify.sh
 
 # ─── Site didático / Teaching site ───────────────────────────────────────────
 

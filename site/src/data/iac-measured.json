@@ -1,0 +1,13 @@
+{
+  "generatedAt": "2026-09-20T14:02:35Z",
+  "tofuVersion": "1.12.3",
+  "providerVersion": "kreuzwerker/docker 4.6.0",
+  "measurements": {
+    "initSeconds": 0.432,
+    "planEmptyStateSeconds": 0.608,
+    "planWithRefreshSeconds": 2.943,
+    "applySeconds": 23.415,
+    "destroySeconds": 6.56,
+    "managedResources": 19
+  }
+}

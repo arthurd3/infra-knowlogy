@@ -31,3 +31,13 @@ k8s/.kubeconfig
 # Configuração local de servidores MCP: aponta para um Qdrant em localhost e
 # varia por máquina. O formato esperado está documentado no CLAUDE.md.
 .mcp.json
+
+# ─── Módulo 4 (IaC) ──────────────────────────────────────────────────────────
+# O estado guarda a senha do Postgres em texto puro (é o assunto de uma lição
+# inteira) e o lock do provider é versionado, mas nada abaixo é.
+iac/.terraform/
+iac/.plugin-cache/
+iac/*.tfstate
+iac/*.tfstate.*
+iac/*.tfplan
+iac/.tofu-*

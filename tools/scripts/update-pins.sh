@@ -41,7 +41,14 @@ done < <({ find "$ROOT/stack" "$ROOT/site" "$ROOT/cicd" -name Dockerfile -o -nam
            # pinadas nos manifests, e o kubeconform (Makefile e k8s-verify).
            find "$ROOT/k8s" -name '*.yaml' 2>/dev/null;
            echo "$ROOT/Makefile";
-           echo "$ROOT/tools/scripts/k8s-verify.sh"; } | grep -v node_modules)
+           echo "$ROOT/tools/scripts/k8s-verify.sh";
+           # Módulo IaC: os mesmos digests do compose.yaml aparecem de novo no
+           # variables.tf (o provider Docker quer a referência como string), e
+           # a imagem do próprio OpenTofu no lib/tofu.sh. Sem estas duas linhas
+           # o `make pins` atualizaria o Compose e o kind e deixaria o módulo 4
+           # para trás — em silêncio, que é o pior jeito de divergir.
+           find "$ROOT/iac" -name '*.tf' 2>/dev/null;
+           echo "$ROOT/tools/scripts/lib/tofu.sh"; } | grep -v node_modules)
 
 echo
 if [ "$changed" -eq 1 ]; then
