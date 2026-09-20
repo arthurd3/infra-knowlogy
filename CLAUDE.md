@@ -176,6 +176,53 @@ justamente por isso.
     culpar a stack — e o nome do container alheio fica no terminal de quem
     roda, nunca no JSON versionado, que é público.
 
+33. **`container_engine_t` NÃO resolve o socket do Docker** — só o do buildkitd.
+    A armadilha 22 achou o tipo certo para engine aninhada e a conclusão
+    natural ("use para qualquer socket de engine") está errada: pela armadilha
+    23, o SELinux checa `connectto` contra o PROCESSO QUE ESCUTA, e o `dockerd`
+    escuta como `container_runtime_t`, não como container. Medido:
+    `container_t` ✗, `container_engine_t` ✗, `spc_t` ✓. A armadilha 7 continua
+    de pé; ela só estava incompleta.
+34. **`label=disable` não desliga o SELinux: ele entrega `spc_t` SEM MCS.** O
+    workaround de todo tutorial e o pedido explícito `label=type:spc_t` dão o
+    MESMO tipo — a diferença são as categorias. Medido:
+    `label=disable` → `spc_t:s0`; `label=type:spc_t` → `spc_t:s0:c55,c466`.
+    MCS é o que impede um container de tocar em arquivo rotulado de OUTRO
+    container. Existe opção estritamente melhor que o `disable`, e ela custa
+    digitar outra palavra. (O `compose.obs.yaml` ainda usa `label=disable` em
+    dois serviços — vale medir se `spc_t` os atende.)
+35. **`spc_t` lê `user_home_t`, e isso dispensa o `:z`.** Medido: `container_t`
+    leva permission denied em `site/package.json`; `spc_t` lê. Montar o
+    repositório inteiro com `:z` faria um `chcon -R` em `.git` e
+    `node_modules` — desnecessário sob `spc_t`.
+36. **Três camadas independentes para um container alcançar o socket do
+    Docker**, e errar qualquer uma dá erro que aponta para as outras: tipo
+    SELinux (`spc_t`), grupo Unix (`--group-add` com o gid LIDO do socket) e
+    dono dos arquivos (`--user`, senão o `tfstate` nasce do root). E o buildx,
+    que o provider chama, quer `$HOME/.docker`: sem `HOME`, o erro é
+    `mkdir /.docker: permission denied`, que não menciona buildx.
+37. **`command -v` acha FUNÇÃO de shell, não só binário.** O `lib/tofu.sh`
+    define uma função `tofu` e usava `command -v tofu` para decidir se havia
+    binário no host — respondendo "sim" numa máquina sem OpenTofu instalado.
+    Use `type -P`, que só olha o PATH.
+38. **O Docker 29 normaliza capability para `CAP_CHOWN`.** Escrita como
+    `CHOWN` no HCL, o provider lê de volta um valor diferente do que escreveu e
+    TODO `plan` seguinte pede `replace` — para sempre. Só os containers com
+    `capabilities.add` entram na conta; os que só têm `drop: [ALL]` ficam
+    estáveis, o que manda procurar no lugar errado. Da mesma família:
+    `memory_swap`, que o daemon preenche com `2 × memory` se você não declarar.
+    **Atributo não declarado não é atributo sem valor.**
+39. **O `.terraform.lock.hcl` guarda DUAS famílias de hash e uma basta.**
+    Adulterar todas as entradas `h1:` e rodar `tofu init`… passa, porque as
+    `zh:` ainda batem. A primeira versão da prova negativa do `iac-verify`
+    nasceu assim: anunciava "o pin protege" tendo testado metade. Teste
+    negativo que passa sem provar nada é pior que teste nenhum.
+40. **Caminho de bind mount é resolvido pelo DAEMON; contexto de build, pelo
+    processo.** Com o `tofu` conteinerizado existem dois sistemas de arquivos
+    na mesma configuração: `/repo/…` para o que o tofu lê, caminho do host para
+    o que o daemon abre. Daí a variável `host_repo_root`. Rodando o `tofu` no
+    host os dois coincidem — e é por isso que o erro só aparece na outra via.
+
 ## Ao mexer na stack
 
 - Rode `make verify` antes de considerar qualquer coisa pronta. Para iterar
@@ -193,6 +240,12 @@ justamente por isso.
   propósito, é a demonstração de injeção de SQL da lição 5). Ele regrava
   `site/src/data/attack-lab.json`, que as lições citam — número de lição de
   segurança escrito à mão, nenhum. `KEEP_JSON=1` para não regravar. Ver ADR 0013.
+- O módulo IaC também: `make iac-verify` (estado bom: **28 passaram ·
+  0 falharam**). Para iterar sem destruir no fim: `KEEP_STACK=1 make iac-verify`;
+  `SKIP_NEGATIVE=1` pula a prova do lock adulterado, que reinstala o provider.
+  Antes de qualquer coisa nele, `make iac-prereqs` — a sonda que descobre como o
+  `tofu` alcança o daemon sob SELinux (ver ADR 0016 e as armadilhas 33–36).
+  A stack dele atende em **8082**, ao lado do Compose (8080) e do kind (8081).
 - O módulo Kubernetes tem portão próprio: `make k8s-verify` (estado bom:
   **33 passaram · 0 falharam**). Para iterar sem recriar o cluster:
   `KEEP_CLUSTER=1 make k8s-verify`. Os portões são independentes de propósito
@@ -211,7 +264,12 @@ justamente por isso.
 - Mexeu no site? `make site-verify` é o ciclo rápido (tipos, testes, build,
   HTML) e não precisa de Docker. Ele é a etapa 8 do `verify`, sem o resto.
 - Toda imagem base é pinada por digest. Para atualizar: `make pins`, e depois
-  `make verify`. Não edite digest à mão.
+  `make verify`. Não edite digest à mão. **O `update-pins.sh` precisa conhecer
+  todo arquivo que carrega digest** — hoje são 19, e o módulo 4 acrescentou
+  dois (`iac/variables.tf`, porque o provider Docker quer a referência como
+  string, e `tools/scripts/lib/tofu.sh`, pela imagem do OpenTofu). Esquecer de
+  acrescentar um arquivo à lista não dá erro: o `make pins` atualiza o resto e
+  deixa aquele para trás, em silêncio.
 - Segredo **nunca** vai para `environment:`. A convenção é `<VAR>_FILE` apontando
   para `/run/secrets/`, implementada igual no `config.go` e no `config.py`.
 
@@ -249,6 +307,7 @@ O
 | `measurement` | `site/src/data/measured.json` | tamanhos medidos, virados em prosa |
 | `port` | `site/src/data/ports.json` | o mecanismo de cada ataque, por porta |
 | `attack` | `site/src/data/attack-lab.json` | o resultado de cada ataque do portão |
+| `skill` | `site/src/data/skills.json` | o que o mercado pede × o que daqui prova |
 
 O formato do ponto imita o do mcp-server-qdrant (vetor `fast-all-minilm-l6-v2`,
 payload `{document, metadata}`) para que o MCP leia o que o script escreve.
@@ -264,11 +323,18 @@ indexada, com o caminho do arquivo de origem no metadata.
 ## Os módulos e o roadmap
 
 O repositório deixou de ser só o módulo Docker: `docs/ROADMAP.md` é a fonte de
-verdade dos módulos (2 = Kubernetes em `k8s/`, feito nesta primeira versão;
-3 = Jenkins/CI-CD em `cicd/`, reservado; depois IaC, Ansible, observabilidade
-avançada). Regras para módulo novo estão lá — em resumo: mesma aplicação de
+verdade dos módulos (2 = Kubernetes em `k8s/`; 3 = Jenkins/CI-CD em `cicd/`;
+4 = IaC com OpenTofu em `iac/` — os três feitos em primeira versão; depois
+Ansible e observabilidade avançada, reservados). Regras para módulo novo estão lá — em resumo: mesma aplicação de
 `stack/services/`, portão `make <módulo>-verify` próprio, lições bilíngues em
 trilha nova, decisões em ADR, números medidos.
+
+O mapa de mercado (`site/src/data/skills.json`, ADR 0014) é o par medido do
+roadmap: ele cruza o que 40 vagas pediam com o que este repositório prova, e
+`site/tests/skills.test.ts` reprova quem se declarar coberto apontando para
+lição inexistente ou checagem de portão que ninguém escreveu. **Se você
+renomear uma checagem de um `*-verify.sh`, o teste quebra** — de propósito:
+quem renomeou é obrigado a olhar o mapa.
 
 Trilha nova no site exige editar **3 pontos**, e não 5 como esta seção dizia
 antes: `TRACKS` em `i18n/ui.ts` (que é a fonte única da lista e da ordem), o
@@ -305,6 +371,13 @@ nenhum, ataca a que já existe. Ficou para depois: força bruta com taxa medida
 (hoje o passo 4 só prova a recusa) e o espelho do laboratório contra o cluster
 kind — as NetworkPolicies dizem a mesma coisa que as redes do Compose e ninguém
 tentou atravessá-las ainda.
+
+O módulo 4 (`iac/`) está **de pé, verde e com as 8 lições escritas**: a mesma
+stack em HCL, provisionada pelo OpenTofu 1.12.3 com o provider
+`kreuzwerker/docker` 4.6.0 contra o daemon local, em **8082**. O portão prova
+idempotência, drift, as duas arestas do grafo, o pin por hash (com prova
+negativa) e a cifragem de estado. Faltam: backend remoto com lock de verdade, e
+provisionar o cluster kind pelo próprio OpenTofu.
 
 O módulo 3 (`cicd/`) está **de pé e verde**: controller com JCasC e 67 plugins
 pinados, buildkitd rootless, agente sem socket, `git daemon` servindo o

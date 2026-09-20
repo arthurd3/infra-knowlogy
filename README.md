@@ -2,7 +2,14 @@
 
 > **A production stack that actually runs — and the lessons that explain every
 > decision in it.** Module 1 is Docker; module 2 ports the same stack to
-> Kubernetes. The [roadmap](docs/ROADMAP.md) carries the rest.
+> Kubernetes; module 3 builds it in a self-hosted Jenkins; module 4 declares it
+> in HCL and provisions it with OpenTofu. The [roadmap](docs/ROADMAP.md) carries
+> the rest.
+
+The same application comes up on three ports at once — `:8080` under Compose,
+`:8081` in a kind cluster, `:8082` from OpenTofu — and the **same**
+`tools/scripts/lib/smoke.sh` passes against all three. Three deploy views, one
+application: that is the whole thesis, and it is a command, not a claim.
 
 The principle tying the whole repository together: **the lessons teach exactly
 the code that is here, with numbers measured on this machine.** No generic blog
@@ -81,6 +88,9 @@ make site-verify # the site alone — types, tests, build, generated HTML (no Do
 
 make k8s-up     # module 2: the SAME stack in a kind cluster, at 127.0.0.1:8081
 make k8s-verify # its own gate — 33 checks, from scratch, cluster destroyed after
+
+make iac-up     # module 4: the SAME stack again, declared in HCL, at 127.0.0.1:8082
+make iac-verify # its own gate — 28 checks, including idempotence and drift
 ```
 
 Requirements: Docker 25+ with BuildKit, Docker Compose v2+, Node 22+ (site only),
