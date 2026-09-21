@@ -1,0 +1,69 @@
+---
+/** ops-01 — o mesmo processo, dois pontos de vista, e o nome que diverge. */
+import Figure from "../Figure.astro";
+import type { Lang } from "../../i18n/ui";
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+const C = {
+  pt: {
+    dentro: "DENTRO DO CONTAINER", fora: "NO HOST",
+    d1: "PID 1", d1s: "sou o primeiro processo",
+    d2: "uid=70(postgres)", d2s: "o /etc/passwd DA IMAGEM",
+    d3: "/proc mostra 3 processos", d3s: "namespace de PID próprio",
+    f1: "PID 67080", f1s: "um entre centenas",
+    f2: "uid=70 → avahi", f2s: "o /etc/passwd DO HOST",
+    f3: "ps aux mostra tudo", f3s: "inclusive este",
+    seta: "é o MESMO processo",
+    kernel: "um kernel só · uma tabela de processos só · um espaço de UIDs só",
+    licao: "o container não traduz o UID: ele não traduz NADA. O 70 é 70 dos dois lados — só o nome é lido de arquivos diferentes.",
+    caption:
+      "O container não é uma máquina. É um processo do host com a visão recortada por namespaces, e o recorte <b>não inclui a identidade numérica</b>: o UID 70 é o mesmo número nos dois lados. O que muda é qual <code>/etc/passwd</code> traduz esse número em nome — e por isso o banco de dados desta stack aparece no <code>ps</code> do host como propriedade do daemon de mDNS.",
+    alt: "Duas colunas descrevendo o mesmo processo: dentro do container e no host, com UID igual e nomes diferentes.",
+  },
+  en: {
+    dentro: "INSIDE THE CONTAINER", fora: "ON THE HOST",
+    d1: "PID 1", d1s: "I am the first process",
+    d2: "uid=70(postgres)", d2s: "the IMAGE's /etc/passwd",
+    d3: "/proc shows 3 processes", d3s: "its own PID namespace",
+    f1: "PID 67080", f1s: "one among hundreds",
+    f2: "uid=70 → avahi", f2s: "the HOST's /etc/passwd",
+    f3: "ps aux shows everything", f3s: "including this one",
+    seta: "the SAME process",
+    kernel: "one kernel · one process table · one UID space",
+    licao: "the container does not translate the UID: it translates NOTHING. 70 is 70 on both sides — only the name is read from different files.",
+    caption:
+      "A container is not a machine. It is a host process whose view is cropped by namespaces, and the crop <b>does not include numeric identity</b>: UID 70 is the same number on both sides. What changes is which <code>/etc/passwd</code> turns that number into a name — which is why this stack's database shows up in the host's <code>ps</code> as owned by the mDNS daemon.",
+    alt: "Two columns describing the same process: inside the container and on the host, same UID and different names.",
+  },
+}[lang];
+---
+<Figure caption={C.caption} alt={C.alt}>
+  <svg viewBox="0 0 720 252" xmlns="http://www.w3.org/2000/svg" font-size="11">
+    <text x="14" y="16" class="dg-muted" font-weight="640" font-size="10.5">{C.dentro}</text>
+    {[[C.d1, C.d1s], [C.d2, C.d2s], [C.d3, C.d3s]].map(([t, s], i) => (
+      <g>
+        <rect x="14" y={26 + i * 50} width="286" height="40" rx="6" class="dg-box dg-box--accent" />
+        <text x="30" y={44 + i * 50} class="dg-mono" font-size="10.5">{t}</text>
+        <text x="30" y={58 + i * 50} class="dg-faint" font-size="8.5">{s}</text>
+      </g>
+    ))}
+
+    {[0, 1, 2].map((i) => (
+      <path d={`M306 ${46 + i * 50} L412 ${46 + i * 50}`} class="dg-line dg-line--dashed" />
+    ))}
+    <text x="359" y="14" text-anchor="middle" class="dg-muted" font-size="9">{C.seta}</text>
+
+    <text x="420" y="16" class="dg-muted" font-weight="640" font-size="10.5">{C.fora}</text>
+    {[[C.f1, C.f1s], [C.f2, C.f2s], [C.f3, C.f3s]].map(([t, s], i) => (
+      <g>
+        <rect x="418" y={26 + i * 50} width="288" height="40" rx="6" class="dg-box" />
+        <text x="434" y={44 + i * 50} class="dg-mono" font-size="10.5">{t}</text>
+        <text x="434" y={58 + i * 50} class="dg-faint" font-size="8.5">{s}</text>
+      </g>
+    ))}
+
+    <rect x="14" y="184" width="692" height="24" rx="5" class="dg-box dg-box--dashed" />
+    <text x="360" y="200" text-anchor="middle" class="dg-faint" font-size="9.5">{C.kernel}</text>
+    <text x="360" y="230" text-anchor="middle" class="dg-fill-warn" font-size="10" font-weight="620">{C.licao}</text>
+  </svg>
+</Figure>

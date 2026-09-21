@@ -1,0 +1,207 @@
+---
+key: a-container-is-a-process
+lang: pt
+track: operacao
+order: 1
+title: "O container é um processo do host"
+summary: "O Postgres desta stack aparece no `ps` do host como propriedade do `avahi`, o daemon de mDNS. Não é bug e não é tradução errada — é a ausência de tradução, e entender por quê muda como você lê qualquer incidente."
+minutes: 14
+tags: [linux, namespaces, proc, uid, strace, containers]
+sources:
+  - label: "Linux man-pages — namespaces(7)"
+    url: "https://man7.org/linux/man-pages/man7/namespaces.7.html"
+    kind: docs
+  - label: "Linux man-pages — user_namespaces(7)"
+    url: "https://man7.org/linux/man-pages/man7/user_namespaces.7.html"
+    kind: docs
+  - label: "Docker Docs — Isolate containers with a user namespace"
+    url: "https://docs.docker.com/engine/security/userns-remap/"
+    kind: docs
+    accessed: "2026-09-21"
+  - label: "Linux man-pages — proc(5)"
+    url: "https://man7.org/linux/man-pages/man5/proc.5.html"
+    kind: docs
+  - label: "Michael Kerrisk — Namespaces in operation (LWN)"
+    url: "https://lwn.net/Articles/531114/"
+    kind: blog
+    accessed: "2026-09-21"
+---
+
+import ProcessTwoViews from "../../../components/diagrams/ProcessTwoViews.astro";
+
+Rode isto com a stack no ar:
+
+```console
+$ PID=$(docker inspect --format '{{.State.Pid}}' infra-knowlogy-db-1)
+$ ps -o pid,user,uid,comm -p "$PID"
+    PID USER       UID COMMAND
+  67080 avahi       70 postgres
+```
+
+O banco de dados desta stack pertence ao **`avahi`** — o daemon de descoberta
+de serviços em rede local, que não tem relação nenhuma com Postgres.
+
+Isso não é bug, não é má configuração e não é o Docker errando. É a coisa mais
+importante que se pode entender sobre containers.
+
+## Não há tradução
+
+<ProcessTwoViews />
+
+Dentro do container, o processo diz `uid=70(postgres)`. Fora, `uid=70`, nome
+`avahi`. **O número é o mesmo.** O que difere é qual arquivo traduziu:
+
+```console
+$ docker exec infra-knowlogy-db-1 getent passwd 70
+postgres:x:70:70:::/bin/false
+
+$ getent passwd 70
+avahi:x:70:70:Avahi mDNS/DNS-SD Stack:/var/run/avahi-daemon:/usr/sbin/nologin
+```
+
+<Term word="Namespace" alt="namespace">
+O mecanismo do kernel que dá a um processo uma **visão própria** de algum
+recurso global. Existem oito: PID, rede, montagens, hostname (UTS), IPC,
+cgroup, tempo e usuário.
+
+A palavra importante é *visão*. Um namespace de PID não cria processos novos —
+ele renumera os que existem. O processo do Postgres é o PID 67080 na tabela de
+processos do kernel, e ao mesmo tempo o PID 1 dentro do namespace dele. Uma
+tabela, dois números.
+
+O namespace de **usuário** é o único que faria o UID ser traduzido — e ele vem
+**desligado** por padrão no Docker. Por isso 70 é 70 dos dois lados.
+</Term>
+
+## Por que isso importa num incidente
+
+Três consequências práticas, e nenhuma é acadêmica:
+
+**1. Permissão de arquivo é do número, não do nome.** Um volume escrito pelo
+container com UID 70 fica, no host, pertencendo ao `avahi`. Se outro container
+rodar como UID 999, ele não lê aquele arquivo — e a mensagem será
+`permission denied`, sem nenhuma pista de que o assunto é UID.
+
+**2. `root` no container é `root` no host.** Sem user namespace, um processo
+com UID 0 dentro é UID 0 fora. O que o impede de fazer estrago são as
+*capabilities* e o seccomp, não o UID. É por isso que `runAsNonRoot` e
+`cap_drop` existem, e é por isso que esta stack usa os dois.
+
+**3. Dois containers podem colidir.** Duas imagens diferentes que escolheram o
+mesmo UID compartilham identidade no host. Não há isolamento de identidade
+enquanto o namespace de usuário estiver desligado.
+
+<Callout type="warn" title="`docker exec ... id` mente para você">
+```console
+$ docker exec infra-knowlogy-db-1 id
+uid=0(root) gid=0(root) groups=0(root),...
+```
+
+Isso **não** é o UID do processo do banco. O `docker exec` usa o `USER`
+configurado na imagem para o comando NOVO que você está rodando; o processo que
+já estava lá continua como 70.
+
+Para ver o processo de verdade, olhe do host — ou de dentro, com
+`ps -o pid,user,comm`.
+</Callout>
+
+## Os namespaces, listados
+
+```console
+$ sudo ls -l /proc/$PID/ns/
+lrwxrwxrwx. 1 avahi avahi 0 mnt    -> 'mnt:[4026533088]'
+lrwxrwxrwx. 1 avahi avahi 0 net    -> 'net:[4026533187]'
+lrwxrwxrwx. 1 avahi avahi 0 pid    -> 'pid:[4026533090]'
+lrwxrwxrwx. 1 avahi avahi 0 user   -> 'user:[4026531837]'   ← o MESMO do host
+```
+
+O número entre colchetes é o *inode* do namespace. Comparar com
+`/proc/self/ns/` mostra quais são compartilhados: o de **usuário** tem o mesmo
+inode que o seu shell, porque ninguém criou um novo.
+
+<Tradeoff
+  a="User namespace desligado (padrão)"
+  b="userns-remap ligado"
+  whenA="Quando você precisa de bind mounts previsíveis, de compartilhar volumes entre containers e do ecossistema inteiro de imagens funcionando sem surpresa. É o padrão porque quebra menos."
+  whenB="Quando o risco de escape de container importa mais que a conveniência — multi-inquilino, execução de código de terceiro, qualquer coisa que rode software que você não escreveu."
+>
+  <Fragment slot="a">
+    UID de dentro = UID de fora. Simples de raciocinar, e `root` no container
+    é `root` no kernel — a defesa vem de capabilities, seccomp e SELinux.
+  </Fragment>
+  <Fragment slot="b">
+    O `root` do container vira um UID alto e sem poder no host. Em troca:
+    arquivos de volume passam a pertencer a UIDs deslocados, e imagens que
+    presumem UID fixo quebram.
+  </Fragment>
+</Tradeoff>
+
+## Ver o que o processo pede ao kernel
+
+Como o container é um processo comum, as ferramentas de processo comum
+funcionam nele. Inclusive o `strace`:
+
+```console
+$ docker run --rm alpine sh -c 'apk add -q strace && strace -c /bin/true'
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.000000           0         9           total
+```
+
+<Callout type="note" title="Medido: NÃO precisou de `--cap-add SYS_PTRACE`">
+O conselho que circula é que `strace` em Docker exige
+`--cap-add SYS_PTRACE`. Medido aqui, **funciona sem**.
+
+A capability governa tracear processo de **outro** usuário. Um processo
+traceando outro que ele mesmo criou, dentro do próprio namespace, não precisa
+dela. O que exigia a flag era o perfil **seccomp** antigo do Docker, que
+bloqueava a syscall `ptrace` — e isso mudou.
+
+Conselho que era verdade e deixou de ser continua circulando. É o mesmo motivo
+de este repositório medir tudo.
+</Callout>
+
+<FieldNote
+  source="Michael Kerrisk — Namespaces in operation, part 1 (LWN.net)"
+  url="https://lwn.net/Articles/531114/"
+  accessed="2026-09-21"
+>
+A série do mantenedor das man pages do Linux mostra que os namespaces foram
+acrescentados ao kernel **um de cada vez**, ao longo de mais de uma década — o
+de montagem em 2002, o de usuário só em 2013. Containers não foram projetados:
+foram **compostos** a partir de peças que existiam para outros fins. É a razão
+de a lista de namespaces parecer arbitrária, e de o de usuário ser o mais novo
+e o mais problemático. Não medido aqui: é história do kernel, não estado desta
+máquina.
+</FieldNote>
+
+<LabExercise
+  question="Um volume nomeado ficou com arquivos que um container novo não consegue ler. Como descobrir a causa em dois comandos?"
+  check="o UID do container é o do host"
+>
+  <Fragment slot="hint">
+    O erro diz `permission denied` e não diz UID nenhum. Os dois lados da
+    comparação são números, não nomes.
+  </Fragment>
+  <Fragment slot="answer">
+
+```bash
+# 1. De quem são os arquivos, em NÚMERO (o -n é o que importa)
+docker run --rm -v meu-volume:/v alpine ls -ln /v
+
+# 2. Como quem o container novo roda
+docker inspect minha-imagem --format '{{.Config.User}}'
+```
+
+O `-n` do `ls` é essencial: sem ele você vê um nome resolvido pelo
+`/etc/passwd` **daquela imagem**, que quase certamente difere do da imagem que
+escreveu os arquivos. Dois containers podem mostrar nomes diferentes para o
+mesmo dono.
+
+Se o `.Config.User` vier vazio, o container roda como UID 0 — e aí o problema
+não é leitura, é que ele **pode** ler tudo.
+
+  </Fragment>
+</LabExercise>
+
+<Quiz set="a-container-is-a-process" />

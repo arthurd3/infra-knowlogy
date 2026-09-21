@@ -1,0 +1,74 @@
+---
+/** ops-02 — a aplicação pergunta ao /proc e recebe a resposta do HOST. */
+import Figure from "../Figure.astro";
+import type { Lang } from "../../i18n/ui";
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+const C = {
+  pt: {
+    app: "a aplicação no container",
+    p1: "/proc/meminfo", p1r: "MemTotal: 31 GiB", p1n: "a memória do HOST — resposta errada",
+    p2: "/sys/fs/cgroup/memory.max", p2r: "402653184  (384 MiB)", p2n: "o limite DELA — resposta certa",
+    err: "toda runtime que dimensiona heap pelo /proc/meminfo pede 31 GiB e morre aos 384 MiB",
+    oom: "quando memory.current alcança memory.max",
+    o1: "o kernel manda SIGKILL", o1n: "não é capturável: nenhum defer, finally ou handler roda",
+    o2: "exit 137", o2n: "128 + 9 — a convenção do shell para “morto pelo sinal 9”",
+    o3: "memory.events: oom_kill +1", o3n: "o contador é a única prova que fica",
+    medido: "medido: limite de 64 MiB, morreu em 0,51 s com OOMKilled=true",
+    caption:
+      "O container não tem memória própria: tem um <b>limite</b>. E o <code>/proc</code> que a aplicação lê continua sendo o do host, então perguntar “quanta memória eu tenho?” pelo caminho de sempre devolve a resposta de outra máquina. O limite verdadeiro está no cgroup, e ultrapassá-lo não gera exceção — gera SIGKILL.",
+    alt: "A aplicação consultando /proc/meminfo e recebendo a memória do host, contra o cgroup com o limite real.",
+  },
+  en: {
+    app: "the application in the container",
+    p1: "/proc/meminfo", p1r: "MemTotal: 31 GiB", p1n: "the HOST's memory — wrong answer",
+    p2: "/sys/fs/cgroup/memory.max", p2r: "402653184  (384 MiB)", p2n: "ITS limit — right answer",
+    err: "any runtime sizing its heap from /proc/meminfo asks for 31 GiB and dies at 384 MiB",
+    oom: "when memory.current reaches memory.max",
+    o1: "the kernel sends SIGKILL", o1n: "not catchable: no defer, finally or handler runs",
+    o2: "exit 137", o2n: "128 + 9 — the shell convention for “killed by signal 9”",
+    o3: "memory.events: oom_kill +1", o3n: "the counter is the only proof left behind",
+    medido: "measured: 64 MiB limit, died in 0.51 s with OOMKilled=true",
+    caption:
+      "A container has no memory of its own: it has a <b>limit</b>. And the <code>/proc</code> the application reads is still the host's, so asking “how much memory do I have?” the usual way returns another machine's answer. The real limit lives in the cgroup, and crossing it raises no exception — it raises SIGKILL.",
+    alt: "The application querying /proc/meminfo and getting the host's memory, against the cgroup holding the real limit.",
+  },
+}[lang];
+---
+<Figure caption={C.caption} alt={C.alt}>
+  <svg viewBox="0 0 720 288" xmlns="http://www.w3.org/2000/svg" font-size="11">
+    <rect x="240" y="10" width="240" height="30" rx="6" class="dg-box dg-box--accent" />
+    <text x="360" y="30" text-anchor="middle" font-weight="620">{C.app}</text>
+
+    <path d="M300 44 L160 70" class="dg-line dg-line--warn" marker-end="url(#cg-arrow)" />
+    <path d="M420 44 L560 70" class="dg-line" marker-end="url(#cg-arrow)" />
+
+    <rect x="14" y="74" width="296" height="54" rx="6" class="dg-box dg-box--warn" />
+    <text x="30" y="93" class="dg-mono" font-size="10">{C.p1}</text>
+    <text x="30" y="108" class="dg-mono dg-faint" font-size="9.5">{C.p1r}</text>
+    <text x="30" y="122" class="dg-fill-warn" font-size="8.5">{C.p1n}</text>
+
+    <rect x="410" y="74" width="296" height="54" rx="6" class="dg-box" />
+    <text x="426" y="93" class="dg-mono" font-size="10">{C.p2}</text>
+    <text x="426" y="108" class="dg-mono dg-faint" font-size="9.5">{C.p2r}</text>
+    <text x="426" y="122" class="dg-muted" font-size="8.5">{C.p2n}</text>
+
+    <text x="360" y="148" text-anchor="middle" class="dg-fill-warn" font-size="9.5">{C.err}</text>
+
+    <line x1="14" y1="160" x2="706" y2="160" class="dg-line" stroke-dasharray="3 3" />
+    <text x="14" y="178" class="dg-muted" font-weight="620" font-size="10">{C.oom}</text>
+    {[[C.o1, C.o1n], [C.o2, C.o2n], [C.o3, C.o3n]].map(([t, n], i) => (
+      <g>
+        <rect x={14 + i * 232} y="188" width="222" height="44" rx="6" class="dg-box" />
+        <text x={30 + i * 232} y="206" class="dg-mono" font-size="10">{t}</text>
+        <text x={30 + i * 232} y="222" class="dg-faint" font-size="8">{n}</text>
+      </g>
+    ))}
+    <text x="360" y="256" text-anchor="middle" class="dg-muted" font-size="9.5">{C.medido}</text>
+    <defs>
+      <marker id="cg-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+        <path d="M0 0 L10 5 L0 10 z" fill="var(--border-strong)" />
+      </marker>
+    </defs>
+  </svg>
+</Figure>

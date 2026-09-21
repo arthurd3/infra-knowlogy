@@ -1,0 +1,62 @@
+---
+/** ops-03 — mesmo 100% de uso, pressões completamente diferentes. */
+import Figure from "../Figure.astro";
+import type { Lang } from "../../i18n/ui";
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+const C = {
+  pt: {
+    a: "32 tarefas · 32 núcleos", b: "128 tarefas · 32 núcleos",
+    uso: "uso de CPU", psi: "pressão (PSI avg10)", load: "load average",
+    au: "100%", ap: "7,0", al: "10,89",
+    bu: "100%", bp: "47,67", bl: "33,99",
+    igual: "IGUAL", difere: "7× MAIOR",
+    oque: "uso responde “o recurso está ocupado?” · pressão responde “alguém está ESPERANDO?”",
+    load1: "e o load average subiu DEPOIS de a carga acabar — é uma média exponencial de 1 minuto,",
+    load2: "e conta tarefas em espera de I/O junto com as de CPU. Dois defeitos para um alarme.",
+    caption:
+      "As duas cargas ocupam a CPU igualmente. A da direita tem quatro tarefas disputando cada núcleo, e é só isso que a <b>pressão</b> enxerga: tempo em que havia trabalho pronto e sem onde rodar. Um servidor a 100% de uso pode estar perfeitamente saudável — o que dói é a fila.",
+    alt: "Duas cargas com 100% de uso de CPU e valores de pressão muito diferentes.",
+  },
+  en: {
+    a: "32 tasks · 32 cores", b: "128 tasks · 32 cores",
+    uso: "CPU utilisation", psi: "pressure (PSI avg10)", load: "load average",
+    au: "100%", ap: "7.0", al: "10.89",
+    bu: "100%", bp: "47.67", bl: "33.99",
+    igual: "SAME", difere: "7× HIGHER",
+    oque: "utilisation answers “is the resource busy?” · pressure answers “is anything WAITING?”",
+    load1: "and load average peaked AFTER the load ended — it is a 1-minute exponential average,",
+    load2: "and it counts I/O-waiting tasks alongside CPU ones. Two defects for one alarm.",
+    caption:
+      "Both loads occupy the CPU equally. The right-hand one has four tasks contending for each core, and that is all <b>pressure</b> sees: time during which work was ready and had nowhere to run. A server at 100% utilisation can be perfectly healthy — what hurts is the queue.",
+    alt: "Two loads at 100% CPU utilisation with very different pressure values.",
+  },
+}[lang];
+---
+<Figure caption={C.caption} alt={C.alt}>
+  <svg viewBox="0 0 720 258" xmlns="http://www.w3.org/2000/svg" font-size="11">
+    <text x="180" y="18" text-anchor="middle" class="dg-muted" font-weight="640" font-size="10.5">{C.a}</text>
+    <text x="540" y="18" text-anchor="middle" class="dg-muted" font-weight="640" font-size="10.5">{C.b}</text>
+
+    {[[C.uso, C.au, C.bu, C.igual], [C.psi, C.ap, C.bp, C.difere], [C.load, C.al, C.bl, ""]].map(
+      ([rot, va, vb, nota], i) => (
+        <g>
+          <text x="14" y={52 + i * 56} class="dg-faint" font-size="9.5">{rot}</text>
+          <rect x="14" y={58 + i * 56} width="332" height="34" rx="6"
+                class={i === 1 ? "dg-box" : "dg-box dg-box--dashed"} />
+          <text x="180" y={81 + i * 56} text-anchor="middle" class="dg-mono" font-size="15">{va}</text>
+          <rect x="374" y={58 + i * 56} width="332" height="34" rx="6"
+                class={i === 1 ? "dg-box dg-box--warn" : "dg-box dg-box--dashed"} />
+          <text x="540" y={81 + i * 56} text-anchor="middle"
+                class={i === 1 ? "dg-mono dg-fill-warn" : "dg-mono"} font-size="15">{vb}</text>
+          {nota && <text x="360" y={81 + i * 56} text-anchor="middle" class="dg-faint" font-size="8">{nota}</text>}
+        </g>
+      ),
+    )}
+
+    <line x1="14" y1="210" x2="706" y2="210" class="dg-line" stroke-dasharray="3 3" />
+    <text x="360" y="226" text-anchor="middle" class="dg-muted" font-size="10" font-weight="620">{C.oque}</text>
+    <text x="360" y="240" text-anchor="middle" class="dg-faint" font-size="8.5">{C.load1}</text>
+    <text x="360" y="251" text-anchor="middle" class="dg-faint" font-size="8.5">{C.load2}</text>
+  </svg>
+</Figure>

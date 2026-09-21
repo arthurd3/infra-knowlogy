@@ -1,0 +1,152 @@
+{
+  "note_pt": "As perguntas saem de uma única observação: o banco desta stack aparece no host como propriedade do daemon de mDNS.",
+  "note_en": "The questions come from one observation: this stack's database shows up on the host as owned by the mDNS daemon.",
+  "pt": [
+    {
+      "q": "`ps` no host mostra o Postgres da stack como propriedade do `avahi`. Por quê?",
+      "options": [
+        {
+          "text": "O Docker traduziu o UID do container para um usuário do host.",
+          "why": "Não houve tradução nenhuma — é justamente esse o ponto. Tradução de UID é o que o namespace de USUÁRIO faria, e ele vem desligado por padrão no Docker."
+        },
+        {
+          "text": "O UID é o mesmo (70) nos dois lados; só o `/etc/passwd` que traduz é diferente.",
+          "correct": true,
+          "why": "A imagem do Postgres chama o UID 70 de `postgres`; este Fedora chama o UID 70 de `avahi`. O número atravessa intacto, e cada lado o resolve com o próprio arquivo. É a ausência de tradução, não um erro dela."
+        },
+        {
+          "text": "O container está compartilhando o namespace de usuário do daemon avahi.",
+          "why": "Não há relação entre os dois processos. O namespace de usuário do container é literalmente o mesmo do host (mesmo inode em /proc/PID/ns/user), porque nenhum foi criado."
+        }
+      ]
+    },
+    {
+      "q": "`docker exec <container> id` responde `uid=0(root)`, mas o processo do banco roda como 70. Como os dois são verdade?",
+      "options": [
+        {
+          "text": "O `exec` cria um processo NOVO, com o `USER` configurado na imagem.",
+          "correct": true,
+          "why": "O `docker exec` não pergunta nada ao processo que já está lá: ele inicia outro, e usa o USER da imagem (ou root, se não houver). O Postgres continua como 70 o tempo todo. Confundir os dois faz auditoria de UID dar o resultado errado."
+        },
+        {
+          "text": "O `id` sempre reporta o UID do PID 1.",
+          "why": "O `id` reporta o UID do processo que o executa — que neste caso é o processo criado pelo `exec`, não o PID 1."
+        },
+        {
+          "text": "O Postgres troca de UID depois de inicializar.",
+          "why": "O entrypoint oficial de fato larga privilégio, mas isso acontece ANTES de o servidor atender — e o `ps` do host mostra 70 o tempo todo. Não é a explicação da divergência."
+        }
+      ]
+    },
+    {
+      "q": "Um volume escrito por um container com UID 70 não é legível por outro que roda como 999. O que resolve, e o que NÃO resolve?",
+      "options": [
+        {
+          "text": "Resolve: alinhar os UIDs ou usar `fsGroup`/`chown`. Não resolve: mudar o NOME do usuário na imagem.",
+          "correct": true,
+          "why": "Permissão de arquivo é gravada como número no inode. Criar um usuário chamado `postgres` na segunda imagem não muda nada se o UID dele for outro — e é por isso que o erro diz `permission denied` sem mencionar UID nenhum."
+        },
+        {
+          "text": "Resolve: rodar o segundo container como root.",
+          "why": "Funciona, e é a razão de tanta gente parar aí. Mas troca um problema de permissão por um processo com UID 0 no kernel do host — o que as lições de endurecimento desta stack passam o tempo todo evitando."
+        },
+        {
+          "text": "Resolve: ligar o user namespace.",
+          "why": "Piora: com `userns-remap` os UIDs passam a ser deslocados, e arquivos escritos antes do remap ficam pertencendo a UIDs que o container remapeado não tem. É uma mudança de regime, não um conserto pontual."
+        }
+      ]
+    },
+    {
+      "q": "Você leu que `strace` em Docker exige `--cap-add SYS_PTRACE`. Medido nesta máquina, funcionou sem. Por quê?",
+      "options": [
+        {
+          "text": "Porque o Alpine usa uma implementação diferente de ptrace.",
+          "why": "`strace` usa a syscall `ptrace` do kernel em qualquer distribuição. A diferença não está no espaço de usuário."
+        },
+        {
+          "text": "Porque `-c` (resumo) não usa ptrace de verdade.",
+          "why": "Usa sim — o `-c` só muda a FORMA de apresentar, contando chamadas em vez de listá-las. O mecanismo é o mesmo."
+        },
+        {
+          "text": "Porque a capability governa tracear processo de OUTRO usuário, e o que exigia a flag era o perfil seccomp antigo do Docker.",
+          "correct": true,
+          "why": "Tracear um processo que você mesmo criou, no seu namespace, não precisa de CAP_SYS_PTRACE. O bloqueio histórico vinha do seccomp do Docker recusando a syscall, e isso mudou. Conselho que era verdade e deixou de ser continua circulando — é o motivo de este repositório medir em vez de repetir."
+        }
+      ]
+    }
+  ],
+  "en": [
+    {
+      "q": "`ps` on the host shows the stack's Postgres as owned by `avahi`. Why?",
+      "options": [
+        {
+          "text": "Docker translated the container's UID into a host user.",
+          "why": "No translation happened at all — that is precisely the point. UID translation is what the USER namespace would do, and it ships disabled by default in Docker."
+        },
+        {
+          "text": "The UID is the same (70) on both sides; only the `/etc/passwd` doing the translating differs.",
+          "correct": true,
+          "why": "The Postgres image calls UID 70 `postgres`; this Fedora calls UID 70 `avahi`. The number crosses intact and each side resolves it with its own file. It is the absence of translation, not a mistake in it."
+        },
+        {
+          "text": "The container is sharing the avahi daemon's user namespace.",
+          "why": "There is no relationship between the two processes. The container's user namespace is literally the host's (same inode in /proc/PID/ns/user), because none was created."
+        }
+      ]
+    },
+    {
+      "q": "`docker exec <container> id` answers `uid=0(root)`, but the database process runs as 70. How are both true?",
+      "options": [
+        {
+          "text": "`exec` creates a NEW process, with the image's configured `USER`.",
+          "correct": true,
+          "why": "`docker exec` asks the already-running process nothing: it starts another one, using the image's USER (or root if there is none). Postgres stays as 70 throughout. Confusing the two makes a UID audit return the wrong answer."
+        },
+        {
+          "text": "`id` always reports PID 1's UID.",
+          "why": "`id` reports the UID of the process running it — which here is the process `exec` created, not PID 1."
+        },
+        {
+          "text": "Postgres switches UID after initialising.",
+          "why": "The official entrypoint does drop privilege, but that happens BEFORE the server serves anything — and the host's `ps` shows 70 the whole time. It is not the explanation for the divergence."
+        }
+      ]
+    },
+    {
+      "q": "A volume written by a container running as UID 70 is unreadable by another running as 999. What fixes it, and what does NOT?",
+      "options": [
+        {
+          "text": "Fixes it: aligning the UIDs or using `fsGroup`/`chown`. Does not: changing the user's NAME in the image.",
+          "correct": true,
+          "why": "File permission is stored as a number in the inode. Creating a user called `postgres` in the second image changes nothing if its UID differs — which is why the error says `permission denied` while naming no UID at all."
+        },
+        {
+          "text": "Fixes it: running the second container as root.",
+          "why": "It works, and that is why so many people stop there. But it trades a permission problem for a process with UID 0 on the host kernel — which this stack's hardening lessons spend their time avoiding."
+        },
+        {
+          "text": "Fixes it: turning on the user namespace.",
+          "why": "It makes things worse: with `userns-remap` UIDs become shifted, and files written before the remap end up owned by UIDs the remapped container does not have. It is a change of regime, not a point fix."
+        }
+      ]
+    },
+    {
+      "q": "You read that `strace` under Docker requires `--cap-add SYS_PTRACE`. Measured on this machine, it worked without. Why?",
+      "options": [
+        {
+          "text": "Because Alpine uses a different ptrace implementation.",
+          "why": "`strace` uses the kernel's `ptrace` syscall on any distribution. The difference is not in user space."
+        },
+        {
+          "text": "Because `-c` (summary mode) does not really use ptrace.",
+          "why": "It does — `-c` only changes the PRESENTATION, counting calls instead of listing them. The mechanism is identical."
+        },
+        {
+          "text": "Because the capability governs tracing ANOTHER user's process, and what required the flag was Docker's old seccomp profile.",
+          "correct": true,
+          "why": "Tracing a process you created yourself, in your own namespace, needs no CAP_SYS_PTRACE. The historical block came from Docker's seccomp refusing the syscall, and that changed. Advice that was true and stopped being true keeps circulating — which is why this repository measures rather than repeats."
+        }
+      ]
+    }
+  ]
+}

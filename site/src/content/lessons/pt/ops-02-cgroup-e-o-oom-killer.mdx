@@ -1,0 +1,203 @@
+---
+key: cgroups-and-the-oom-killer
+lang: pt
+track: operacao
+order: 2
+title: "O limite que a aplicação não lê"
+summary: "A aplicação pergunta ao `/proc/meminfo` quanta memória tem e recebe a resposta do host — 31 GiB, quando o cgroup dela permite 384 MiB. Depois ela morre com exit 137, sem exceção, sem log e sem chance de limpar nada."
+minutes: 14
+tags: [linux, cgroup, memoria, oom, limites]
+sources:
+  - label: "Linux kernel — Control Group v2"
+    url: "https://docs.kernel.org/admin-guide/cgroup-v2.html"
+    kind: docs
+  - label: "Linux kernel — memory.events and the memory controller"
+    url: "https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files"
+    kind: docs
+  - label: "Docker Docs — Runtime options with Memory, CPUs and GPUs"
+    url: "https://docs.docker.com/engine/containers/resource_constraints/"
+    kind: docs
+    accessed: "2026-09-21"
+  - label: "Linux man-pages — signal(7)"
+    url: "https://man7.org/linux/man-pages/man7/signal.7.html"
+    kind: docs
+---
+
+import CgroupLimit from "../../../components/diagrams/CgroupLimit.astro";
+
+O container não tem memória. Ele tem um **limite**.
+
+A diferença parece filosófica até o dia em que uma aplicação lê
+`/proc/meminfo`, encontra 31 GiB e decide dimensionar seu heap por isso.
+
+<CgroupLimit />
+
+## As duas perguntas, medidas
+
+```console
+$ docker exec infra-knowlogy-worker-1 head -1 /proc/meminfo
+MemTotal:       32787392 kB          ← 31 GiB: a memória do HOST
+
+$ docker exec infra-knowlogy-worker-1 cat /sys/fs/cgroup/memory.max
+402653184                            ← 384 MiB: o limite DESTE container
+```
+
+O `/proc` de dentro do container **não é isolado** para memória. O namespace de
+montagem recortou o sistema de arquivos, mas `/proc/meminfo` é gerado pelo
+kernel a partir do estado global — e não existe namespace de memória.
+
+<Term word="cgroup" alt="control group">
+*Control group* — o mecanismo do kernel que **limita e contabiliza** recursos
+de um conjunto de processos. É a outra metade do container: o namespace recorta
+o que o processo *vê*, o cgroup limita o que ele *consome*.
+
+Na versão 2 (a única no Fedora moderno, e a que o Kubernetes exige desde o
+1.25) cada cgroup é um diretório, e cada limite é um arquivo:
+
+```
+/sys/fs/cgroup/memory.max      o teto rígido — ultrapassar é SIGKILL
+/sys/fs/cgroup/memory.high     o teto de pressão — ultrapassar é lentidão
+/sys/fs/cgroup/memory.current  quanto está em uso agora
+/sys/fs/cgroup/cpu.max         "100000 100000" = 1 CPU (quota por período)
+/sys/fs/cgroup/pids.max        quantos processos podem existir
+```
+
+Dentro do container esses caminhos descrevem **o próprio container** — é a
+única forma confiável de uma aplicação descobrir o seu limite.
+</Term>
+
+## `memory.max` e `memory.high` não são a mesma coisa
+
+Medido no `worker` desta stack:
+
+```console
+memory.max   = 402653184   (384 MiB)
+memory.high  = max          (sem teto de pressão)
+```
+
+- **`memory.max`** é o teto rígido. Alcançá-lo dispara o OOM killer.
+- **`memory.high`** é o teto de pressão. Ao ultrapassá-lo o kernel **não mata**:
+  ele força recuperação agressiva e *atrasa* o processo. O resultado é um
+  serviço que fica lento em vez de morrer.
+
+O Docker expõe o primeiro (`--memory`) e não o segundo. Quem quer degradação
+em vez de morte precisa escrever no cgroup por outro caminho — e é uma escolha
+que quase ninguém sabe que tem.
+
+## O que acontece ao cruzar o limite
+
+```console
+$ docker run --name oom --memory=64m --memory-swap=64m python:3.13-alpine \
+    python -c 'b=[]
+while True: b.append(bytearray(8*1024*1024))'
+
+$ docker inspect oom --format '{{.State.OOMKilled}} {{.State.ExitCode}}'
+true 137
+```
+
+**Medido: 0,51 segundo do início até a morte.**
+
+<Callout type="warn" title="137 = 128 + 9, e o 9 é o que importa">
+A convenção do shell é que um processo morto por sinal sai com `128 + número
+do sinal`. O sinal 9 é `SIGKILL`.
+
+`SIGKILL` **não é capturável**. Não existe handler, `defer`, `finally`,
+`atexit` ou `trap` que rode. A conexão não é fechada, o arquivo temporário não
+é apagado, a transação não é revertida pela aplicação — o processo
+simplesmente deixa de existir entre uma instrução e a seguinte.
+
+É por isso que "tratar o OOM" não é uma estratégia. A estratégia é **não
+chegar lá**.
+</Callout>
+
+E a única prova que fica:
+
+```console
+$ cat /sys/fs/cgroup/memory.events
+oom 1
+oom_kill 1
+```
+
+Um contador. Sem timestamp, sem qual processo, sem quanto pedia. É por isso
+que o `OOMKilled=true` do Docker e o `reason: OOMKilled` do Kubernetes valem
+tanto: eles preservam o fato que o cgroup só conta.
+
+<Tradeoff
+  a="Limite baixo e apertado"
+  b="Limite alto e folgado"
+  whenA="Quando muitos containers dividem um nó e você precisa que um vazamento em UM não derrube os outros. O limite é a contenção do estrago, e o custo é morrer mais cedo."
+  whenB="Quando o serviço é o único que importa naquele nó e o pico legítimo de memória é difícil de prever. O custo é que um vazamento leva a máquina inteira junto."
+>
+  <Fragment slot="a">
+    O OOM killer acerta só o culpado, e o orquestrador o reinicia. Em troca:
+    picos legítimos viram mortes, e você paga em reinicializações.
+  </Fragment>
+  <Fragment slot="b">
+    Menos mortes falsas. Em troca: o OOM killer do HOST entra em ação, e ele
+    escolhe a vítima por heurística — pode não ser quem causou o problema.
+  </Fragment>
+</Tradeoff>
+
+## A aplicação pode, e deve, ler o próprio limite
+
+Runtimes modernas já fazem isso: a JVM tem `-XX:+UseContainerSupport` (ligado
+por padrão desde o Java 10), o .NET lê o cgroup, o Node aceita
+`--max-old-space-size`. As que não fazem precisam ser informadas à mão.
+
+A leitura correta, em qualquer linguagem, é o arquivo — não o `/proc/meminfo`:
+
+```python
+def meu_limite_de_memoria():
+    """Lê o limite DESTE container. Devolve None se não houver limite."""
+    try:
+        v = open("/sys/fs/cgroup/memory.max").read().strip()
+        return None if v == "max" else int(v)
+    except FileNotFoundError:
+        return None          # cgroup v1, ou fora de container
+```
+
+<FieldNote
+  source="Linux kernel documentation — Control Group v2"
+  url="https://docs.kernel.org/admin-guide/cgroup-v2.html"
+  accessed="2026-09-21"
+>
+A documentação do kernel descreve a v2 como uma reescrita deliberada da v1,
+motivada por uma falha de projeto: na v1 cada recurso tinha sua própria
+hierarquia, e um processo podia estar em posições inconsistentes em cada uma
+delas. A v2 impõe uma **hierarquia única**. É por isso que o Kubernetes passou
+a exigi-la e por que a migração foi longa — não era uma melhoria incremental,
+era outro modelo. Não medido aqui: esta máquina só tem a v2.
+</FieldNote>
+
+<LabExercise
+  question="Um container morre de tempos em tempos sem log nenhum e sem stack trace. Como confirmar que foi o OOM killer, e não a aplicação?"
+  check="OOM killer: OOMKilled=true e exit 137"
+>
+  <Fragment slot="hint">
+    Se não há log, é porque o processo não teve chance de escrever um. O registro
+    está em quem o matou, não em quem morreu.
+  </Fragment>
+  <Fragment slot="answer">
+
+```bash
+# 1. O estado que o Docker guardou da última morte
+docker inspect <container> --format '{{.State.OOMKilled}} {{.State.ExitCode}}'
+
+# 2. No Kubernetes, o mesmo fato com outro nome
+kubectl get pod <pod> -o jsonpath='{.status.containerStatuses[0].lastState.terminated.reason}'
+
+# 3. O kernel, que registra a escolha da vítima
+sudo dmesg -T | grep -i -A2 'killed process'
+```
+
+`OOMKilled=true` com `137` fecha o caso. Ausência de log **é** a evidência:
+SIGKILL não deixa escrever nada, então um crash de aplicação produziria
+stack trace e um OOM não produz nada.
+
+O `dmesg` é o que diz **quanto** o processo pedia e quais eram os outros
+candidatos — a única fonte com essa informação, e ela se perde no reboot.
+
+  </Fragment>
+</LabExercise>
+
+<Quiz set="cgroups-and-the-oom-killer" />

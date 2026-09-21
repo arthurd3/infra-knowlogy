@@ -1,0 +1,152 @@
+{
+  "note_pt": "As perguntas saem do limite que a aplicação não lê e da morte que não deixa log.",
+  "note_en": "The questions come from the limit the application never reads and the death that leaves no log.",
+  "pt": [
+    {
+      "q": "Uma aplicação Java lê `/proc/meminfo` no container, vê 31 GiB e dimensiona o heap por isso. O que acontece?",
+      "options": [
+        {
+          "text": "Ela morre com exit 137 ao cruzar o limite do cgroup, que aqui é 384 MiB.",
+          "correct": true,
+          "why": "`/proc/meminfo` não é isolado por namespace: ele é gerado pelo kernel a partir do estado GLOBAL, e não existe namespace de memória. A resposta é a do host. O limite verdadeiro está em `/sys/fs/cgroup/memory.max`, e cruzá-lo é SIGKILL."
+        },
+        {
+          "text": "O kernel recusa a alocação e a JVM lança OutOfMemoryError.",
+          "why": "Seria o comportamento se o limite fosse do alocador. O cgroup não recusa `malloc`: ele deixa alocar e mata quando a memória é realmente TOCADA. Por isso não há exceção — há SIGKILL."
+        },
+        {
+          "text": "O Docker corrige o /proc/meminfo automaticamente.",
+          "why": "Não corrige, e é justamente essa a armadilha. Existem projetos (lxcfs) que fazem isso, mas não é o comportamento padrão de Docker nenhum."
+        }
+      ]
+    },
+    {
+      "q": "`memory.max` e `memory.high` — qual a diferença operacional?",
+      "options": [
+        {
+          "text": "`high` é o mesmo que `max` em cgroup v2; só o nome mudou.",
+          "why": "São arquivos distintos com semânticas distintas, e nesta stack `memory.max` vale 402653184 enquanto `memory.high` vale `max` — medido."
+        },
+        {
+          "text": "`max` é o teto rígido (SIGKILL); `high` é o teto de pressão, que ATRASA em vez de matar.",
+          "correct": true,
+          "why": "Ultrapassar o `high` faz o kernel forçar recuperação agressiva e estrangular o processo — o serviço fica lento em vez de morrer. É frequentemente o que se queria, e o Docker só expõe `--memory`, que escreve no `max`. Muita gente nem sabe que a escolha existe."
+        },
+        {
+          "text": "`high` é a memória reservada e `max` é o burst permitido.",
+          "why": "Reserva é outro conceito (`memory.low`/`memory.min`, e `--memory-reservation` no Docker). Nem `high` nem `max` reservam coisa alguma."
+        }
+      ]
+    },
+    {
+      "q": "Por que \"tratar o OOM na aplicação\" não é uma estratégia?",
+      "options": [
+        {
+          "text": "Porque o OOM acontece dentro do alocador e o stack fica corrompido.",
+          "why": "Não há corrupção: o processo é encerrado limpo do ponto de vista do kernel. O que não há é oportunidade de a aplicação reagir."
+        },
+        {
+          "text": "Porque o kernel manda SIGTERM antes, e a aplicação normalmente ignora.",
+          "why": "O OOM killer não avisa. Não há SIGTERM antes — essa cortesia existe em desligamento orquestrado (`docker stop`, terminação de pod), não em OOM."
+        },
+        {
+          "text": "Porque o sinal é SIGKILL, que não é capturável — nenhum handler, defer, finally ou atexit roda.",
+          "correct": true,
+          "why": "137 = 128 + 9, e o 9 é SIGKILL. O processo deixa de existir entre uma instrução e a seguinte: conexão não fechada, arquivo temporário não removido, nada escrito em log. É por isso que a ausência de log É a evidência de OOM."
+        }
+      ]
+    },
+    {
+      "q": "Um container morre sem log e sem stack trace. Qual a fonte que diz QUANTO ele pedia?",
+      "options": [
+        {
+          "text": "`memory.events` no cgroup.",
+          "why": "Ele guarda só contadores — `oom 1`, `oom_kill 1` — sem timestamp, sem processo e sem tamanho. É prova de que aconteceu, não de quanto."
+        },
+        {
+          "text": "`dmesg`, onde o kernel registra a escolha da vítima.",
+          "correct": true,
+          "why": "Só o log do kernel traz o tamanho pedido e a lista de candidatos que o OOM killer avaliou. É a única fonte com essa informação — e ela se perde no reboot, o que torna coletá-la parte do trabalho de observabilidade."
+        },
+        {
+          "text": "O `ExitCode` do container.",
+          "why": "137 diz COMO morreu (sinal 9), não quanto pedia. É o começo do diagnóstico, não o fim."
+        }
+      ]
+    }
+  ],
+  "en": [
+    {
+      "q": "A Java application reads `/proc/meminfo` in the container, sees 31 GiB and sizes its heap accordingly. What happens?",
+      "options": [
+        {
+          "text": "It dies with exit 137 on crossing the cgroup limit, which here is 384 MiB.",
+          "correct": true,
+          "why": "`/proc/meminfo` is not namespace-isolated: the kernel generates it from GLOBAL state, and there is no memory namespace. The answer is the host's. The real limit lives in `/sys/fs/cgroup/memory.max`, and crossing it is SIGKILL."
+        },
+        {
+          "text": "The kernel refuses the allocation and the JVM throws OutOfMemoryError.",
+          "why": "That would be the behaviour if the limit belonged to the allocator. The cgroup does not refuse `malloc`: it lets you allocate and kills when memory is actually TOUCHED. Which is why there is no exception — there is SIGKILL."
+        },
+        {
+          "text": "Docker fixes /proc/meminfo automatically.",
+          "why": "It does not, and that is precisely the trap. Projects exist (lxcfs) that do this, but it is not any Docker's default behaviour."
+        }
+      ]
+    },
+    {
+      "q": "`memory.max` and `memory.high` — what is the operational difference?",
+      "options": [
+        {
+          "text": "`high` is the same as `max` in cgroup v2; only the name changed.",
+          "why": "They are distinct files with distinct semantics, and in this stack `memory.max` is 402653184 while `memory.high` is `max` — measured."
+        },
+        {
+          "text": "`max` is the hard ceiling (SIGKILL); `high` is the pressure ceiling, which THROTTLES instead of killing.",
+          "correct": true,
+          "why": "Crossing `high` makes the kernel force aggressive reclaim and throttle the process — the service gets slow rather than dying. That is frequently what you wanted, and Docker only exposes `--memory`, which writes `max`. Most people do not know the choice exists."
+        },
+        {
+          "text": "`high` is reserved memory and `max` is the permitted burst.",
+          "why": "Reservation is a different concept (`memory.low`/`memory.min`, and `--memory-reservation` in Docker). Neither `high` nor `max` reserves anything."
+        }
+      ]
+    },
+    {
+      "q": "Why is \"handling the OOM in the application\" not a strategy?",
+      "options": [
+        {
+          "text": "Because the OOM happens inside the allocator and the stack is left corrupted.",
+          "why": "There is no corruption: from the kernel's point of view the process is terminated cleanly. What there is not is an opportunity for the application to react."
+        },
+        {
+          "text": "Because the kernel sends SIGTERM first and the application usually ignores it.",
+          "why": "The OOM killer gives no warning. There is no SIGTERM first — that courtesy exists in orchestrated shutdown (`docker stop`, pod termination), not in an OOM."
+        },
+        {
+          "text": "Because the signal is SIGKILL, which is not catchable — no handler, defer, finally or atexit runs.",
+          "correct": true,
+          "why": "137 = 128 + 9, and 9 is SIGKILL. The process stops existing between one instruction and the next: connection not closed, temp file not removed, nothing written to a log. Which is why the absence of a log IS the evidence of an OOM."
+        }
+      ]
+    },
+    {
+      "q": "A container dies with no log and no stack trace. Which source tells you HOW MUCH it was asking for?",
+      "options": [
+        {
+          "text": "`memory.events` in the cgroup.",
+          "why": "It keeps only counters — `oom 1`, `oom_kill 1` — with no timestamp, no process and no size. It is proof that it happened, not of how much."
+        },
+        {
+          "text": "`dmesg`, where the kernel records the victim selection.",
+          "correct": true,
+          "why": "Only the kernel log carries the requested size and the list of candidates the OOM killer weighed. It is the single source with that information — and it is lost on reboot, which makes collecting it part of the observability job."
+        },
+        {
+          "text": "The container's `ExitCode`.",
+          "why": "137 tells you HOW it died (signal 9), not how much it wanted. It is the start of the diagnosis, not the end."
+        }
+      ]
+    }
+  ]
+}

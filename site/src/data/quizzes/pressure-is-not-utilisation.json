@@ -1,0 +1,152 @@
+{
+  "note_pt": "As perguntas saem de duas cargas com o mesmo 100% de uso e pressões completamente diferentes.",
+  "note_en": "The questions come from two loads at the same 100% utilisation with completely different pressure.",
+  "pt": [
+    {
+      "q": "Duas cargas mostram 100% de CPU. Uma tem PSI `some avg10=7,0` e a outra `47,67`. O que difere?",
+      "options": [
+        {
+          "text": "A segunda tem fila: há trabalho pronto sem onde rodar.",
+          "correct": true,
+          "why": "Medido aqui: 32 tarefas em 32 núcleos ocupam a CPU inteira sem ninguém esperar; 128 tarefas ocupam exatamente a mesma CPU com três em cada quatro paradas a cada instante. Uso pergunta 'está ocupado?'; pressão pergunta 'alguém está ESPERANDO?'."
+        },
+        {
+          "text": "A segunda está usando mais CPU — o `top` arredondou.",
+          "why": "As duas saturaram a CPU. É justamente por uso saturar em 100% que ele não consegue distinguir os dois casos — depois de 100% não há mais nada a reportar."
+        },
+        {
+          "text": "A segunda tem I/O bloqueando as tarefas.",
+          "why": "Seria pressão de I/O, medida em `/proc/pressure/io`, e nestas medições ela ficou em zero. A diferença está em `/proc/pressure/cpu`, e é contenção por núcleo."
+        }
+      ]
+    },
+    {
+      "q": "O load average atingiu o pico DEPOIS de a carga acabar. Por quê, e o que isso implica para alertas?",
+      "options": [
+        {
+          "text": "Porque as tarefas mortas continuam contando por um tempo.",
+          "why": "Tarefas mortas saem da conta imediatamente. O que persiste é o peso histórico dentro da média exponencial."
+        },
+        {
+          "text": "Porque é uma média exponencial de 1 minuto: ela sobe com atraso e continua subindo depois do fim.",
+          "correct": true,
+          "why": "Medido: 10,89 durante a carga e 33,99 doze segundos depois dela. Um alarme baseado nisso dispara tarde E não desliga quando você conserta — os dois piores comportamentos possíveis. O PSI avg10 reage em ~10 s e desce junto."
+        },
+        {
+          "text": "Porque o kernel só atualiza o loadavg a cada 5 minutos.",
+          "why": "Ele é recalculado a cada poucos segundos; o atraso vem da MÉDIA, não da frequência de amostragem."
+        }
+      ]
+    },
+    {
+      "q": "Um load average de 34 no Linux pode significar duas coisas muito diferentes. Quais?",
+      "options": [
+        {
+          "text": "Processos ou threads — depende da configuração do kernel.",
+          "why": "O Linux conta tarefas escalonáveis, o que inclui threads, sempre. Não há configuração alternando isso, e não é a ambiguidade que importa."
+        },
+        {
+          "text": "CPU saturada, ou tarefas presas em espera ININTERRUPTA de I/O — e o número não diz qual.",
+          "correct": true,
+          "why": "O Linux conta tarefas em estado `R` e em estado `D` no mesmo número, por causa de um patch de 1993 que nunca saiu. Um NFS travado produz o mesmo 34 que uma CPU cheia. É por isso que a definição de 'load average' diverge entre Linux e BSD, e por que quase toda intuição sobre o número vem de um dos dois."
+        },
+        {
+          "text": "Média de 1 minuto ou de 15 — depende da coluna.",
+          "why": "As três colunas são janelas diferentes do mesmo sinal e aparecem juntas. A ambiguidade está em O QUE é contado, não em por quanto tempo."
+        }
+      ]
+    },
+    {
+      "q": "Qual a diferença entre as linhas `some` e `full` do PSI?",
+      "options": [
+        {
+          "text": "`some` conta processos e `full` conta threads.",
+          "why": "Ambas contam tarefas escalonáveis. A distinção é 'pelo menos uma' contra 'todas'."
+        },
+        {
+          "text": "`some` é a média de 10 s e `full` a de 300 s.",
+          "why": "As janelas são as colunas `avg10`, `avg60` e `avg300`, e as DUAS linhas têm as três. `some` e `full` diferem em quantas tarefas estavam travadas, não em janela."
+        },
+        {
+          "text": "`some` = pelo menos uma tarefa travada; `full` = TODAS travadas e o recurso ocioso por falta de trabalho executável.",
+          "correct": true,
+          "why": "`some` é o sinal de degradação e `full` é o de colapso. Para CPU, `full` é quase sempre zero — sempre há algo pronto. Para memória e I/O, um `full` diferente de zero significa que a máquina parou de progredir, e é um alarme de outra gravidade."
+        }
+      ]
+    }
+  ],
+  "en": [
+    {
+      "q": "Two loads both show 100% CPU. One has PSI `some avg10=7.0` and the other `47.67`. What differs?",
+      "options": [
+        {
+          "text": "The second has a queue: there is runnable work with nowhere to run.",
+          "correct": true,
+          "why": "Measured here: 32 tasks on 32 cores occupy the whole CPU with nobody waiting; 128 tasks occupy exactly the same CPU with three in four stalled at any instant. Utilisation asks 'is it busy?'; pressure asks 'is anything WAITING?'."
+        },
+        {
+          "text": "The second is using more CPU — `top` rounded.",
+          "why": "Both saturated the CPU. It is precisely because utilisation saturates at 100% that it cannot distinguish the two cases — past 100% there is nothing left to report."
+        },
+        {
+          "text": "The second has I/O blocking the tasks.",
+          "why": "That would be I/O pressure, measured in `/proc/pressure/io`, and in these measurements it stayed at zero. The difference is in `/proc/pressure/cpu`, and it is per-core contention."
+        }
+      ]
+    },
+    {
+      "q": "The load average peaked AFTER the load ended. Why, and what does that imply for alerting?",
+      "options": [
+        {
+          "text": "Because dead tasks keep counting for a while.",
+          "why": "Dead tasks leave the count immediately. What persists is their historical weight inside the exponential average."
+        },
+        {
+          "text": "Because it is a 1-minute exponential average: it rises late and keeps rising after the end.",
+          "correct": true,
+          "why": "Measured: 10.89 during the load and 33.99 twelve seconds after it. An alarm built on that fires late AND does not clear when you fix things — the two worst possible behaviours. PSI's avg10 reacts in ~10 s and comes down with you."
+        },
+        {
+          "text": "Because the kernel only updates loadavg every 5 minutes.",
+          "why": "It is recomputed every few seconds; the lag comes from the AVERAGE, not from the sampling rate."
+        }
+      ]
+    },
+    {
+      "q": "A load average of 34 on Linux can mean two very different things. Which?",
+      "options": [
+        {
+          "text": "Processes or threads — depending on kernel configuration.",
+          "why": "Linux counts schedulable tasks, which includes threads, always. No setting toggles that, and it is not the ambiguity that matters."
+        },
+        {
+          "text": "A saturated CPU, or tasks stuck in UNINTERRUPTIBLE I/O wait — and the number does not say which.",
+          "correct": true,
+          "why": "Linux counts `R`-state and `D`-state tasks in the same number, because of a 1993 patch that never left. A hung NFS mount produces the same 34 as a full CPU. Which is why 'load average' diverges between Linux and BSD, and why almost every intuition about the number comes from one of the two."
+        },
+        {
+          "text": "The 1-minute or the 15-minute average — depending on the column.",
+          "why": "The three columns are different windows of the same signal and appear together. The ambiguity is in WHAT is counted, not over how long."
+        }
+      ]
+    },
+    {
+      "q": "What is the difference between PSI's `some` and `full` lines?",
+      "options": [
+        {
+          "text": "`some` counts processes and `full` counts threads.",
+          "why": "Both count schedulable tasks. The distinction is 'at least one' versus 'all'."
+        },
+        {
+          "text": "`some` is the 10 s average and `full` the 300 s one.",
+          "why": "The windows are the `avg10`, `avg60` and `avg300` columns, and BOTH lines have all three. `some` and `full` differ in how many tasks were stalled, not in window."
+        },
+        {
+          "text": "`some` = at least one task stalled; `full` = ALL stalled and the resource idle for lack of runnable work.",
+          "correct": true,
+          "why": "`some` is the degradation signal and `full` is the collapse signal. For CPU, `full` is almost always zero — there is always something runnable. For memory and I/O, a non-zero `full` means the machine stopped making progress, and it is an alarm of a different severity."
+        }
+      ]
+    }
+  ]
+}

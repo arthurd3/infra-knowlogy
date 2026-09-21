@@ -1,0 +1,178 @@
+---
+key: pressure-is-not-utilisation
+lang: en
+track: operacao
+order: 3
+title: "Pressure is not utilisation, and load average lies twice"
+summary: "Two loads, both at 100% CPU. One with pressure of 7.0 and the other 47.67 — measured here. And the load average peaked AFTER the load ended, which is the worst possible moment for an alarm."
+minutes: 13
+tags: [linux, psi, load-average, capacity, alerting]
+sources:
+  - label: "Linux kernel — PSI: Pressure Stall Information"
+    url: "https://docs.kernel.org/accounting/psi.html"
+    kind: docs
+  - label: "Facebook Engineering — PSI: pressure stall information for Linux"
+    url: "https://facebookmicrosites.github.io/psi/"
+    kind: blog
+    accessed: "2026-09-21"
+  - label: "Brendan Gregg — Linux Load Averages: Solving the Mystery"
+    url: "https://www.brendangregg.com/blog/2017-08-08/linux-load-averages.html"
+    kind: blog
+    accessed: "2026-09-21"
+  - label: "Linux man-pages — proc(5), /proc/loadavg"
+    url: "https://man7.org/linux/man-pages/man5/proc.5.html"
+    kind: docs
+---
+
+import PressureVsUsage from "../../../components/diagrams/PressureVsUsage.astro";
+
+Two loads on this 32-core machine, timed:
+
+<PressureVsUsage />
+
+In both, `top` says **100% CPU**. They are not remotely the same thing.
+
+## What utilisation cannot tell you
+
+Utilisation answers "is the resource busy?". It is a binary question stretched
+into a percentage, and it saturates: past 100% there is nothing left to report.
+
+What is missing is the queue. Thirty-two tasks on thirty-two cores occupy the
+entire CPU **with nobody waiting**. One hundred and twenty-eight tasks occupy
+exactly the same CPU, and three out of every four are stalled at any instant.
+
+<Term word="PSI" alt="Pressure Stall Information">
+*Pressure Stall Information* — the kernel interface that measures **time lost
+waiting** for a resource. Three files:
+
+```
+/proc/pressure/cpu      waiting for CPU time
+/proc/pressure/memory   waiting for memory reclaim
+/proc/pressure/io       waiting for disk
+```
+
+Each carries two lines and three windows:
+
+```
+some avg10=47.67 avg60=15.94 avg300=3.83 total=15545132
+full avg10=0.00  avg60=0.00  avg300=0.00 total=0
+```
+
+- **`some`** — at least one task was stalled. It is the degradation signal.
+- **`full`** — **every** task was stalled, and the CPU sat idle for lack of
+  runnable work. It is the collapse signal. For CPU, `full` is almost always
+  zero; for memory and I/O, a non-zero `full` is serious.
+
+The `avgNN` values are percentages of time over the last 10, 60 and 300 seconds,
+and `total` is an accumulator in microseconds — which is the one to graph,
+because it is not an average.
+
+Available per **cgroup** too: `/sys/fs/cgroup/<...>/cpu.pressure` measures one
+container's pressure alone.
+</Term>
+
+## Load average lies twice
+
+```
+during the load:   load 10.89
+12 s AFTER it:     load 33.99     ← the peak
+```
+
+**First defect: lag.** The load average is an exponential average over 1, 5 and
+15 minutes. It rises after the problem started and keeps rising after it ended.
+An alarm built on it fires late and does not clear when you fix things.
+
+**Second defect: it measures two things.** On Linux — and only on Linux — the
+load average counts tasks in state `R` (runnable) **and** in state `D`
+(uninterruptible I/O wait). A load of 34 may be a saturated CPU or a hung NFS
+mount, and the number does not say which.
+
+<Callout type="warn" title="Why that mixture exists">
+It was not a design decision: it was a 1993 patch that never left. Linux started
+counting `D`-state tasks so that load would reflect machines stuck on disk I/O,
+and the definition diverged from every other Unix that day.
+
+The practical result is that "load average" means different things on Linux and
+BSD, and nearly every intuition about the number comes from one or the other.
+</Callout>
+
+<Tradeoff
+  a="Alarming on utilisation (CPU %)"
+  b="Alarming on pressure (PSI)"
+  whenA="For billing, capacity planning and occupancy graphs. Utilisation is what you buy and what shows up on the invoice."
+  whenB="For waking someone up. Pressure says work is WAITING, which is the operational definition of “the service is worse for its users”."
+>
+  <Fragment slot="a">
+    Simple, universal and present in every tool. In exchange: it saturates at
+    100% and cannot separate “busy and healthy” from “busy with a queue”.
+  </Fragment>
+  <Fragment slot="b">
+    Does not saturate, reacts in ~10 s and exists per cgroup. In exchange: needs
+    kernel 4.20+, and is still missing from many off-the-shelf dashboards.
+  </Fragment>
+</Tradeoff>
+
+## What to do with it
+
+This stack's `obs` profile `node-exporter` already exposes PSI as
+`node_pressure_cpu_waiting_seconds_total` — a counter, whose rate is the
+percentage:
+
+```promql
+rate(node_pressure_cpu_waiting_seconds_total[5m]) * 100
+```
+
+And inside a container, the read is local:
+
+```console
+$ docker exec infra-knowlogy-worker-1 cat /sys/fs/cgroup/cpu.pressure
+some avg10=0.00 avg60=0.00 avg300=0.00 total=0
+```
+
+Zero, because this worker contends for CPU with nobody. A high value **here**,
+with the whole machine quiet, pinpoints the container that is squeezed —
+something the host's CPU percentage cannot localise.
+
+<FieldNote
+  source="Facebook Engineering — PSI: pressure stall information for Linux"
+  url="https://facebookmicrosites.github.io/psi/"
+  accessed="2026-09-21"
+>
+PSI was written at Facebook by Johannes Weiner to solve a fleet problem: machines
+that looked healthy by utilisation while delivering bad latency, and machines
+that looked overloaded while being fine. The engineering write-up reports using
+the signal to raise load density per machine — packing more services onto the
+same hardware safely, because a non-saturating "it hurts" signal finally existed.
+Not measured here: it is a fleet result, and this is one machine.
+</FieldNote>
+
+<LabExercise
+  question="The dashboard shows CPU at 95% and nobody complained. Another day it shows 95% and the service is slow. Which signal separates the two cases?"
+  check="cgroup v2: o worker lê seu próprio limite"
+>
+  <Fragment slot="hint">
+    It is not an occupancy percentage, and it is not the load average.
+  </Fragment>
+  <Fragment slot="answer">
+
+```bash
+# From the host
+cat /proc/pressure/cpu
+
+# From one specific container
+docker exec <container> cat /sys/fs/cgroup/cpu.pressure
+```
+
+Compare the `some` line at both moments. 95% utilisation with a low `some avg10`
+is a **well-used** machine: the work fits. The same 95% with a high `some avg10`
+means a queue — there is runnable work with nowhere to run, and that is what
+users feel as slowness.
+
+The detail that closes the diagnosis: read `/proc/pressure/io` alongside. High
+CPU pressure with high I/O is usually a symptom rather than a cause — tasks come
+back from disk all at once and fight for CPU in a burst.
+
+  </Fragment>
+</LabExercise>
+
+<Quiz set="pressure-is-not-utilisation" />
