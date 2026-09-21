@@ -209,7 +209,7 @@
         "checks": [
           "o UID do container é o do host",
           "cgroup v2: o worker lê seu próprio limite",
-          "OOM killer: OOMKilled=true e exit 137",
+          "OOM killer: o kernel contou oom_kill",
           "DNS: rótulo único desconhecido leva SEGUNDOS",
           "postgres: pg_stat_statements carregado"
         ],
@@ -263,7 +263,7 @@
         "checks": [
           "o UID do container é o do host",
           "cgroup v2: o worker lê seu próprio limite",
-          "OOM killer: OOMKilled=true e exit 137",
+          "OOM killer: o kernel contou oom_kill",
           "DNS: rótulo único desconhecido leva SEGUNDOS",
           "postgres: pg_stat_statements carregado"
         ],

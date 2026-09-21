@@ -14,7 +14,7 @@ const C = {
     o1: "o kernel manda SIGKILL", o1n: "não é capturável: nenhum defer, finally ou handler roda",
     o2: "exit 137", o2n: "128 + 9 — a convenção do shell para “morto pelo sinal 9”",
     o3: "memory.events: oom_kill +1", o3n: "o contador é a única prova que fica",
-    medido: "medido: limite de 64 MiB, morreu em 0,51 s com OOMKilled=true",
+    medido: "medido: limite de 64 MiB, morreu em 0,51 s — oom_kill=1 e saída 137",
     caption:
       "O container não tem memória própria: tem um <b>limite</b>. E o <code>/proc</code> que a aplicação lê continua sendo o do host, então perguntar “quanta memória eu tenho?” pelo caminho de sempre devolve a resposta de outra máquina. O limite verdadeiro está no cgroup, e ultrapassá-lo não gera exceção — gera SIGKILL.",
     alt: "A aplicação consultando /proc/meminfo e recebendo a memória do host, contra o cgroup com o limite real.",
@@ -28,7 +28,7 @@ const C = {
     o1: "the kernel sends SIGKILL", o1n: "not catchable: no defer, finally or handler runs",
     o2: "exit 137", o2n: "128 + 9 — the shell convention for “killed by signal 9”",
     o3: "memory.events: oom_kill +1", o3n: "the counter is the only proof left behind",
-    medido: "measured: 64 MiB limit, died in 0.51 s with OOMKilled=true",
+    medido: "measured: 64 MiB limit, died in 0.51 s — oom_kill=1 and exit 137",
     caption:
       "A container has no memory of its own: it has a <b>limit</b>. And the <code>/proc</code> the application reads is still the host's, so asking “how much memory do I have?” the usual way returns another machine's answer. The real limit lives in the cgroup, and crossing it raises no exception — it raises SIGKILL.",
     alt: "The application querying /proc/meminfo and getting the host's memory, against the cgroup holding the real limit.",

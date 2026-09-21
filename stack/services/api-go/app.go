@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"context"
 	"crypto/rand"
 	"errors"
@@ -10,6 +11,10 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
+
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/trace"
 )
 
 var errNotFound = errors.New("link não encontrado")
@@ -76,6 +81,51 @@ func (a *app) Close() {
 
 // ─── Persistência ────────────────────────────────────────────────────────────
 
+// tarefaDeEnriquecimento é o que viaja na fila.
+//
+// ─── Por que a mensagem deixou de ser só o código ───────────────────────────
+// Um trace atravessa um processo pelo contexto, e o contexto atravessa a REDE
+// por um cabeçalho. Numa chamada HTTP o `traceparent` vai no header e ninguém
+// precisa pensar nisso. Numa FILA não existe header: o Redis transporta bytes.
+//
+// Então o contexto tem que viajar DENTRO da mensagem — e isso muda o formato
+// dela, que é uma mudança incompatível entre dois serviços que se falam. É
+// exatamente aqui que a maioria das instrumentações para: os spans do
+// produtor e do consumidor ficam bonitos, em dois traces diferentes, e
+// ninguém repara porque cada metade parece certa.
+//
+// O worker aceita AS DUAS formas de propósito (ver worker/main.py): durante um
+// rollout, mensagens no formato antigo ainda estão na fila.
+type tarefaDeEnriquecimento struct {
+	Code string `json:"code"`
+	// Os campos do W3C Trace Context, escritos pelo propagador do OTel.
+	Traceparent string `json:"traceparent,omitempty"`
+	Tracestate  string `json:"tracestate,omitempty"`
+}
+
+// Set faz `tarefaDeEnriquecimento` servir de carrier para o propagador, que é
+// a interface que o OTel usa para escrever o contexto em qualquer transporte.
+func (t *tarefaDeEnriquecimento) Set(chave, valor string) {
+	switch chave {
+	case "traceparent":
+		t.Traceparent = valor
+	case "tracestate":
+		t.Tracestate = valor
+	}
+}
+
+func (t *tarefaDeEnriquecimento) Get(chave string) string {
+	switch chave {
+	case "traceparent":
+		return t.Traceparent
+	case "tracestate":
+		return t.Tracestate
+	}
+	return ""
+}
+
+func (t *tarefaDeEnriquecimento) Keys() []string { return []string{"traceparent", "tracestate"} }
+
 func (a *app) createLink(ctx context.Context, rawURL string) (Link, error) {
 	code, err := newCode(7)
 	if err != nil {
@@ -83,11 +133,24 @@ func (a *app) createLink(ctx context.Context, rawURL string) (Link, error) {
 	}
 
 	var l Link
-	err = a.db.QueryRow(ctx, `
-		INSERT INTO links (code, url)
-		VALUES ($1, $2)
-		RETURNING code, url, title, favicon, clicks, created_at, enriched_at, enrich_error
-	`, code, rawURL).Scan(&l.Code, &l.URL, &l.Title, &l.Favicon, &l.Clicks, &l.CreatedAt, &l.EnrichedAt, &l.EnrichError)
+	err = func() error {
+		// Um span por operação de I/O. O span do servidor HTTP já existe (o
+		// otelhttp o criou); estes são filhos dele, e é a diferença entre
+		// "a requisição levou 40 ms" e "o INSERT levou 38 desses 40".
+		ctx, span := tracer().Start(ctx, "db.insert",
+			trace.WithSpanKind(trace.SpanKindClient),
+			trace.WithAttributes(attribute.String("db.system", "postgresql")))
+		defer span.End()
+		e := a.db.QueryRow(ctx, `
+			INSERT INTO links (code, url)
+			VALUES ($1, $2)
+			RETURNING code, url, title, favicon, clicks, created_at, enriched_at, enrich_error
+		`, code, rawURL).Scan(&l.Code, &l.URL, &l.Title, &l.Favicon, &l.Clicks, &l.CreatedAt, &l.EnrichedAt, &l.EnrichError)
+		if e != nil {
+			span.RecordError(e)
+		}
+		return e
+	}()
 	if err != nil {
 		return Link{}, fmt.Errorf("inserindo link: %w", err)
 	}
@@ -95,9 +158,32 @@ func (a *app) createLink(ctx context.Context, rawURL string) (Link, error) {
 	// Enfileira o enriquecimento. Falhar aqui NÃO falha a requisição: o link já
 	// funciona sem título. Fatiar o trabalho entre "o que o usuário precisa
 	// agora" e "o que pode acontecer depois" é o que mantém a API rápida.
-	if err := a.redis.LPush(ctx, a.cfg.RedisQueue, l.Code).Err(); err != nil {
-		enqueueFailures.Inc()
-	}
+	func() {
+		ctx, span := tracer().Start(ctx, "cache.enqueue",
+			trace.WithSpanKind(trace.SpanKindProducer),
+			trace.WithAttributes(
+				attribute.String("messaging.system", "redis"),
+				attribute.String("messaging.destination.name", a.cfg.RedisQueue),
+			))
+		defer span.End()
+
+		tarefa := tarefaDeEnriquecimento{Code: l.Code}
+		// A injeção: o propagador escreve o contexto ATUAL no carrier. O span
+		// pai do worker vai ser este `cache.enqueue`, e não o span do servidor
+		// — que é o que faz o trace mostrar a fila como a fronteira que ela é.
+		propagation.TraceContext{}.Inject(ctx, &tarefa)
+
+		carga, e := json.Marshal(tarefa)
+		if e != nil {
+			span.RecordError(e)
+			enqueueFailures.Inc()
+			return
+		}
+		if e := a.redis.LPush(ctx, a.cfg.RedisQueue, string(carga)).Err(); e != nil {
+			span.RecordError(e)
+			enqueueFailures.Inc()
+		}
+	}()
 	linksCreated.Inc()
 	return l, nil
 }

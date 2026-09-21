@@ -1,0 +1,140 @@
+{
+  "note_pt": "As três perguntas cobrem o que a medição contrariou: a fila, o caminho de retentativa e o custo.",
+  "note_en": "The three questions cover what the measurement contradicted: the queue, the retry path and the cost.",
+  "pt": [
+    {
+      "q": "A api enfileira trabalho no Redis e o worker consome. Sem propagar o `traceparent` na mensagem, o que você vê no backend de traces?",
+      "options": [
+        {
+          "text": "Um erro de exportação no worker, porque falta o contexto obrigatório.",
+          "why": "Contexto de trace não é obrigatório. Um span sem pai é uma raiz perfeitamente válida — o SDK cria um `trace_id` novo e segue. É por isso que a falha é silenciosa: não existe nada de inválido em começar um trace."
+        },
+        {
+          "text": "Um trace só, porque o coletor junta os spans pelo horário.",
+          "why": "O coletor não infere parentesco. Ele agrupa pelo `trace_id` que veio em cada span, e nada mais. Juntar por proximidade de horário produziria árvores erradas em qualquer sistema com mais de uma requisição por vez."
+        },
+        {
+          "text": "Dois traces separados, ambos corretos — um da api e um do worker.",
+          "correct": true,
+          "why": "É exatamente o que torna esta falha difícil: nada quebra. Os spans do worker existem, têm nome certo e duração certa. Eles só não sabem de quem são filhos. Cada metade parece impecável sozinha, e a pergunta que o trace existe para responder deixa de ter resposta justamente na fronteira mais interessante."
+        },
+        {
+          "text": "Nada — o worker não gera spans sem contexto de entrada.",
+          "why": "Ele gera. O `start_as_current_span` sem contexto pai abre uma raiz nova. O worker fica perfeitamente instrumentado, num trace que ninguém consegue ligar à requisição que o originou."
+        }
+      ]
+    },
+    {
+      "q": "O tracing desta stack funcionava para requisições rápidas e se partia nas lentas. Qual era a causa?",
+      "options": [
+        {
+          "text": "O reenfileiramento da retentativa mandava o código cru de volta à fila, sem o `traceparent`.",
+          "correct": true,
+          "why": "Medido: uma URL que devolve 404 produziu três traces onde deveria haver um. E repare no formato da falha — ela só atinge o caminho lento, que é o único que alguém vai investigar de madrugada. O caminho feliz é o que todo mundo instrumenta; o de retentativa é o que importa."
+        },
+        {
+          "text": "O exportador em lote descartava spans quando a requisição demorava.",
+          "why": "O `BatchSpanProcessor` só descarta quando a fila interna enche, o que não acontece com este volume. E se acontecesse, a perda seria aleatória — não correlacionada com a duração da requisição."
+        },
+        {
+          "text": "O timeout do exportador cortava traces longos pela metade.",
+          "why": "O timeout do exportador limita a entrega ao coletor, não a duração do span. Um span de 10 minutos é exportado normalmente quando fecha; nada o trunca por ser longo."
+        },
+        {
+          "text": "O coletor limitava o número de spans por trace.",
+          "why": "Não havia limite configurado, e o sintoma seria outro: um trace truncado, não vários traces órfãos. Quando um trace aparece partido em pedaços independentes, o problema é quase sempre propagação de contexto."
+        }
+      ]
+    },
+    {
+      "q": "O portão exige provar que a imagem de referência tem zero símbolos `go.opentelemetry.io` antes de gravar o custo. Por quê?",
+      "options": [
+        {
+          "text": "Porque símbolos do OTel aumentam o tempo de inicialização do binário.",
+          "why": "Aumentam muito pouco, e não é isso que a checagem mede. A contagem de símbolos serve como prova de identidade da imagem de referência, não como medida de desempenho."
+        },
+        {
+          "text": "Porque o Docker recusa comparar imagens de tags diferentes.",
+          "why": "O Docker não tem opinião sobre isso — `docker image inspect` lê qualquer tag. A regra é editorial, não técnica: o número só entra na lição se a comparação for entre coisas de fato diferentes."
+        },
+        {
+          "text": "Porque o scanner de vulnerabilidades precisa da referência limpa.",
+          "why": "O scanner é outra etapa do portão e não usa essa referência. A checagem aqui existe só para impedir que o custo do tracing seja medido contra um build que já tem tracing."
+        },
+        {
+          "text": "Porque o `sizes.sh` reconstrói as tags de referência, e depois da instrumentação elas viram builds COM OTel — a comparação daria delta zero.",
+          "correct": true,
+          "why": "E o resultado seria pior que um erro: a lição anunciaria, com um número medido, que observabilidade é de graça. Medição que compara uma coisa com ela mesma não falha — ela mente com aparência de rigor. Sem referência válida o script preserva o valor antigo e marca `referencia_valida: false`."
+        }
+      ]
+    }
+  ],
+  "en": [
+    {
+      "q": "The api enqueues work in Redis and the worker consumes it. Without propagating `traceparent` in the message, what do you see in the trace backend?",
+      "options": [
+        {
+          "text": "An export error in the worker, because the required context is missing.",
+          "why": "Trace context is not required. A span with no parent is a perfectly valid root — the SDK mints a new `trace_id` and moves on. That is why the failure is silent: there is nothing invalid about starting a trace."
+        },
+        {
+          "text": "A single trace, because the collector stitches spans together by timestamp.",
+          "why": "The collector infers no parentage. It groups by the `trace_id` carried in each span, and nothing else. Stitching by time proximity would produce wrong trees in any system handling more than one request at a time."
+        },
+        {
+          "text": "Two separate traces, both correct — one from the api and one from the worker.",
+          "correct": true,
+          "why": "This is exactly what makes the failure hard: nothing breaks. The worker's spans exist, with the right names and the right durations. They just don't know whose children they are. Each half looks flawless on its own, and the question a trace exists to answer goes unanswered at the most interesting boundary."
+        },
+        {
+          "text": "Nothing — the worker emits no spans without an incoming context.",
+          "why": "It does emit them. `start_as_current_span` with no parent context opens a fresh root. The worker ends up perfectly instrumented, in a trace nobody can tie back to the request that caused it."
+        }
+      ]
+    },
+    {
+      "q": "Tracing in this stack worked for fast requests and broke on slow ones. What was the cause?",
+      "options": [
+        {
+          "text": "The retry path pushed the bare code back onto the queue, without the `traceparent`.",
+          "correct": true,
+          "why": "Measured: a URL returning 404 produced three traces where there should have been one. And notice the shape of the failure — it only hits the slow path, which is the only one anyone investigates at 3 a.m. The happy path is what everyone instruments; the retry path is what matters."
+        },
+        {
+          "text": "The batch exporter dropped spans when the request took too long.",
+          "why": "`BatchSpanProcessor` only drops when its internal queue fills, which does not happen at this volume. And if it did, the loss would be random — not correlated with request duration."
+        },
+        {
+          "text": "The exporter timeout truncated long traces halfway.",
+          "why": "The exporter timeout bounds delivery to the collector, not span duration. A ten-minute span is exported normally when it closes; nothing truncates it for being long."
+        },
+        {
+          "text": "The collector capped the number of spans per trace.",
+          "why": "No such limit was configured, and the symptom would be different: one truncated trace, not several orphan ones. When a trace shows up split into independent pieces, the problem is almost always context propagation."
+        }
+      ]
+    },
+    {
+      "q": "The gate requires proving the reference image has zero `go.opentelemetry.io` symbols before recording the cost. Why?",
+      "options": [
+        {
+          "text": "Because OTel symbols increase the binary's startup time.",
+          "why": "They increase it very little, and that is not what the check measures. The symbol count serves as proof of the reference image's identity, not as a performance measure."
+        },
+        {
+          "text": "Because Docker refuses to compare images from different tags.",
+          "why": "Docker has no opinion about this — `docker image inspect` reads any tag. The rule is editorial, not technical: the number enters the lesson only if the comparison is between things that genuinely differ."
+        },
+        {
+          "text": "Because the vulnerability scanner needs a clean reference.",
+          "why": "The scanner is a different gate step and does not use this reference. The check exists solely to keep the cost of tracing from being measured against a build that already has tracing."
+        },
+        {
+          "text": "Because `sizes.sh` rebuilds the reference tags, and after instrumentation they become builds WITH OTel — the comparison would show zero delta.",
+          "correct": true,
+          "why": "And the result would be worse than an error: the lesson would announce, with a measured number, that observability is free. A measurement comparing something against itself does not fail — it lies with the appearance of rigor. With no valid reference the script keeps the old value and marks `referencia_valida: false`."
+        }
+      ]
+    }
+  ]
+}

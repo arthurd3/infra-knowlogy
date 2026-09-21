@@ -1,0 +1,171 @@
+{
+  "_comentario": "Gerado por tools/scripts/tracing-measure.py — não edite à mão.",
+  "medido_em": "2026-09-21",
+  "caminho_feliz": {
+    "trace": "59a49c3326d0aec46c4215826dfe8f9b",
+    "spans": 7,
+    "servicos": [
+      "api-go",
+      "edge",
+      "worker-py"
+    ],
+    "profundidade": 5,
+    "duracao_ms": 60.27,
+    "arvore": [
+      {
+        "servico": "edge",
+        "nome": "edge-api",
+        "offset_ms": 0.0,
+        "duracao_ms": 2.37,
+        "nivel": 0
+      },
+      {
+        "servico": "api-go",
+        "nome": "POST /api/links",
+        "offset_ms": 0.28,
+        "duracao_ms": 1.84,
+        "nivel": 1
+      },
+      {
+        "servico": "api-go",
+        "nome": "db.insert",
+        "offset_ms": 0.32,
+        "duracao_ms": 1.6,
+        "nivel": 2
+      },
+      {
+        "servico": "api-go",
+        "nome": "cache.enqueue",
+        "offset_ms": 1.92,
+        "duracao_ms": 0.15,
+        "nivel": 2
+      },
+      {
+        "servico": "worker-py",
+        "nome": "worker.enrich",
+        "offset_ms": 2.37,
+        "duracao_ms": 57.9,
+        "nivel": 3
+      },
+      {
+        "servico": "worker-py",
+        "nome": "http.fetch",
+        "offset_ms": 9.7,
+        "duracao_ms": 48.75,
+        "nivel": 4
+      },
+      {
+        "servico": "worker-py",
+        "nome": "db.update",
+        "offset_ms": 58.56,
+        "duracao_ms": 0.64,
+        "nivel": 4
+      }
+    ]
+  },
+  "caminho_retentativa": {
+    "trace": "c3f188f5135898819a4311e7473e4fbc",
+    "spans": 10,
+    "servicos": [
+      "api-go",
+      "edge",
+      "worker-py"
+    ],
+    "profundidade": 7,
+    "duracao_ms": 187.19,
+    "arvore": [
+      {
+        "servico": "edge",
+        "nome": "edge-api",
+        "offset_ms": 0.0,
+        "duracao_ms": 2.14,
+        "nivel": 0
+      },
+      {
+        "servico": "api-go",
+        "nome": "POST /api/links",
+        "offset_ms": 0.19,
+        "duracao_ms": 1.71,
+        "nivel": 1
+      },
+      {
+        "servico": "api-go",
+        "nome": "db.insert",
+        "offset_ms": 0.23,
+        "duracao_ms": 1.42,
+        "nivel": 2
+      },
+      {
+        "servico": "api-go",
+        "nome": "cache.enqueue",
+        "offset_ms": 1.66,
+        "duracao_ms": 0.2,
+        "nivel": 2
+      },
+      {
+        "servico": "worker-py",
+        "nome": "worker.enrich",
+        "offset_ms": 2.05,
+        "duracao_ms": 31.29,
+        "nivel": 3
+      },
+      {
+        "servico": "worker-py",
+        "nome": "http.fetch",
+        "offset_ms": 8.8,
+        "duracao_ms": 22.47,
+        "nivel": 4
+      },
+      {
+        "servico": "worker-py",
+        "nome": "worker.enrich",
+        "offset_ms": 33.59,
+        "duracao_ms": 76.74,
+        "nivel": 4
+      },
+      {
+        "servico": "worker-py",
+        "nome": "http.fetch",
+        "offset_ms": 41.01,
+        "duracao_ms": 67.51,
+        "nivel": 5
+      },
+      {
+        "servico": "worker-py",
+        "nome": "worker.enrich",
+        "offset_ms": 110.54,
+        "duracao_ms": 76.65,
+        "nivel": 5
+      },
+      {
+        "servico": "worker-py",
+        "nome": "http.fetch",
+        "offset_ms": 118.61,
+        "duracao_ms": 66.78,
+        "nivel": 6
+      }
+    ]
+  },
+  "codigos": {
+    "feliz": "ksRMzyb",
+    "retentativa": "yKzXvBL"
+  },
+  "custo": {
+    "api_go": {
+      "referencia_valida": true,
+      "referencia_tag": "infra-knowlogy/api-go:ci",
+      "imagem_com_bytes": 9753983,
+      "imagem_sem_bytes": 5998212,
+      "binario_com_bytes": 27762872,
+      "binario_sem_bytes": 14762168,
+      "simbolos_otel_com": 2315,
+      "simbolos_otel_sem": 0
+    },
+    "worker_py": {
+      "imagem_com_bytes": 62791515,
+      "imagem_sem_bytes": 62791394,
+      "site_packages_bytes": 55546731,
+      "otel_bytes": 24383497
+    }
+  }
+}

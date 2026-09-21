@@ -34,7 +34,7 @@
         },
         {
           "text": "O `docker stop` esgotou o período de graça.",
-          "why": "Chega perto, mas o caminho é outro: o `stop` manda SIGTERM primeiro e só depois SIGKILL. O resultado final também é 137, então o 137 sozinho não distingue os dois — quem distingue é o `docker inspect` com o campo `OOMKilled`."
+          "why": "Chega perto, mas o caminho é outro: o `stop` manda SIGTERM primeiro e só depois SIGKILL. O resultado final também é 137, então o 137 sozinho não distingue os dois — quem distingue é o contador `oom_kill` do cgroup, lido de dentro do container."
         }
       ]
     },
@@ -108,7 +108,7 @@
         },
         {
           "text": "`docker stop` ran out of grace period.",
-          "why": "Close, but a different path: `stop` sends SIGTERM first and only then SIGKILL. The final code is also 137, so 137 alone does not tell the two apart — `docker inspect` and its `OOMKilled` field do."
+          "why": "Close, but a different path: `stop` sends SIGTERM first and only then SIGKILL. The final code is also 137, so 137 alone does not tell the two apart — the cgroup's `oom_kill` counter, read from inside the container, does."
         }
       ]
     },

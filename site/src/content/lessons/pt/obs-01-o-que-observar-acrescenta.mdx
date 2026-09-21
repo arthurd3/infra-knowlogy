@@ -93,14 +93,18 @@ O `site/src/data/obs-measured.json` traz os números desta máquina, regravados
 pelo `make verify`: séries ativas, memória residente do Prometheus, e quanto
 cada alvo publica antes e depois da filtragem.
 
-<Callout type="trap" label="Trace é o sinal que esta stack NÃO tem">
-E a lição não vai fingir que tem. Tracing distribuído exige propagar um
-identificador de contexto por toda a cadeia — api, Redis, worker — e nenhuma
-das três aplicações faz isso hoje.
+<Callout type="note" label="Trace era o sinal que esta stack não tinha">
+Quando esta lição foi escrita, as três aplicações não propagavam contexto
+nenhum, e dizer isso em voz alta valia mais do que um diagrama de "três
+pilares" sugerindo completude.
 
-O caminho seria OpenTelemetry, que virou o padrão depois da fusão do OpenTracing
-com o OpenCensus em 2019. Está declarado como lacuna no roadmap, não escondido
-atrás de um diagrama de "três pilares" que sugere completude.
+Hoje elas propagam. O `traceparent` do W3C sai do edge, atravessa a api, viaja
+**dentro do corpo** da mensagem no Redis — porque fila não tem cabeçalho — e
+chega ao worker. A lição 9 mede a árvore inteira e o preço que ela custou em
+bytes de imagem.
+
+O diagrama abaixo ficou como estava de propósito: ele descreve a pergunta que
+cada sinal responde, e essa parte não mudou.
 </Callout>
 
 ## A quarta pergunta
@@ -130,6 +134,7 @@ sendo gasto** — e isso exige ter definido o orçamento antes.
 O `prometheus.yml` tem sete `scrape_configs`. Um deles rapa `localhost:9090`.
 
 Pergunta: por que o Prometheus raspa a si mesmo, e o que se perde sem isso?
+
 
 <Fragment slot="hint">
 Pense no que acontece quando o problema é o próprio monitoramento.

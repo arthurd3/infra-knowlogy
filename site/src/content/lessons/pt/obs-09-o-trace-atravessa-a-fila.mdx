@@ -1,0 +1,245 @@
+---
+key: distributed-tracing
+lang: pt
+track: observabilidade
+order: 9
+title: O trace que atravessa a fila
+summary: "Métrica diz que piorou, log diz o que houve num caso. Nenhum dos dois diz por onde ESTA requisição passou. O trace diz — e se parte exatamente onde ninguém olha."
+minutes: 16
+tags: [observabilidade, tracing, opentelemetry, w3c, fila, propagacao]
+sources:
+  - label: "W3C — Trace Context (Recommendation)"
+    url: "https://www.w3.org/TR/trace-context/"
+    kind: docs
+    accessed: "2026-09-21"
+  - label: "OpenTelemetry — Context Propagation"
+    url: "https://opentelemetry.io/docs/concepts/context-propagation/"
+    kind: docs
+    accessed: "2026-09-21"
+  - label: "Google Research — Dapper, a Large-Scale Distributed Systems Tracing Infrastructure"
+    url: "https://research.google/pubs/dapper-a-large-scale-distributed-systems-tracing-infrastructure/"
+    kind: book
+    accessed: "2026-09-21"
+  - label: "OpenTelemetry — Semantic Conventions"
+    url: "https://opentelemetry.io/docs/specs/semconv/"
+    kind: docs
+    accessed: "2026-09-21"
+  - label: "Caddy — a diretiva tracing"
+    url: "https://caddyserver.com/docs/caddyfile/directives/tracing"
+    kind: docs
+    accessed: "2026-09-21"
+---
+
+import TraceAcrossQueue from "../../../components/diagrams/TraceAcrossQueue.astro";
+
+A lição 1 desta trilha declarou uma lacuna em voz alta: **trace é o sinal que
+esta stack não tem**. Ela tem agora, e o caminho até aqui rendeu mais ensino do
+que o resultado.
+
+## A pergunta que sobra
+
+Você tem a métrica: a taxa de erro subiu. Tem o log: `connection refused` em
+`db:5432`, às 03h14. O que nenhum dos dois responde é a pergunta que o plantão
+realmente faz às três da manhã:
+
+> **Esta requisição aqui — a que o cliente reclamou — passou por onde, e gastou
+> o tempo em quê?**
+
+Métrica é agregada por construção: ela soma milhares de requisições e perde a
+identidade de cada uma. Log é específico por construção: ele descreve um evento
+e não sabe o que veio antes nem depois. O **trace** existe para costurar as
+duas coisas.
+
+<Term word="trace" alt="trace">
+Um **trace** é o registro de uma requisição inteira atravessando vários
+processos. Ele é composto de <b>spans</b> — cada span é um intervalo de tempo
+com nome, início, fim e um pai. O conjunto forma uma árvore, e a raiz é o
+primeiro processo que viu a requisição.
+
+O que faz um trace ser *distribuído* é que os spans nascem em máquinas
+diferentes, em linguagens diferentes, e ainda assim se reconhecem como partes da
+mesma árvore.
+</Term>
+
+## Como os pedaços se reconhecem
+
+Um span criado no worker em Python precisa saber que é filho de um span criado
+na api em Go. Isso não acontece por mágica: alguém tem que **carregar o
+identificador** de um processo ao outro.
+
+O formato é padronizado desde 2021, e é um cabeçalho HTTP de uma linha só:
+
+```
+traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
+             │  │                                │                │
+             │  │                                │                └ flags (amostrado?)
+             │  │                                └ span-id do PAI
+             │  └ trace-id: o mesmo do começo ao fim
+             └ versão
+```
+
+O **propagador** do OpenTelemetry cuida disso, e para HTTP é tudo automático.
+
+<Term word="propagador" alt="propagator">
+O **propagador** é a peça que serializa e desserializa esse contexto. Ele não
+sabe o que é HTTP: ele sabe escrever pares chave-valor num *carrier* e lê-los de
+volta.
+
+É por isso que o mesmo propagador serve para um cabeçalho HTTP, para os metadados
+de uma mensagem Kafka, ou para um campo dentro de um JSON numa lista do Redis —
+o carrier muda, o formato do `traceparent` não.
+</Term>
+
+## O desenho, medido
+
+<TraceAcrossQueue />
+
+<Callout type="trap" label="A fila é onde a instrumentação se parte">
+HTTP tem cabeçalho. Uma lista do Redis **não tem**. Quando a api enfileira um
+trabalho, não existe lugar óbvio para pôr o `traceparent` — e a saída mais comum
+é não pôr.
+
+O resultado não parece um defeito. Os spans do worker continuam existindo,
+continuam corretos, continuam com o nome certo e a duração certa. Eles só estão
+num **trace diferente**. Cada metade está impecável sozinha, e a pergunta que o
+trace existe para responder — *por onde passou* — deixa de ter resposta
+exatamente na fronteira mais interessante.
+
+Nesta stack a api enfileira JSON com o `traceparent` dentro, e o worker o extrai
+antes de abrir o primeiro span. O portão reprova se o trace não cobrir os três
+serviços.
+</Callout>
+
+## O caminho que ninguém instrumenta
+
+O caminho feliz é o que todo mundo instrumenta. O que importa é o outro.
+
+Quando o enriquecimento falha, o worker devolve o código à fila e tenta de novo.
+A primeira versão daqui reenfileirava **o código cru** — sem o contexto. Isso
+funcionava: o link era processado, a retentativa acontecia, o log registrava.
+
+E destruía o trace em silêncio. Medido: uma URL que devolve 404 produziu **três
+traces onde deveria haver um**. O trace da requisição tinha a primeira
+tentativa; as outras duas boiavam soltas, sem vínculo com nada.
+
+<Callout type="trap" label="A regressão mora no caminho lento">
+Repare no formato da falha: o tracing funcionava perfeitamente para as
+requisições rápidas, e se partia justamente nas lentas. O caso que você vai
+investigar de madrugada era o único que o instrumento não cobria.
+
+Hoje o reenfileiramento carrega o contexto, as tentativas ficam aninhadas dentro
+do trace original, e a história inteira de um link que falhou três vezes cabe
+numa árvore só. O portão conta as tentativas e reprova se elas se espalharem.
+</Callout>
+
+## A armadilha da variável de ambiente
+
+A api e o worker recebem `OTEL_EXPORTER_OTLP_ENDPOINT=otel-collector:4317`. O
+edge recebe `http://otel-collector:4318`, e a diferença não é capricho: o
+módulo do Caddy exige **URL com esquema**. Sem ele, monta `https:///v1/traces` e
+falha com `no Host in request URL`.
+
+O modo de falhar é o pior possível: **a instrumentação funciona**. O
+`trace_id` aparece no access log do Caddy, os spans nascem corretos, e só a
+exportação morre. Quem olhar o log vai ver tracing funcionando — e não vai ver
+span nenhum no coletor.
+
+<LabExercise check="tracing: o span raiz é do edge" file="stack/services/edge/Caddyfile">
+
+Você suspeita que o edge está gerando spans mas não exportando nenhum.
+
+Pergunta: sem mexer no coletor, como confirmar **em um comando** que os spans
+existem?
+
+
+<Fragment slot="hint">
+A diretiva `tracing` do Caddy não só cria o span — ela também acrescenta dois
+campos a cada linha do access log.
+</Fragment>
+
+<Fragment slot="answer">
+```bash
+docker compose logs edge | grep traceID
+```
+
+Com a diretiva ativa, cada linha do access log carrega `traceID` e `spanID`. Se
+eles estão lá, o span **foi criado** — e o problema mora entre o processo e o
+coletor, não na instrumentação.
+
+Foi exatamente assim que a falha de exportação apareceu aqui: o `traceID` no log
+do Caddy batia com o trace que o coletor tinha recebido da api, provando que o
+edge participava do mesmo trace e só não conseguia entregar os próprios spans.
+</Fragment>
+</LabExercise>
+
+## O preço, medido
+
+Esta trilha inteira fala em imagem mínima. Esconder o custo do tracing aqui
+seria incoerente, então ele está medido — e não é pequeno.
+
+| | sem OTel | com OTel | |
+|---|---|---|---|
+| imagem da api (Go) | 6,0 MB | 9,8 MB | **+63%** |
+| binário da api | 14,8 MB | 27,8 MB | **+88%** |
+| imagem do worker (Python) | 52,8 MB | 62,8 MB | **+19%** |
+
+A prova de que a comparação é honesta está no binário: a imagem de referência
+tem **zero** ocorrências de `go.opentelemetry.io`, e a instrumentada tem mais de
+**dois mil**. O portão exige essa prova antes de gravar o número — sem ela,
+comparar um build instrumentado com outro instrumentado daria delta zero e a
+lição anunciaria, com um número medido, que observabilidade é de graça.
+
+No Python o custo aparece de outro jeito: OTel, gRPC e protobuf somam **43,9% de
+todos os bytes de pacote** instalados no worker. A biblioteca de tracing é maior
+que a aplicação que ela observa.
+
+<Tradeoff
+  a="Instrumentar tudo"
+  b="Instrumentar só as fronteiras"
+  whenA="Quando a pergunta é “onde o tempo foi gasto DENTRO deste serviço”. Um span por consulta ao banco encontra o N+1 que nenhum painel mostra. Custa bytes na imagem, CPU no processo e volume no backend."
+  whenB="Quando a pergunta é “qual serviço está lento”. Um span na entrada e um na saída de cada processo já reconstroem a árvore inteira e respondem isso. É o que esta stack faz no edge — e é por isso que o span do proxy tem um nome só."
+  chose="b"
+  verdict="o edge tem um span só, e cada aplicação tem um punhado. Um host de estudo poderia bancar mais; o ponto da lição é que os spans de fronteira são os que se pagam."
+/>
+
+<FieldNote
+  source="Dapper, a Large-Scale Distributed Systems Tracing Infrastructure (Google Research, 2010)"
+  url="https://research.google/pubs/dapper-a-large-scale-distributed-systems-tracing-infrastructure/"
+  kind="scale"
+  accessed="2026-09-21"
+>
+O Dapper amostrava, e agressivamente. Para serviços de alto volume, guardar uma
+fração pequena das requisições bastou para diagnosticar problemas — a
+justificativa é que anomalia que importa **se repete**, então ela aparece na
+amostra.
+
+É a decisão que esta stack não precisa tomar: num host de estudo, guardar tudo é
+barato. Em escala, o custo do tracing deixa de ser bytes na imagem e passa a ser
+o backend que guarda os spans.
+</FieldNote>
+
+## O que o portão prova
+
+<RunIt title="O trace inteiro, do portão">
+
+```bash
+# Regrava a medição e roda as cinco checagens de tracing
+make verify
+
+# Ou só a medição, com a stack já de pé
+python3 tools/scripts/tracing-measure.py
+```
+</RunIt>
+
+Cinco checagens, e a quarta é a que vale:
+
+1. um `trace_id` atravessa os **três** serviços
+2. o span raiz é do **edge**, não da api
+3. `http.fetch` e `db.update` do worker estão no mesmo trace da requisição
+4. as **três tentativas** ficam no mesmo trace, e não em traces órfãos
+5. o custo foi medido contra referência **provadamente** não instrumentada
+
+Cada uma foi testada na direção negativa: um JSON adulterado com a regressão
+correspondente reprova exatamente a checagem que deveria reprovar, e só ela.
+
+<Quiz set="distributed-tracing" />

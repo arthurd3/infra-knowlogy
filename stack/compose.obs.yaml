@@ -26,6 +26,42 @@
 # Ver docs/adr/0003-socket-do-docker-na-observabilidade.md.
 
 services:
+  # ─── O endereço do coletor, só quando o profile `obs` está ligado ─────────
+  # Sem OTEL_EXPORTER_OTLP_ENDPOINT as duas aplicações rodam com spans no-op.
+  # É o que permite a MESMA imagem servir nos dois modos, sem rebuild — e é o
+  # que impede um coletor indisponível de derrubar a api.
+  api:
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: otel-collector:4317
+
+  worker:
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: otel-collector:4317
+
+  # ─── A tensão que instrumentar o edge expõe ────────────────────────────────
+  # O edge vive na rede `edge`, que é a DMZ: ela existe justamente para que o
+  # proxy NÃO alcance o resto. Mas telemetria precisa sair de onde ela nasce, e
+  # o span raiz nasce aqui.
+  #
+  # A escolha feita: o coletor entra na rede `edge` (abaixo), em vez de o edge
+  # entrar na rede de observabilidade. A diferença importa — o coletor recebe e
+  # não inicia conexão, então acrescentá-lo à DMZ não dá ao proxy nenhum
+  # caminho novo. O contrário daria.
+  #
+  # Isto só vale no profile `obs`: sem ele, nada disto existe.
+  edge:
+    environment:
+      # ─── Por que ESTE valor é diferente do das outras duas ──────────────
+      # A api e o worker recebem `otel-collector:4317`. O Caddy exige URL com
+      # ESQUEMA: sem ele o módulo monta `https:///v1/traces` e falha com
+      # "no Host in request URL" — mesma variável, duas regras de parsing.
+      #
+      # E o modo de falhar é o pior possível: a instrumentação FUNCIONA. O
+      # trace_id aparece no access log do Caddy, os spans nascem corretos, e só
+      # a exportação morre. Quem olhar o log vai ver tracing funcionando.
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_SERVICE_NAME: edge
+
 
   # ─── Fronteira de segurança do socket ──────────────────────────────────────
   docker-socket-proxy:
@@ -121,6 +157,64 @@ services:
     deploy:
       resources:
         limits: {cpus: "1.00", memory: 768M, pids: 200}
+
+  # ─── O dono do volume, antes de o coletor tentar escrever ──────────────────
+  # Armadilha conhecida deste repositório, aparecendo pela terceira vez: um
+  # volume NOMEADO herda o dono do diretório que já existe na imagem, e
+  # `/traces` não existe em imagem nenhuma — então o Docker o cria do root. O
+  # coletor roda como 65534 e leva `permission denied`.
+  #
+  # O sintoma é traiçoeiro: o coletor sobe saudável, RECEBE os spans, e o
+  # exportador falha calado. Quem conta a verdade são as métricas do próprio
+  # coletor — `receiver_accepted_spans` contra `exporter_send_failed_spans`.
+  #
+  # (As duas ocorrências anteriores foram o Alloy em /var/lib/alloy/data e o
+  # Redis num PV do Kubernetes. Nas três, a correção é dar dono ao diretório
+  # ANTES de o serviço não-root tentar usá-lo.)
+  otel-traces-init:
+    profiles: [obs]
+    image: alpine:3.22@sha256:14358309a308569c32bdc37e2e0e9694be33a9d99e68afb0f5ff33cc1f695dce
+    user: "0:0"
+    command: ["sh", "-c", "chown 65534:65534 /traces && chmod 0755 /traces"]
+    volumes:
+      - otel_traces:/traces
+    restart: "no"
+
+  # ─── Traces ────────────────────────────────────────────────────────────────
+  # O terceiro sinal. A lição `why-observe` declarava que ele faltava: havia
+  # métrica (Prometheus) e log (Loki), e nenhuma forma de seguir UMA requisição
+  # atravessando os serviços.
+  #
+  # A imagem vem do ghcr e não do Docker Hub, pela mesma razão do Alertmanager.
+  otel-collector:
+    profiles: [obs]
+    image: ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib:0.161.0@sha256:fd328de2552466ad78385e1b1289c3f2402b1c45f265b252aab1955b42845ac1
+    restart: unless-stopped
+    command: ["--config=/etc/otel/config.yaml"]
+    depends_on:
+      otel-traces-init:
+        condition: service_completed_successfully
+    volumes:
+      - ./services/observability/otel-collector.yaml:/etc/otel/config.yaml:ro,z
+      - otel_traces:/traces
+    # Nas DUAS redes: `data` para a api e o worker o alcançarem, `obs` para o
+    # Prometheus raspar as métricas dele.
+    networks: [obs, data, edge]
+    user: "65534:65534"
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    healthcheck:
+      # O coletor não traz shell nem wget. A prova de vida possível é o próprio
+      # endpoint de métricas dele, checado de fora pelo Compose não dá — então
+      # usamos o binário, que aceita `--help` e sai 0.
+      test: ["CMD", "/otelcol-contrib", "--help"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits: {cpus: "0.50", memory: 256M, pids: 100}
 
   # ─── Roteamento de alerta ──────────────────────────────────────────────────
   # O Prometheus decide QUANDO um alerta está `firing`; o Alertmanager decide
@@ -375,6 +469,7 @@ networks:
 
 volumes:
   alertmanager_data:
+  otel_traces:
   prometheus_data:
   grafana_data:
   loki_data:

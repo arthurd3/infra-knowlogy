@@ -44,6 +44,19 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
 
+	// ─── Observabilidade quebrada NÃO derruba o que ela observa ─────────────
+	// A primeira versão disto fazia `os.Exit(1)` quando o setup falhava, com o
+	// argumento de "falhar cedo e alto". Na prática um erro de configuração de
+	// semconv pôs a api em crash loop: o healthcheck reprovava, o Compose
+	// recriava, e o serviço ficou indisponível por causa da INSTRUMENTAÇÃO.
+	//
+	// Um trace a menos é um trace a menos. Uma api fora do ar é um incidente.
+	shutdownTracing, err := setupTracing(ctx, "api-go", "dev")
+	if err != nil {
+		logger.Error("tracing desligado por erro de configuração", "err", err)
+		shutdownTracing = func(context.Context) error { return nil }
+	}
+
 	app, err := newApp(ctx, cfg)
 	if err != nil {
 		logger.Error("falha ao inicializar a aplicação", "err", err)
@@ -95,6 +108,13 @@ func main() {
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		logger.Error("desligamento forçado", "err", err)
 		os.Exit(1)
+	}
+
+	// O flush final, e ele importa. O exportador é EM LOTE: sem esta chamada,
+	// os spans da última requisição — justamente as que interessam quando algo
+	// deu errado durante um deploy — morrem junto com o processo.
+	if err := shutdownTracing(shutdownCtx); err != nil {
+		logger.Warn("flush de spans incompleto", "err", err)
 	}
 	logger.Info("desligado limpo")
 }

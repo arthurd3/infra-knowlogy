@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-21T13:07:53Z",
+  "generatedAt": "2026-09-21T17:57:35Z",
   "prometheusVersion": "3.7.3",
   "targets": {
     "total": 7,
@@ -15,9 +15,9 @@
     ]
   },
   "tsdb": {
-    "activeSeries": 4770,
-    "samplesPerSecond": 289.7,
-    "residentBytes": 102440960
+    "activeSeries": 7375,
+    "samplesPerSecond": 311.3,
+    "residentBytes": 105803776
   },
   "collection": {
     "perJob": [
@@ -29,14 +29,14 @@
       },
       {
         "job": "cadvisor",
-        "scraped": 1227,
-        "kept": 47,
-        "dropped": 1180
+        "scraped": 1235,
+        "kept": 49,
+        "dropped": 1186
       },
       {
         "job": "node",
-        "scraped": 2381,
-        "kept": 2381,
+        "scraped": 2514,
+        "kept": 2514,
         "dropped": 0
       },
       {
@@ -47,72 +47,72 @@
       },
       {
         "job": "prometheus",
-        "scraped": 816,
-        "kept": 816,
+        "scraped": 900,
+        "kept": 900,
         "dropped": 0
       },
       {
         "job": "redis",
-        "scraped": 416,
-        "kept": 416,
+        "scraped": 419,
+        "kept": 419,
         "dropped": 0
       },
       {
         "job": "worker",
-        "scraped": 36,
-        "kept": 36,
+        "scraped": 40,
+        "kept": 40,
         "dropped": 0
       }
     ],
-    "scrapedTotal": 5600,
-    "keptTotal": 4420,
-    "droppedTotal": 1180
+    "scrapedTotal": 5832,
+    "keptTotal": 4646,
+    "droppedTotal": 1186
   },
   "apiTraffic": {
     "byRoute": [
       {
+        "route": "unmatched",
+        "method": "POST",
+        "status": "201",
+        "total": 12
+      },
+      {
         "route": "/healthz",
         "method": "GET",
         "status": "200",
-        "total": 10
-      },
-      {
-        "route": "/{code}",
-        "method": "GET",
-        "status": "302",
-        "total": 10
-      },
-      {
-        "route": "/api/links",
-        "method": "POST",
-        "status": "201",
-        "total": 10
+        "total": 11
       },
       {
         "route": "/readyz",
         "method": "GET",
         "status": "200",
-        "total": 9
+        "total": 11
+      },
+      {
+        "route": "unmatched",
+        "method": "GET",
+        "status": "302",
+        "total": 10
       },
       {
         "route": "/metrics",
         "method": "GET",
         "status": "200",
-        "total": 6
+        "total": 7
       }
     ],
-    "infrastructureTotal": 25,
-    "userTotal": 20,
-    "infraPerUserRequest": 1.2,
-    "infrastructurePerMinute": 15.7
+    "infrastructureTotal": 29,
+    "userTotal": 22,
+    "infraPerUserRequest": 1.3,
+    "infrastructurePerMinute": 13.6
   },
   "rules": {
     "recording": 7,
     "alerting": 3
   },
   "latency": {
-    "p50Seconds": 0.00251,
-    "p90Seconds": 0.00452,
-    "p99Seconds": 0.00497
+    "p50Seconds": 0.00253,
+    "p90Seconds": 0.00455,
+    "p99Seconds": 0.00608
   }
 }

@@ -92,10 +92,14 @@ $ docker run --name oom --memory=64m --memory-swap=64m python:3.13-alpine \
 while True: b.append(bytearray(8*1024*1024))'
 
 $ docker inspect oom --format '{{.State.OOMKilled}} {{.State.ExitCode}}'
-true 137
+false 137
 ```
 
-**Measured: 0.51 seconds from start to death.**
+**Measured: 0.51 seconds from start to death — and note the `false`.**
+
+That output is not a typo. The process *was* killed by the OOM killer: 137 is
+128+9, the SIGKILL only the kernel sends. And Docker still recorded
+`OOMKilled=false`. Come back to this line after reading the trap below.
 
 <Callout type="warn" title="137 = 128 + 9, and the 9 is what matters">
 The shell convention is that a process killed by a signal exits with `128 +
@@ -118,9 +122,35 @@ oom 1
 oom_kill 1
 ```
 
-A counter. No timestamp, no which-process, no how-much-it-asked-for. That is why
-Docker's `OOMKilled=true` and Kubernetes's `reason: OOMKilled` are worth so much:
-they preserve the fact the cgroup merely counts.
+A counter. No timestamp, no which-process, no how-much-it-asked-for. In exchange
+it is the primary source: the kernel writes that number itself, as it happens.
+
+<Callout type="trap" label="Docker's flag can say `false` on a real OOM">
+`.State.OOMKilled` is a second-hand record, and it gets things wrong. Measured on
+this host, with the allocator running as the container's PID 1:
+
+```console
+$ docker inspect oom --format '{{.State.OOMKilled}} {{.State.ExitCode}}'
+false 137
+
+$ cat /sys/fs/cgroup/memory.events     # read from INSIDE, before the container is gone
+max 324
+oom 1
+oom_kill 1
+```
+
+Exit 137 is SIGKILL. `oom_kill 1` is the kernel saying it killed. `max 324` is
+the reclaim attempts before that. Three sources agree, and only Docker's flag
+disagrees.
+
+This repository's gate was born requiring `OOMKilled=true` and **failed against
+an OOM that genuinely happened**. The fix was not to loosen the check: it was to
+change the source. Today it reads `memory.events` from inside the cgroup and
+reports Docker's flag as information only.
+
+The general lesson outlives Docker: when two sources disagree, prefer the one
+that wrote the fact over the one that observed it.
+</Callout>
 
 <Tradeoff
   a="A low, tight limit"
@@ -170,9 +200,11 @@ machine only has v2.
 </FieldNote>
 
 <LabExercise
-  question="A container dies every so often with no log at all and no stack trace. How do you confirm it was the OOM killer and not the application?"
-  check="OOM killer: OOMKilled=true e exit 137"
+  check="OOM killer: o kernel contou oom_kill"
 >
+
+A container dies every so often with no log at all and no stack trace. How do you confirm it was the OOM killer and not the application?
+
   <Fragment slot="hint">
     If there is no log, it is because the process never got to write one. The
     record is with whoever killed it, not with whoever died.
@@ -190,7 +222,9 @@ kubectl get pod <pod> -o jsonpath='{.status.containerStatuses[0].lastState.termi
 sudo dmesg -T | grep -i -A2 'killed process'
 ```
 
-`OOMKilled=true` with `137` closes the case. The absence of a log **is** the
+`137` with `oom_kill` incremented closes the case — and note the order: the
+kernel's counter is the proof, Docker's flag is the convenience. The absence of a
+log **is** the
 evidence: SIGKILL leaves no chance to write anything, so an application crash
 would produce a stack trace and an OOM produces nothing.
 

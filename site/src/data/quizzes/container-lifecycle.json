@@ -30,7 +30,7 @@
         },
         {
           "text": "Ficou sem memória e foi morto pelo OOM killer.",
-          "why": "Esse é o 137 (128 + 9, SIGKILL). E nem todo 137 é OOM — o `docker inspect` tem o campo `OOMKilled` justamente porque o código de saída sozinho não distingue."
+          "why": "Esse é o 137 (128 + 9, SIGKILL). E nem todo 137 é OOM: um `docker stop` que estoura o prazo também termina em 137. Quem distingue com segurança é o contador `oom_kill` em `memory.events` — o campo `OOMKilled` do `docker inspect` existe para isso, mas foi medido reportando `false` num OOM real neste host."
         },
         {
           "text": "Faltou uma biblioteca compartilhada no momento de executar o binário.",
@@ -86,7 +86,7 @@
         },
         {
           "text": "It ran out of memory and the OOM killer got it.",
-          "why": "That is 137 (128 + 9, SIGKILL). And not every 137 is an OOM — `docker inspect` carries an `OOMKilled` field precisely because the exit code alone cannot tell."
+          "why": "That is 137 (128 + 9, SIGKILL). And not every 137 is an OOM: a `docker stop` that runs out its grace period also ends in 137. What tells them apart reliably is the `oom_kill` counter in `memory.events` — `docker inspect`'s `OOMKilled` field exists for this, but was measured reporting `false` on a genuine OOM on this host."
         },
         {
           "text": "A shared library was missing when the binary was executed.",

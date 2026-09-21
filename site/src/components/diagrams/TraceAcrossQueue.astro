@@ -1,0 +1,91 @@
+---
+/** obs-09 — o trace medido, atravessando a fila do Redis.
+ *
+ * Os números vêm de tracing-measured.json, gravado por
+ * tools/scripts/tracing-measure.py. Nenhum milissegundo aqui é escrito à mão:
+ * o desenho envelhece junto com a medição, ou não envelhece.
+ */
+import Figure from "../Figure.astro";
+import t from "../../data/tracing-measured.json";
+import type { Lang } from "../../i18n/ui";
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+
+const feliz = t.caminho_feliz;
+const total = feliz.duracao_ms;
+// Ordem de cascata: pelo instante em que cada span começou. A indentação vem
+// do nível na árvore — é assim que um visualizador de trace desenha.
+const spans = [...feliz.arvore].sort((a, b) => a.offset_ms - b.offset_ms);
+
+const X0 = 210;            // onde a régua de tempo começa
+const LARG = 460;          // largura útil da régua
+const px = (ms: number) => (ms / total) * LARG;
+
+// Só três classes de preenchimento existem no tema (accent, warn, danger) — e
+// nenhuma delas significa "erro" aqui. O `dg-box--raised` é a variante neutra.
+const COR: Record<string, string> = {
+  edge: "dg-fill-accent",
+  "api-go": "dg-box--accent",
+  "worker-py": "dg-box--raised",
+};
+
+const C = {
+  pt: {
+    title: "um trace_id · 3 serviços · " + feliz.spans + " spans",
+    fila: "a fila do Redis",
+    filaSub: "o traceparent viaja no CORPO da mensagem",
+    total: `${total} ms de ponta a ponta`,
+    caption:
+      "A cascata medida de uma requisição real desta stack. O span raiz nasce no <b>edge</b> — instrumentar só a aplicação deixaria o tempo do proxy fora da conta. A linha tracejada é onde quase toda instrumentação se parte: <b>o Redis não tem cabeçalho</b>, então o <code>traceparent</code> do W3C precisa viajar dentro do corpo da mensagem. Sem isso, os spans do worker continuariam existindo e corretos — num trace <i>separado</i>, e cada metade pareceria certa sozinha.",
+    alt: "Cascata de spans de um trace atravessando edge, api e worker, com a fila do Redis marcada no meio.",
+  },
+  en: {
+    title: "one trace_id · 3 services · " + feliz.spans + " spans",
+    fila: "the Redis queue",
+    filaSub: "traceparent rides in the message BODY",
+    total: `${total} ms end to end`,
+    caption:
+      "The measured waterfall of a real request through this stack. The root span is born at the <b>edge</b> — instrumenting only the application would leave the proxy's time out of the picture. The dashed line is where nearly every instrumentation breaks: <b>Redis has no headers</b>, so the W3C <code>traceparent</code> has to travel inside the message body. Without that, the worker's spans would still exist and still be correct — in a <i>separate</i> trace, and each half would look right on its own.",
+    alt: "Span waterfall of one trace crossing edge, api and worker, with the Redis queue marked in the middle.",
+  },
+}[lang];
+
+// A fronteira da fila fica entre o último span da api e o primeiro do worker.
+const primeiroWorker = spans.find((s) => s.servico === "worker-py");
+const yFila = primeiroWorker ? 44 + spans.indexOf(primeiroWorker) * 26 - 7 : 0;
+---
+<Figure caption={C.caption} alt={C.alt}>
+  <svg viewBox="0 0 700 260" xmlns="http://www.w3.org/2000/svg" font-size="11">
+    <text x="14" y="18" class="dg-title" font-size="11">{C.title}</text>
+    <text x={X0 + LARG} y="18" text-anchor="end" class="dg-faint" font-size="8.5">{C.total}</text>
+
+    {spans.map((s, i) => {
+      const y = 44 + i * 26;
+      const w = Math.max(px(s.duracao_ms), 2.5);
+      return (
+        <g>
+          <text x={16 + s.nivel * 11} y={y + 4} class="dg-muted" font-size="9">
+            {s.servico === "edge" ? "▸" : s.nivel > 0 ? "└" : "▸"}
+          </text>
+          <text x={28 + s.nivel * 11} y={y + 4} class="dg-title" font-size="9.5">{s.nome}</text>
+          <rect x={X0 + px(s.offset_ms)} y={y - 7} width={w} height="12" rx="3"
+                class={`dg-box ${COR[s.servico] ?? "dg-box--raised"}`} />
+          <text x={X0 + px(s.offset_ms) + w + 6} y={y + 3} class="dg-faint" font-size="8">
+            {s.duracao_ms} ms
+          </text>
+        </g>
+      );
+    })}
+
+    <path d={`M14 ${yFila} L686 ${yFila}`} class="dg-line dg-line--dashed" fill="none" />
+    <text x="14" y={yFila - 6} class="dg-muted" font-size="9" font-weight="620">{C.fila}</text>
+    <text x={X0 + LARG} y={yFila - 6} text-anchor="end" class="dg-faint" font-size="8">{C.filaSub}</text>
+
+    {["edge", "api-go", "worker-py"].map((s, i) => (
+      <g>
+        <rect x={14 + i * 92} y="238" width="11" height="9" rx="2" class={`dg-box ${COR[s]}`} />
+        <text x={30 + i * 92} y="246" class="dg-faint" font-size="8.5">{s}</text>
+      </g>
+    ))}
+  </svg>
+</Figure>

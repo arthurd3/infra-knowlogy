@@ -234,6 +234,16 @@ justamente por isso.
     renderização. Ao criar componente didático novo, pergunte o que acontece se
     a prop obrigatória faltar.
 
+    **Aconteceu de novo, em escala.** O `LabExercise` recebe a pergunta pelo
+    CORPO; 34 exercícios (17 lições ×2 idiomas — toda a trilha `operacao`, o
+    módulo Kubernetes, `obs-08` e `cicd-09`) a passavam por uma prop
+    `question=` que o componente não declara. Medido no HTML publicado:
+    `lab__question` com **0 caracteres** de texto. Passou por tudo — inclusive
+    pela checagem "as lições saem com quiz ou exercício", que via o elemento
+    existir. Hoje o `site-check` exige **20 caracteres de texto renderizado**
+    dentro do exercício. A lição da lição: quando uma prop sumir em silêncio
+    uma vez, procure onde mais a mesma forma foi copiada.
+
 42. **O denominador de um SLI tem um piso constante, e é aí que ele nasce
     errado.** A razão infraestrutura/usuário oscila com a carga e por isso é
     ruim como afirmação; o piso não oscila e é derivável: healthcheck a cada 10s
@@ -405,20 +415,70 @@ justamente por isso.
     LIMPO: com o Linkerd instalado ele reprova dizendo que o namespace já
     existe, fazendo um script correto parecer quebrado.)
 
+60. **O `.State.OOMKilled` do Docker diz `false` num OOM de verdade.** Medido
+    neste host, com o alocador como PID 1: saída **137** (128+9, o SIGKILL que
+    só o kernel manda) e `memory.events` do cgroup com `oom 1`, `oom_kill 1`,
+    `max 324`. Três fontes concordam e só a flag discorda. O portão nasceu
+    exigindo `OOMKilled=true` e **reprovou contra um OOM real**; a correção não
+    foi afrouxar a checagem, foi trocar a fonte — hoje ele lê `memory.events`
+    de DENTRO do cgroup (antes de o container sumir) e reporta a flag só como
+    informação. A lição publicada também afirmava `true 137`: estava errada e
+    foi corrigida, junto com o diagrama e dois quizzes. **Quando duas fontes
+    discordam, prefira a que escreveu o fato, não a que o observou.**
+61. **`OTEL_EXPORTER_OTLP_ENDPOINT` tem duas regras de parsing.** O SDK Go
+    aceita `host:port`; o módulo do Caddy exige **URL com esquema** e, sem ele,
+    monta `https:///v1/traces` e falha com `no Host in request URL`. O modo de
+    falhar é o pior: **a instrumentação funciona** — o `traceID` aparece no
+    access log, os spans nascem certos, e só a exportação morre. Quem olha o
+    log vê tracing funcionando e nenhum span no coletor.
+62. **OTLP/gRPC reenfileira; OTLP/HTTP descarta.** Com o coletor recém
+    reiniciado, a api e o worker (gRPC) reenviam e o edge (HTTP) **perde o
+    lote** — e só o edge some do trace, o que faz parecer erro de configuração
+    dele. A medição parava o coletor para truncar o arquivo; hoje ela só
+    **marca o deslocamento em bytes** e lê do ponto em diante. Não reiniciar
+    saiu mais barato E mais correto.
+63. **Esperar por um proxy do que se vai afirmar é corrida disfarçada.** A
+    medição aguardava "dois traces existirem" e depois afirmava "três
+    serviços" — coisas diferentes, porque os spans do edge chegam por outro
+    caminho e atrasam. Passava na bancada e reprovava dentro do `make verify`.
+    Primo da armadilha 48: **espere exatamente pela condição que a checagem
+    declara.**
+64. **`docker compose up` com um conjunto de arquivos DIFERENTE recria os
+    serviços** — ele vê configuração diferente e desfaz o overlay que outro
+    passo acabou de montar. O passo 10 do `verify` subia com `PROD` depois de o
+    passo 9 ter subido com `OBS`, e o edge terminava todo `make verify` sem
+    `OTEL_EXPORTER_OTLP_ENDPOINT`. Dentro do portão passava (a ordem salva);
+    quem medisse à mão logo depois via o edge "mal configurado".
+65. **Referência de comparação que se auto-invalida não falha: mente.** O custo
+    do tracing é medido contra uma imagem sem OTel — e o `sizes.sh` reconstrói
+    as tags de referência, que depois da instrumentação passam a TER OTel.
+    Comparar instrumentado com instrumentado dá delta zero, e a lição anunciaria
+    com número medido que observabilidade é de graça. Por isso a referência só
+    vale com **zero ocorrências de `go.opentelemetry.io` no binário**; sem
+    referência válida o script preserva o valor antigo e marca
+    `referencia_valida: false`.
+
 ## Ao mexer na stack
 
 - Rode `make verify` antes de considerar qualquer coisa pronta. Para iterar
   rápido: `SKIP_SCAN=1 SKIP_OBS=1 make verify`. O estado bom conhecido é
-  **45 checagens**, das quais **44 passam e 1 falha** — e a que falha é o passo 7,
-  por CVEs HIGH de `curl` no Alpine da imagem `web`, com correção disponível
-  (`make pins`). O passo 9 saiu de 4 para 9 checagens com as regras de SLO
-  (ADR 0018) e o passo 10 acrescentou 8 de operação (ADR 0022); `SKIP_OPS=1`
-  pula estas, que precisam da stack no ar.
+  **57 passaram · 0 falharam · 1 pulada** com `SKIP_SCAN=1`. O passo 7 (Trivy)
+  continua com CVEs HIGH de `curl` no Alpine da imagem `web`, com correção
+  disponível (`make pins`). O passo 9 cresceu três vezes: as regras de SLO
+  (ADR 0018), o Alertmanager, e o **tracing ponta a ponta** — 6 checagens que
+  provam um `trace_id` atravessando edge → api → fila do Redis → worker, mais o
+  custo medido contra referência sem OTel. O passo 10 acrescentou 8 de operação
+  (ADR 0022); `SKIP_OPS=1` pula estas, que precisam da stack no ar.
 - O profile `obs` deixou de ser só infraestrutura: `rules/slo.yml` tem 7 regras
   de gravação e 3 de alerta que o Prometheus carrega de verdade, e o portão
   prova que elas avaliam, que o SLI tem valor e que o relabel do cAdvisor ainda
   corta. `python3 tools/scripts/obs-measure.py` regrava
   `site/src/data/obs-measured.json`, que as lições e os diagramas citam.
+- O tracing é a outra metade: `python3 tools/scripts/tracing-measure.py` regrava
+  `site/src/data/tracing-measured.json`, e o diagrama `TraceAcrossQueue.astro`
+  o lê **em tempo de build** — nenhum milissegundo da lição é escrito à mão. Ele
+  não reinicia serviço nenhum (armadilha 62): marca o deslocamento do arquivo de
+  traces e lê do ponto em diante.
 - A trilha **Operação** é transversal como a de Segurança: ela não porta a stack
   para lugar nenhum, mede a que já existe. As checagens são o passo 10 do
   `verify`, e `python3 tools/scripts/ops-measure.py` regrava
@@ -669,7 +729,7 @@ Sem licença apurada, redesenhe em SVG e use `redrawnFrom`. O slot `legend` é o
 formato "figura anotada": lista numerada amarrando cada peça do desenho a algo
 que este repositório mede.
 
-**Testes** (`site/tests/`, 95 casos, `make site-test`). Cobrem a lógica do
+**Testes** (`site/tests/`, 97 casos, `make site-test`). Cobrem a lógica do
 portão, o fluxo do laboratório, a fidelidade da gravação, a paridade das chaves
 de i18n e as invariantes do conteúdo bilíngue — inclusive a que os diagramas
 tornaram necessária: **as duas versões de uma lição usam os mesmos

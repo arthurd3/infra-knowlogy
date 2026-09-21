@@ -1,0 +1,70 @@
+# O coletor — a peça que a aplicação NÃO precisa conhecer.
+#
+# ─── Por que existe, em vez de a api falar direto com o backend ─────────────
+# Sem coletor, cada serviço precisa saber o endereço, o protocolo e as
+# credenciais do backend de traces — e trocar de backend vira uma mudança em
+# todas as aplicações, com rebuild e redeploy de cada uma.
+#
+# Com coletor, a aplicação conhece UM endereço interno e fala OTLP. Trocar
+# Tempo por Jaeger, ou mandar para dois lugares ao mesmo tempo, é mexer neste
+# arquivo. É a mesma inversão que o `edge` faz para HTTP.
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  # Em lote, pela mesma razão do SDK: reduzir chamadas de rede. O coletor
+  # agrupa o que vem de VÁRIOS serviços, o que o SDK de um serviço só não
+  # consegue fazer.
+  batch:
+    timeout: 2s
+    send_batch_size: 256
+  # Um teto de memória, porque um coletor sem limite é o próximo incidente:
+  # numa tempestade de spans ele cresce até o OOM killer agir — e aí a
+  # observabilidade some exatamente quando você mais precisa dela.
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 192
+    spike_limit_mib: 48
+
+exporters:
+  # Arquivo, e não um backend de verdade, de propósito. Subir um Tempo ou um
+  # Jaeger acrescentaria um serviço com banco próprio para provar uma coisa
+  # que um arquivo JSON prova melhor: o portão LÊ os spans e conta quantos
+  # serviços um trace atravessou. Um backend seria mais bonito e menos
+  # verificável.
+  file:
+    path: /traces/traces.json
+    rotation:
+      max_megabytes: 16
+      max_backups: 2
+  # O `debug` no nível básico só conta — serve para ver no log do container se
+  # algo está chegando, sem despejar span nenhum.
+  debug:
+    verbosity: basic
+
+service:
+  # O coletor expõe as próprias métricas, e elas são a primeira coisa a olhar
+  # quando "os traces sumiram": `otelcol_receiver_accepted_spans` contra
+  # `otelcol_exporter_sent_spans` separa "não chegou" de "não saiu".
+  telemetry:
+    metrics:
+      level: basic
+      readers:
+        - pull:
+            exporter:
+              prometheus:
+                host: 0.0.0.0
+                port: 8888
+  pipelines:
+    traces:
+      receivers: [otlp]
+      # A ordem importa: memory_limiter PRIMEIRO, para ele poder recusar antes
+      # de o batch acumular.
+      processors: [memory_limiter, batch]
+      exporters: [file, debug]

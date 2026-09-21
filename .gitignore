@@ -13,6 +13,10 @@ site/.vitest/
 site/node_modules/
 node_modules/
 stack/services/api-go/bin/
+# O binário solto que um `go build` conteinerizado deixa no diretório montado.
+# Ele nasce do root (o build roda como root dentro do container) e tem ~39 MB —
+# entrar no repositório por descuido seria caro e irreversível.
+stack/services/api-go/api-go
 
 # Generated reports
 tools/reports/

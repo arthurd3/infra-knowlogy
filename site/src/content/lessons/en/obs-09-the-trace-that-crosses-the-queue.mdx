@@ -1,0 +1,245 @@
+---
+key: distributed-tracing
+lang: en
+track: observabilidade
+order: 9
+title: The trace that crosses the queue
+summary: "A metric says things got worse; a log says what happened in one case. Neither says where THIS request went. A trace does — and it breaks exactly where nobody looks."
+minutes: 16
+tags: [observability, tracing, opentelemetry, w3c, queue, propagation]
+sources:
+  - label: "W3C — Trace Context (Recommendation)"
+    url: "https://www.w3.org/TR/trace-context/"
+    kind: docs
+    accessed: "2026-09-21"
+  - label: "OpenTelemetry — Context Propagation"
+    url: "https://opentelemetry.io/docs/concepts/context-propagation/"
+    kind: docs
+    accessed: "2026-09-21"
+  - label: "Google Research — Dapper, a Large-Scale Distributed Systems Tracing Infrastructure"
+    url: "https://research.google/pubs/dapper-a-large-scale-distributed-systems-tracing-infrastructure/"
+    kind: book
+    accessed: "2026-09-21"
+  - label: "OpenTelemetry — Semantic Conventions"
+    url: "https://opentelemetry.io/docs/specs/semconv/"
+    kind: docs
+    accessed: "2026-09-21"
+  - label: "Caddy — the tracing directive"
+    url: "https://caddyserver.com/docs/caddyfile/directives/tracing"
+    kind: docs
+    accessed: "2026-09-21"
+---
+
+import TraceAcrossQueue from "../../../components/diagrams/TraceAcrossQueue.astro";
+
+Lesson 1 of this track declared a gap out loud: **a trace is the signal this
+stack does not have**. It has one now, and the road here taught more than the
+result did.
+
+## The question that is left over
+
+You have the metric: the error rate went up. You have the log: `connection
+refused` on `db:5432`, at 03:14. What neither answers is the question on-call
+actually asks at three in the morning:
+
+> **This request here — the one the customer complained about — where did it go,
+> and what did it spend the time on?**
+
+A metric is aggregated by construction: it sums thousands of requests and loses
+each one's identity. A log is specific by construction: it describes one event
+and knows nothing of what came before or after. A **trace** exists to stitch
+the two together.
+
+<Term word="trace" alt="trace">
+A **trace** is the record of one request crossing several processes. It is made
+of <b>spans</b> — each span is an interval with a name, a start, an end and a
+parent. Together they form a tree, and the root is the first process that saw
+the request.
+
+What makes a trace *distributed* is that the spans are born on different
+machines, in different languages, and still recognise one another as parts of
+the same tree.
+</Term>
+
+## How the pieces recognise each other
+
+A span created in the Python worker has to know it is a child of a span created
+in the Go api. That does not happen by magic: something has to **carry the
+identifier** from one process to the other.
+
+The format has been standardised since 2021, and it is a single-line HTTP header:
+
+```
+traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
+             │  │                                │                │
+             │  │                                │                └ flags (sampled?)
+             │  │                                └ the PARENT's span-id
+             │  └ trace-id: the same from start to finish
+             └ version
+```
+
+OpenTelemetry's **propagator** handles this, and over HTTP it is all automatic.
+
+<Term word="propagator" alt="propagator">
+The **propagator** is the piece that serialises and deserialises that context.
+It knows nothing about HTTP: it knows how to write key-value pairs into a
+*carrier* and read them back out.
+
+That is why the same propagator serves an HTTP header, the metadata of a Kafka
+message, or a field inside a JSON blob on a Redis list — the carrier changes,
+the shape of `traceparent` does not.
+</Term>
+
+## The picture, measured
+
+<TraceAcrossQueue />
+
+<Callout type="trap" label="The queue is where instrumentation breaks">
+HTTP has headers. A Redis list **does not**. When the api enqueues work, there
+is no obvious place to put the `traceparent` — and the most common outcome is
+not putting it anywhere.
+
+The result does not look like a defect. The worker's spans still exist, still
+correct, still with the right name and the right duration. They are simply in a
+**different trace**. Each half is flawless on its own, and the question a trace
+exists to answer — *where did it go* — stops having an answer at precisely the
+most interesting boundary.
+
+In this stack the api enqueues JSON with the `traceparent` inside, and the
+worker extracts it before opening its first span. The gate fails if the trace
+does not cover all three services.
+</Callout>
+
+## The path nobody instruments
+
+The happy path is what everyone instruments. The other one is what matters.
+
+When enrichment fails, the worker puts the code back on the queue and tries
+again. The first version here re-enqueued **the bare code** — with no context.
+That worked: the link got processed, the retry happened, the log recorded it.
+
+And it destroyed the trace silently. Measured: a URL returning 404 produced
+**three traces where there should have been one**. The request's trace held the
+first attempt; the other two floated free, tied to nothing.
+
+<Callout type="trap" label="The regression lives on the slow path">
+Notice the shape of the failure: tracing worked perfectly for fast requests and
+broke precisely on slow ones. The case you would investigate at 3 a.m. was the
+only one the instrument did not cover.
+
+Today the re-enqueue carries the context, the attempts nest inside the original
+trace, and the whole story of a link that failed three times fits in one tree.
+The gate counts the attempts and fails if they scatter.
+</Callout>
+
+## The environment-variable trap
+
+The api and the worker get `OTEL_EXPORTER_OTLP_ENDPOINT=otel-collector:4317`.
+The edge gets `http://otel-collector:4318`, and the difference is not a whim:
+Caddy's module requires a **URL with a scheme**. Without one it builds
+`https:///v1/traces` and fails with `no Host in request URL`.
+
+The failure mode is the worst possible one: **the instrumentation works**. The
+`trace_id` shows up in Caddy's access log, the spans are created correctly, and
+only the export dies. Anyone reading the log sees tracing working — and sees no
+spans at all in the collector.
+
+<LabExercise check="tracing: o span raiz é do edge" file="stack/services/edge/Caddyfile">
+
+You suspect the edge is generating spans but exporting none of them.
+
+Question: without touching the collector, how do you confirm **in one command**
+that the spans exist?
+
+
+<Fragment slot="hint">
+Caddy's `tracing` directive does not only create the span — it also adds two
+fields to every access-log line.
+</Fragment>
+
+<Fragment slot="answer">
+```bash
+docker compose logs edge | grep traceID
+```
+
+With the directive active, every access-log line carries `traceID` and `spanID`.
+If they are there, the span **was created** — and the problem lives between the
+process and the collector, not in the instrumentation.
+
+That is exactly how the export failure surfaced here: the `traceID` in Caddy's
+log matched the trace the collector had received from the api, proving the edge
+was part of the same trace and simply could not deliver its own spans.
+</Fragment>
+</LabExercise>
+
+## The price, measured
+
+This whole track is about minimal images. Hiding the cost of tracing here would
+be incoherent, so it is measured — and it is not small.
+
+| | without OTel | with OTel | |
+|---|---|---|---|
+| api image (Go) | 6.0 MB | 9.8 MB | **+63%** |
+| api binary | 14.8 MB | 27.8 MB | **+88%** |
+| worker image (Python) | 52.8 MB | 62.8 MB | **+19%** |
+
+The proof that the comparison is honest lives in the binary: the reference image
+has **zero** occurrences of `go.opentelemetry.io`, and the instrumented one has
+over **two thousand**. The gate demands that proof before recording the number —
+without it, comparing one instrumented build against another would show zero
+delta, and the lesson would announce, with a measured number, that observability
+is free.
+
+In Python the cost shows up differently: OTel, gRPC and protobuf together are
+**43.9% of every package byte** installed in the worker. The tracing library is
+bigger than the application it observes.
+
+<Tradeoff
+  a="Instrument everything"
+  b="Instrument only the boundaries"
+  whenA="When the question is “where did the time go INSIDE this service”. One span per database query finds the N+1 that no dashboard shows. It costs bytes in the image, CPU in the process and volume in the backend."
+  whenB="When the question is “which service is slow”. One span on the way in and one on the way out of each process already reconstructs the whole tree and answers that. It is what this stack does at the edge — which is why the proxy has a single span."
+  chose="b"
+  verdict="the edge gets one span, the applications get a handful each. A host for study can afford more; the point of the lesson is that the boundary spans are the ones that pay for themselves."
+/>
+
+<FieldNote
+  source="Dapper, a Large-Scale Distributed Systems Tracing Infrastructure (Google Research, 2010)"
+  url="https://research.google/pubs/dapper-a-large-scale-distributed-systems-tracing-infrastructure/"
+  kind="scale"
+  accessed="2026-09-21"
+>
+Dapper sampled, and aggressively. For high-volume services, keeping a small
+fraction of requests was enough to diagnose problems — the reasoning being that
+an anomaly that matters **repeats**, so it shows up in the sample.
+
+It is the decision this stack does not have to make: on a host for study,
+keeping everything is cheap. At scale, the cost of tracing stops being bytes in
+the image and becomes the backend that stores the spans.
+</FieldNote>
+
+## What the gate proves
+
+<RunIt title="The whole trace, from the gate">
+
+```bash
+# Rewrites the measurement and runs the five tracing checks
+make verify
+
+# Or just the measurement, with the stack already up
+python3 tools/scripts/tracing-measure.py
+```
+</RunIt>
+
+Five checks, and the fourth is the one that counts:
+
+1. one `trace_id` crosses all **three** services
+2. the root span belongs to the **edge**, not the api
+3. the worker's `http.fetch` and `db.update` are in the same trace as the request
+4. the **three attempts** stay in one trace, not in orphan traces
+5. the cost was measured against a **provably** uninstrumented reference
+
+Each was tested in the negative direction: a doctored JSON carrying the matching
+regression fails exactly the check that should fail, and only that one.
+
+<Quiz set="distributed-tracing" />

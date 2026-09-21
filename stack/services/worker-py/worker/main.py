@@ -20,6 +20,8 @@ import psycopg
 import redis
 from prometheus_client import Counter, Histogram, start_http_server
 
+from . import tracing
+
 from .config import Config
 from .enrich import SSRFBlocked, fetch_metadata
 
@@ -110,9 +112,16 @@ class Worker:
             if item is None:
                 continue
 
-            _, code = item
+            _, bruto = item
+            # A mensagem carrega o contexto do trace que começou na api. Sem
+            # este desempacotamento os spans do worker formariam um trace
+            # SEPARADO — correto e inútil.
+            code, ctx = tracing.desempacotar(bruto)
+            if not code:
+                continue
             with DURATION.time():
-                self.process(code)
+                with tracing.span("worker.enrich", ctx, code=code):
+                    self.process(code)
 
         self.close()
         log.info("worker desligado limpo")
@@ -137,7 +146,8 @@ class Worker:
                 url, attempts = row
 
                 try:
-                    meta = fetch_metadata(self.http, url, max_bytes=self.cfg.max_bytes)
+                    with tracing.span("http.fetch", url=url):
+                        meta = fetch_metadata(self.http, url, max_bytes=self.cfg.max_bytes)
                 except SSRFBlocked as exc:
                     # Não faz sentido tentar de novo: a URL nunca vai virar pública.
                     self._finish(conn, code, None, None, f"bloqueado: {exc}")
@@ -148,7 +158,8 @@ class Worker:
                     self._retry_or_give_up(conn, code, attempts, str(exc))
                     return
 
-                self._finish(conn, code, meta.title, meta.favicon, None)
+                with tracing.span("db.update", code=code):
+                    self._finish(conn, code, meta.title, meta.favicon, None)
                 JOBS.labels(result="ok").inc()
                 log.info("link enriquecido", extra={"extra_fields": {"code": code, "title": meta.title}})
 
@@ -163,7 +174,7 @@ class Worker:
             # Volta para o começo da fila. Um backoff de verdade usaria um
             # sorted set com timestamp; aqui a simplicidade vale mais que a
             # precisão, e o comportamento fica visível na lição.
-            self.redis.lpush(self.cfg.queue, code)
+            self.redis.lpush(self.cfg.queue, tracing.empacotar(code))
             JOBS.labels(result="retry").inc()
             log.info("reenfileirado", extra={"extra_fields": {"code": code, "attempt": attempts}})
         else:
@@ -193,6 +204,10 @@ class Worker:
 
 
 def main() -> int:
+    # Liga o tracing antes de qualquer trabalho. Sem OTEL_EXPORTER_OTLP_ENDPOINT
+    # tudo vira no-op, e a mesma imagem roda com e sem o profile `obs`.
+    provider = tracing.configurar()
+
     handler = logging.StreamHandler(sys.stdout)
     handler.setFormatter(JSONFormatter())
     logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO").upper(), handlers=[handler])
@@ -205,6 +220,12 @@ def main() -> int:
     worker = Worker(cfg)
     worker.install_signal_handlers()
     worker.run()
+
+    # O flush final. O exportador é EM LOTE: sem esta chamada, os spans das
+    # últimas mensagens processadas morrem com o processo — justamente as que
+    # interessam quando algo deu errado durante um desligamento.
+    if provider is not None:
+        provider.shutdown()
     return 0
 
 

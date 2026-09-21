@@ -52,6 +52,16 @@
 	# A API. handle (e não handle_path) preserva o prefixo /api, que é o que a
 	# API espera receber.
 	handle /api/* {
+		# ─── O span raiz nasce AQUI, e não na api ──────────────────────────
+		# O edge é o primeiro processo que vê a requisição. Sem instrumentá-lo,
+		# o trace começa na api e o tempo gasto no proxy — TLS, roteamento,
+		# espera por conexão a montante — fica fora da conta, invisível.
+		#
+		# O módulo lê OTEL_EXPORTER_OTLP_ENDPOINT do ambiente, e sem a variável
+		# ele não faz nada: a mesma imagem serve com e sem o profile `obs`.
+		tracing {
+			span edge-api
+		}
 		reverse_proxy api:8080 {
 			health_uri /healthz
 			health_interval 10s

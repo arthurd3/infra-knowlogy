@@ -92,10 +92,14 @@ $ docker run --name oom --memory=64m --memory-swap=64m python:3.13-alpine \
 while True: b.append(bytearray(8*1024*1024))'
 
 $ docker inspect oom --format '{{.State.OOMKilled}} {{.State.ExitCode}}'
-true 137
+false 137
 ```
 
-**Medido: 0,51 segundo do início até a morte.**
+**Medido: 0,51 segundo do início até a morte — e repare no `false`.**
+
+Esta saída não é um erro de digitação. O processo *foi* morto pelo OOM killer:
+137 é 128+9, o SIGKILL que só o kernel manda. E ainda assim o Docker registrou
+`OOMKilled=false`. Volte a essa linha depois de ler a armadilha abaixo.
 
 <Callout type="warn" title="137 = 128 + 9, e o 9 é o que importa">
 A convenção do shell é que um processo morto por sinal sai com `128 + número
@@ -118,9 +122,35 @@ oom 1
 oom_kill 1
 ```
 
-Um contador. Sem timestamp, sem qual processo, sem quanto pedia. É por isso
-que o `OOMKilled=true` do Docker e o `reason: OOMKilled` do Kubernetes valem
-tanto: eles preservam o fato que o cgroup só conta.
+Um contador. Sem timestamp, sem qual processo, sem quanto pedia. Em compensação
+ele é a fonte primária: quem escreve esse número é o kernel, na hora.
+
+<Callout type="trap" label="A flag do Docker pode dizer `false` num OOM real">
+O `.State.OOMKilled` é um registro de segunda mão, e ele erra. Medido neste
+host, com o alocador rodando como PID 1 do container:
+
+```console
+$ docker inspect oom --format '{{.State.OOMKilled}} {{.State.ExitCode}}'
+false 137
+
+$ cat /sys/fs/cgroup/memory.events     # lido de DENTRO, antes de o container sumir
+max 324
+oom 1
+oom_kill 1
+```
+
+Saída 137 é SIGKILL. `oom_kill 1` é o kernel dizendo que matou. `max 324` são as
+recuperações tentadas antes disso. Os três concordam, e só a flag do Docker
+discorda.
+
+O portão deste repositório nasceu exigindo `OOMKilled=true` e **reprovou contra
+um OOM que aconteceu de verdade**. A correção não foi afrouxar a checagem: foi
+trocar a fonte. Hoje ele lê `memory.events` de dentro do cgroup e reporta a flag
+do Docker só como informação.
+
+A lição geral vale além do Docker: quando duas fontes discordam, prefira a que
+escreveu o fato, não a que o observou.
+</Callout>
 
 <Tradeoff
   a="Limite baixo e apertado"
@@ -170,9 +200,11 @@ era outro modelo. Não medido aqui: esta máquina só tem a v2.
 </FieldNote>
 
 <LabExercise
-  question="Um container morre de tempos em tempos sem log nenhum e sem stack trace. Como confirmar que foi o OOM killer, e não a aplicação?"
-  check="OOM killer: OOMKilled=true e exit 137"
+  check="OOM killer: o kernel contou oom_kill"
 >
+
+Um container morre de tempos em tempos sem log nenhum e sem stack trace. Como confirmar que foi o OOM killer, e não a aplicação?
+
   <Fragment slot="hint">
     Se não há log, é porque o processo não teve chance de escrever um. O registro
     está em quem o matou, não em quem morreu.
@@ -190,7 +222,9 @@ kubectl get pod <pod> -o jsonpath='{.status.containerStatuses[0].lastState.termi
 sudo dmesg -T | grep -i -A2 'killed process'
 ```
 
-`OOMKilled=true` com `137` fecha o caso. Ausência de log **é** a evidência:
+`137` com `oom_kill` incrementado fecha o caso — e note a ordem: o contador do
+kernel é a prova, a flag do Docker é a conveniência. Ausência de log **é** a
+evidência:
 SIGKILL não deixa escrever nada, então um crash de aplicação produziria
 stack trace e um OOM não produz nada.
 

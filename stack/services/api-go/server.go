@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 func (a *app) routes() http.Handler {
@@ -27,7 +28,31 @@ func (a *app) routes() http.Handler {
 	mux.HandleFunc("GET /api/links/{code}", a.handleGet)
 	mux.HandleFunc("GET /{code}", a.handleRedirect)
 
-	return withMetrics(withRecover(mux))
+	// `otelhttp` por FORA do mux e por DENTRO das outras camadas: ele lê o
+	// `traceparent` que chegou (ou abre um trace novo), cria o span raiz da
+	// requisição e o põe no contexto — que é de onde todo span filho sai.
+	//
+	// O nome do span vem do padrão da rota e não da URL: sem isso, cada código
+	// de link vira um nome diferente e o backend enche de spans únicos, que é
+	// a versão de tracing do problema de cardinalidade.
+	comTrace := otelhttp.NewHandler(mux, "api",
+		otelhttp.WithSpanNameFormatter(func(_ string, r *http.Request) string {
+			if p := r.Pattern; p != "" {
+				return p
+			}
+			return r.Method
+		}),
+		// Saúde e métricas fora do trace: elas são 16 requisições por minuto
+		// com zero usuários (ver a lição de SLI), e trace delas é só custo.
+		otelhttp.WithFilter(func(r *http.Request) bool {
+			switch r.URL.Path {
+			case "/healthz", "/readyz", "/metrics":
+				return false
+			}
+			return true
+		}),
+	)
+	return withMetrics(withRecover(comTrace))
 }
 
 // handleHealthz é LIVENESS: "o processo está vivo?". Nunca toca em dependência

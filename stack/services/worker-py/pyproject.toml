@@ -13,6 +13,15 @@ dependencies = [
     "prometheus-client>=0.24,<0.25",
     "psycopg[binary]>=3.2,<4",
     "redis>=6.4,<7",
+    # ─── O custo do tracing, declarado aqui ─────────────────────────────────
+    # O comentário acima diz que cada pacote vira código na imagem final, e
+    # isso continua valendo. Estes quatro existem porque um trace que para na
+    # borda da fila não é um trace — é dois. A lição de tracing mede o delta
+    # de tamanho que eles custaram.
+    "opentelemetry-sdk>=1.30,<2",
+    "opentelemetry-exporter-otlp-proto-grpc>=1.30,<2",
+    "opentelemetry-instrumentation-httpx>=0.50b0",
+    "opentelemetry-instrumentation-psycopg>=0.50b0",
 ]
 
 [build-system]

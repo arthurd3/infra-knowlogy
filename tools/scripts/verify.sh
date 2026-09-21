@@ -406,6 +406,89 @@ else:
   SID=$(printf '%s' "$SIL" | python3 -c 'import sys,json;print(json.load(sys.stdin).get("silenceID",""))' 2>/dev/null)
   [ -n "$SID" ] && curl -sS -XDELETE "http://127.0.0.1:${APORT}/api/v2/silence/$SID" -o /dev/null 2>/dev/null
 
+  # ─── Tracing ponta a ponta ────────────────────────────────────────────────
+  # A pergunta que log e métrica não respondem: "esta requisição, esta aqui,
+  # passou por onde e gastou o tempo em quê?". O portão exige que UM trace_id
+  # atravesse o edge, a api, a fila do Redis e o worker — porque é exatamente na
+  # fila que a maioria das instrumentações se parte, e cada metade continua
+  # parecendo correta sozinha.
+  if python3 tools/scripts/tracing-measure.py >/tmp/tracem.txt 2>&1; then
+    ok "medições de tracing gravadas -> site/src/data/tracing-measured.json"
+  else
+    bad "a medição de tracing falhou"; tail -6 /tmp/tracem.txt | sed 's/^/       /'
+  fi
+
+  while IFS='|' read -r VEREDITO MSG; do
+    case "$VEREDITO" in
+      OK) ok "$MSG" ;;
+      "") : ;;
+      *)  bad "$MSG" ;;
+    esac
+  done < <(python3 - site/src/data/tracing-measured.json <<'PYTRACE'
+import json, sys
+
+try:
+    d = json.load(open(sys.argv[1]))
+except Exception as exc:
+    print(f"BAD|não consegui ler o tracing-measured.json ({exc})")
+    raise SystemExit(0)
+
+feliz = d.get("caminho_feliz", {})
+ret = d.get("caminho_retentativa", {})
+custo = d.get("custo", {}).get("api_go", {})
+nomes = lambda t: [s["nome"] for s in t.get("arvore", [])]
+servs = lambda t: t.get("servicos", [])
+
+# 1. Um trace_id só, atravessando os três processos. Se o traceparent não
+#    sobrevivesse à fila, haveria DOIS traces corretos em vez de um.
+if len(servs(feliz)) == 3 and set(servs(feliz)) == {"edge", "api-go", "worker-py"}:
+    print(f"OK|tracing: um trace_id atravessa os 3 serviços "
+          f"({feliz['spans']} spans, {feliz['duracao_ms']}ms)")
+else:
+    print(f"BAD|tracing: o trace não cobriu os 3 serviços (achei {servs(feliz)})")
+
+# 2. A raiz nasce no edge, não na api. Sem instrumentar o proxy, o tempo gasto
+#    nele fica fora da conta — e é onde TLS e espera por upstream moram.
+raiz = [s for s in feliz.get("arvore", []) if s.get("nivel") == 0]
+if len(raiz) == 1 and raiz[0]["servico"] == "edge":
+    print(f"OK|tracing: o span raiz é do edge ({raiz[0]['nome']}), e não da api")
+else:
+    print(f"BAD|tracing: a raiz não é do edge (achei {[r['servico'] for r in raiz]})")
+
+# 3. O worker chegou ao banco DENTRO do mesmo trace.
+if "db.update" in nomes(feliz) and "http.fetch" in nomes(feliz):
+    print("OK|tracing: http.fetch e db.update do worker estão no mesmo trace da requisição")
+else:
+    print(f"BAD|tracing: faltou http.fetch ou db.update no trace feliz ({nomes(feliz)})")
+
+# 4. A prova que importa: as RETENTATIVAS ficam no mesmo trace. Reenfileirar o
+#    código cru funcionava e produzia traces órfãos — o caminho lento, que é o
+#    único que você investiga, era justamente o que o tracing não cobria.
+tentativas = nomes(ret).count("http.fetch")
+if tentativas >= 3 and len(servs(ret)) == 3:
+    print(f"OK|tracing: as {tentativas} tentativas ficam NO MESMO trace "
+          f"(profundidade {ret['profundidade']}), e não em traces órfãos")
+elif tentativas >= 3:
+    print(f"BAD|tracing: as {tentativas} tentativas estão juntas mas o trace perdeu um serviço ({servs(ret)})")
+else:
+    print(f"BAD|tracing: só achei {tentativas} tentativas no trace de retentativa — "
+          f"o reenfileiramento perdeu o traceparent")
+
+# 5. O custo é medido contra uma referência PROVADAMENTE não instrumentada.
+#    Sem esta prova, comparar instrumentado com instrumentado daria delta zero e
+#    a lição anunciaria, com número medido, que observabilidade é de graça.
+if not custo.get("referencia_valida"):
+    print("BAD|tracing: não sobrou imagem sem OTel para comparar — o custo gravado é de outra execução")
+elif custo.get("simbolos_otel_sem") == 0 and (custo.get("simbolos_otel_com") or 0) > 1000:
+    pct = 100 * (custo["imagem_com_bytes"] / custo["imagem_sem_bytes"] - 1)
+    print(f"OK|tracing: custo medido contra referência com 0 símbolos OTel "
+          f"({custo['imagem_sem_bytes']/1e6:.1f} -> {custo['imagem_com_bytes']/1e6:.1f} MB, +{pct:.0f}%)")
+else:
+    print(f"BAD|tracing: a referência não prova ausência de OTel "
+          f"(sem={custo.get('simbolos_otel_sem')} com={custo.get('simbolos_otel_com')})")
+PYTRACE
+)
+
   if python3 tools/scripts/obs-measure.py >/tmp/obsm.txt 2>&1; then
     ok "medições gravadas -> site/src/data/obs-measured.json"
     sed 's/^/    /' /tmp/obsm.txt | tail -4
@@ -422,7 +505,20 @@ step "10/10 Operação (cgroup, OOM, DNS e Postgres)"
 if [ "${SKIP_OPS:-0}" = "1" ]; then
   skip "trilha de operação pulada (SKIP_OPS=1)"
 else
-  docker compose "${PROD[@]}" up -d --wait --wait-timeout 180 >/dev/null 2>&1
+  # ─── Subir com o MESMO conjunto de arquivos que o passo 9 usou ────────────
+  # Esta linha subia com `PROD`, sem o overlay de observabilidade — e o Compose
+  # trata isso como mudança de configuração: ele RECRIA os serviços que o
+  # overlay tocava, jogando fora o que o passo 9 acabou de montar.
+  #
+  # O sintoma foi o edge perder `OTEL_EXPORTER_OTLP_ENDPOINT` ao fim de todo
+  # `make verify`. Dentro do portão passava (o passo 10 vem depois do 9), mas a
+  # stack ficava sem tracing para quem fosse medir à mão logo em seguida — e a
+  # medição então acusava o edge de estar mal configurado.
+  if [ "${SKIP_OBS:-0}" = "1" ]; then
+    docker compose "${PROD[@]}" up -d --wait --wait-timeout 180 >/dev/null 2>&1
+  else
+    docker compose "${OBS[@]}" --profile obs up -d --wait --wait-timeout 180 >/dev/null 2>&1
+  fi
 
   # ── O UID do container É o UID do host. Enquanto o user namespace estiver
   # desligado (padrão do Docker), não há tradução nenhuma — e o `ps` do host
@@ -452,16 +548,37 @@ else
 
   # ── O OOM killer, provocado. O que importa não é morrer: é SIGKILL não ser
   # capturável, então nenhum `defer`, `finally` ou handler roda.
+  #
+  # ─── Por que NÃO confiar no `.State.OOMKilled` do Docker ──────────────────
+  # A primeira versão desta checagem exigia `OOMKilled=true`. Ela reprovou
+  # contra uma execução em que o OOM aconteceu de verdade: o Docker reportou
+  # `false` e o código de saída foi 137 — que é 128+9, exatamente o SIGKILL que
+  # o próprio Docker diz não ter acontecido.
+  #
+  # Quem tem a verdade é o kernel, em `memory.events` do cgroup. Medido nesta
+  # máquina: `oom 1`, `oom_kill 1`, `max 324` (as recuperações tentadas antes de
+  # matar). Por isso a checagem lê o contador de DENTRO do cgroup, antes de o
+  # container sumir, e a flag do Docker entra só como informação.
   docker rm -f ops-oom-gate >/dev/null 2>&1
-  docker run --name ops-oom-gate --memory=64m --memory-swap=64m python:3.13-alpine@sha256:1a63a53928ce53d2b0baf08092a703f4840ac5dfbd61fd48802dbf48e08c801e \
-    python -c 'b=[]
-while True: b.append(bytearray(8*1024*1024))' >/dev/null 2>&1
-  OOM_ESTADO=$(docker inspect ops-oom-gate --format '{{.State.OOMKilled}}|{{.State.ExitCode}}' 2>/dev/null)
+  OOM_SAIDA=$(docker run --name ops-oom-gate --memory=64m --memory-swap=64m \
+    --entrypoint sh python:3.13-alpine@sha256:1a63a53928ce53d2b0baf08092a703f4840ac5dfbd61fd48802dbf48e08c801e -c '
+python -c "b=[]
+while True: b.append(bytearray(8*1024*1024))" >/dev/null 2>&1
+echo "filho=$?"
+sed -n "s/^oom_kill /oom_kill=/p" /sys/fs/cgroup/memory.events' 2>/dev/null)
+  OOM_FLAG=$(docker inspect ops-oom-gate --format '{{.State.OOMKilled}}' 2>/dev/null)
   docker rm -f ops-oom-gate >/dev/null 2>&1
-  if [ "$OOM_ESTADO" = "true|137" ]; then
-    ok "OOM killer: OOMKilled=true e exit 137 (128 + 9, SIGKILL)"
+
+  OOM_FILHO=""; OOM_CONTA=""
+  case "$OOM_SAIDA" in *filho=*) OOM_FILHO=$(printf '%s\n' "$OOM_SAIDA" | sed -n 's/^filho=//p') ;; esac
+  case "$OOM_SAIDA" in *oom_kill=*) OOM_CONTA=$(printf '%s\n' "$OOM_SAIDA" | sed -n 's/^oom_kill=//p') ;; esac
+
+  if [ "${OOM_CONTA:-0}" -ge 1 ] 2>/dev/null && [ "$OOM_FILHO" = "137" ]; then
+    ok "OOM killer: o kernel contou oom_kill (=${OOM_CONTA}) e a saída foi 137 (128+9, SIGKILL) — o Docker reportou OOMKilled=${OOM_FLAG:-?}"
+  elif [ "$OOM_FILHO" = "137" ]; then
+    bad "OOM: a saída foi 137 mas memory.events não contou oom_kill (leu '${OOM_CONTA:-vazio}')"
   else
-    bad "o OOM não aconteceu como esperado (estado: ${OOM_ESTADO:-vazio})"
+    bad "OOM: o processo não foi morto por SIGKILL (saída '${OOM_FILHO:-vazia}', oom_kill '${OOM_CONTA:-vazio}')"
   fi
 
   # ── DNS: um rótulo desconhecido custa segundos; dois rótulos inexistentes

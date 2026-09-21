@@ -95,14 +95,18 @@ host; the Postgres and Redis exporters; and Prometheus itself.
 `make verify`: active series, Prometheus resident memory, and how much each
 target publishes before and after filtering.
 
-<Callout type="trap" label="Tracing is the signal this stack does NOT have">
-And the lesson will not pretend otherwise. Distributed tracing requires
-propagating a context identifier along the whole chain — api, Redis, worker —
-and none of the three applications does that today.
+<Callout type="note" label="Tracing was the signal this stack did not have">
+When this lesson was written, none of the three applications propagated any
+context, and saying so out loud was worth more than a "three pillars" diagram
+implying completeness.
 
-The path would be OpenTelemetry, which became the standard after OpenTracing
-merged with OpenCensus in 2019. It is declared as a gap in the roadmap, not
-hidden behind a "three pillars" diagram that implies completeness.
+They propagate now. The W3C `traceparent` leaves the edge, crosses the api,
+travels **inside the body** of the Redis message — because a queue has no
+headers — and reaches the worker. Lesson 9 measures the whole tree and the price
+it cost in image bytes.
+
+The diagram below was deliberately left as it was: it describes the question
+each signal answers, and that part did not change.
 </Callout>
 
 ## The fourth question
@@ -133,6 +137,7 @@ being spent** — and that requires having defined the budget first.
 `localhost:9090`.
 
 Question: why does Prometheus scrape itself, and what is lost without that?
+
 
 <Fragment slot="hint">
 Think about what happens when the problem is the monitoring itself.
