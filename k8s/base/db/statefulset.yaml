@@ -85,7 +85,21 @@ spec:
         - name: run-postgresql
           emptyDir: {medium: Memory, sizeLimit: 8Mi}
   volumeClaimTemplates:
-    - metadata:
+    # `apiVersion` e `kind` parecem redundantes aqui — o campo se chama
+    # volumeClaimTemplates, o que mais seria? — e são exatamente o que faz a
+    # diferença num fluxo GitOps.
+    #
+    # O API server os preenche ao aceitar o objeto. Sem eles no manifesto, o
+    # objeto VIVO tem dois campos que o Git não tem, e o ArgoCD reporta o
+    # StatefulSet como OutOfSync PARA SEMPRE: ele aplica, o servidor completa,
+    # e a diferença reaparece no ciclo seguinte.
+    #
+    # A correção podia ser um `ignoreDifferences` na Application. Declarar o
+    # campo é melhor: o manifesto passa a descrever o objeto como ele
+    # realmente é, e a ferramenta não precisa de exceção.
+    - apiVersion: v1
+      kind: PersistentVolumeClaim
+      metadata:
         name: pgdata
       spec:
         accessModes: [ReadWriteOnce]

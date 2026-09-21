@@ -1,0 +1,54 @@
+# A Application do ArgoCD — o objeto que diz "o cluster deve parecer com isto".
+#
+# ─── A fonte é o REPOSITÓRIO, não o seu laptop ──────────────────────────────
+# Este é o ponto que mais surpreende quem vem de `kubectl apply`. O ArgoCD lê
+# o Git; ele não sabe que você existe. Um arquivo alterado e não empurrado não
+# muda nada no cluster, e um `kubectl apply` feito à mão é DESFEITO no próximo
+# ciclo de reconciliação.
+#
+# É a mesma inversão que o módulo 4 (OpenTofu) faz com o estado, e a lição de
+# drift compara os quatro modelos lado a lado.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: stack
+  namespace: argocd
+  # Sem este finalizer, apagar a Application deixa os objetos órfãos no
+  # cluster — vivos e sem ninguém reconciliando. Com ele, o ArgoCD faz a
+  # limpeza em cascata.
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    # O repositório PÚBLICO. Não é o caminho local: se fosse, isto não seria
+    # GitOps — seria `kubectl apply` com passos a mais.
+    #
+    # O instalador substitui esta URL pela do `git remote get-url origin`, para
+    # que um fork funcione sem editar manifesto. O valor abaixo é só o padrão
+    # de quem clonou sem remote.
+    repoURL: REPO_URL_AQUI
+    targetRevision: main
+    path: k8s/base
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: infra-knowlogy
+  syncPolicy:
+    automated:
+      # `prune` apaga do cluster o que sumiu do Git. Sem isso, remover um
+      # manifesto do repositório não remove o objeto — e o cluster acumula
+      # coisas que ninguém declara mais.
+      prune: true
+      # `selfHeal` é o que faz a mudança manual ser DESFEITA. É a metade que
+      # transforma "o Git é a fonte" de declaração em mecanismo.
+      selfHeal: true
+    syncOptions:
+      # O namespace é criado pelo próprio k8s/base; sem esta opção o ArgoCD
+      # tentaria criá-lo também e brigaria com o manifesto.
+      - CreateNamespace=false
+      # `ServerSideApply` deixa o API SERVER resolver a mesclagem em vez de o
+      # ArgoCD calcular um patch. Importa aqui porque outros atores tocam os
+      # mesmos objetos — o portão escala deployments, o HPA muda `replicas` —
+      # e o apply do lado do servidor registra a propriedade de cada campo.
+      - ServerSideApply=true
+
