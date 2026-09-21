@@ -11,6 +11,7 @@
 #   SKIP_HPA=1       pula a medição de reação do HPA (~2 min de carga real)
 #   SKIP_GATEWAY=1   pula a instalação e as provas da Gateway API (~4 MB + 1 min)
 #   SKIP_GITOPS=1    pula a instalação do ArgoCD e a prova de drift (~2 MB + 2 min)
+#   SKIP_FLUX=1      pula o Flux (o ArgoCD sozinho não permite a comparação)
 #   KEEP_CLUSTER=1   reaproveita o cluster existente e não o destrói no final
 #                    (para iterar; a medição de criação do cluster fica de fora)
 set -uo pipefail
@@ -38,7 +39,8 @@ now_ms() { date +%s%3N; }
 # As medições que viram k8s-measured.json (e depois, números nas lições).
 M_CLUSTER_CREATE_S=""; M_STACK_READY_S=""; M_SELF_HEAL_S=""
 M_NOTREADY_S=""; M_ROLLING_TOTAL=""; M_ROLLING_FAILS=""; M_SHUTDOWN_MAX_MS=""
-M_NETPOL_WINDOW_MS=""; M_HPA_CEGA=""; M_HPA_CEGA_MIN=""; M_GITOPS_DRIFT_S=""
+M_NETPOL_WINDOW_MS=""; M_HPA_CEGA=""; M_HPA_CEGA_MIN=""
+M_GITOPS_DRIFT_S=""; M_FLUX_DRIFT_S=""
 M_HPA_BOOT=""; M_HPA_DEPOIS=""; M_HPA_TEORICO=""
 
 # ─── 1. Pré-requisitos e lint estático ───────────────────────────────────────
@@ -854,6 +856,50 @@ print("       fora de sincronia:", [f"{x[\"kind\"]}/{x[\"name\"]}" for x in r] o
   else
     bad "a mudança manual sobreviveu a 300s — selfHeal desligado, ou recuado por conflito anterior"
     "${KC[@]}" scale deploy/web --replicas="${DECLARADO:-1}" >/dev/null 2>&1
+  fi
+  # ── Flux, ao lado. A comparação da lição só é honesta porque os dois rodam.
+  if [ "${SKIP_FLUX:-}" = "1" ]; then
+    skip "Flux (SKIP_FLUX=1)"
+  else
+    FONTE=$(kubectl -n flux-system get gitrepository stack \
+      -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null)
+    KUST=$(kubectl -n flux-system get kustomization flux-demo \
+      -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null)
+    if [ "$FONTE" = "True" ] && [ "$KUST" = "True" ]; then
+      REV_FLUX=$(kubectl -n flux-system get gitrepository stack \
+        -o jsonpath='{.status.artifact.revision}' 2>/dev/null)
+      ok "Flux: GitRepository e Kustomization Ready (${REV_FLUX##*:})"
+    else
+      bad "Flux não reconciliou (GitRepository=${FONTE:-?} Kustomization=${KUST:-?})"
+    fi
+
+    # ── A mesma prova de drift, no outro reconciliador. O que a checagem
+    # afirma é diferente de propósito: aqui o pior caso É o intervalo, porque
+    # o kustomize-controller NÃO observa o cluster — ele reconcilia no
+    # temporizador. Medido: 43,6 · 60,0 · 60,0 s com `interval: 1m`, batendo
+    # no teto. O ArgoCD é sub-segundo no melhor caso e ILIMITADO no pior.
+    #
+    # Daí o limite generoso: o que se checa é que desfaz dentro de algumas
+    # janelas do intervalo, não uma velocidade.
+    DECL_FLUX=$(kubectl -n flux-demo get deploy eco -o jsonpath='{.spec.replicas}' 2>/dev/null)
+    if [ -n "$DECL_FLUX" ]; then
+      kubectl -n flux-demo scale deploy/eco --replicas=3 >/dev/null 2>&1
+      T_FLUX=$(now_ms)
+      M_FLUX_DRIFT_S=""
+      for _ in $(seq 1 240); do
+        [ "$(kubectl -n flux-demo get deploy eco -o jsonpath='{.spec.replicas}' 2>/dev/null)" = "$DECL_FLUX" ] && {
+          M_FLUX_DRIFT_S=$(( ($(now_ms) - T_FLUX) / 1000 )); break; }
+        sleep 1
+      done
+      if [ -n "$M_FLUX_DRIFT_S" ]; then
+        ok "Flux desfez o drift em ${M_FLUX_DRIFT_S}s (limitado pelo interval de 1m)"
+      else
+        bad 'o Flux não desfez o drift em 240s — wait desligado ou controlador parado'
+        kubectl -n flux-demo scale deploy/eco --replicas="${DECL_FLUX:-1}" >/dev/null 2>&1
+      fi
+    else
+      bad 'o Deployment eco não existe — o Flux não aplicou gitops/flux-demo'
+    fi
   fi
 fi
 

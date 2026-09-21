@@ -1,6 +1,6 @@
 {
   "_comentario": "Medido contra o cluster kind com ArgoCD v3.5.3 e selfHeal ligado. A mudança manual é um `kubectl scale deploy/web --replicas=3`; o tempo é até o ArgoCD devolver o valor declarado no Git.",
-  "reconciliador": "argocd",
+  "reconciliador": "argocd + flux",
   "versao": "v3.5.3",
   "fonte": "git@github.com:arthurd3/infra-knowlogy.git",
   "segundosDoPushAteSincronizar": 240,
@@ -19,5 +19,28 @@
     96.39
   ],
   "_notaHonestidade": "Estes números NÃO são uma distribuição da mesma grandeza, e juntá-los numa mediana seria mentir. O selfHeal do ArgoCD tem recuo exponencial: a primeira correção depois de uma sincronização limpa levou 0,34 s duas vezes; provocando de seguida, subiu para 11 s e 48 s; e sob provocação contínua estabilizou num platô de ~96 s. Uma pausa de 90 s NÃO foi suficiente para zerar o recuo — voltou em 26 s, não em 0,34 s. Não caracterizei quanto tempo de ociosidade zera o contador, e digo isso em vez de inventar um número.",
-  "_notaProjeto": "O recuo é de propósito: um controlador em laço de briga com um operador humano martelaria o API server. É a mesma razão de o HPA ter janela de estabilização para descer. Medir reconciliação exige linha de base fria, como a do HPA."
+  "_notaProjeto": "O recuo é de propósito: um controlador em laço de briga com um operador humano martelaria o API server. É a mesma razão de o HPA ter janela de estabilização para descer. Medir reconciliação exige linha de base fria, como a do HPA.",
+  "flux": {
+    "versao": "v2.9.5",
+    "manifestoKB": 333,
+    "intervaloConfigurado": "1m",
+    "segundosParaDesfazer": [
+      43.6,
+      60.04,
+      60.0
+    ],
+    "_nota": "O kustomize-controller do Flux NÃO observa o cluster: ele reconcilia no `interval`. Por isso o pior caso é o intervalo e nunca passa dele — os três valores batem no teto de 60 s porque o intervalo é 1m. É uma propriedade da configuração, e a afirmação estável é 'limitado pelo intervalo', não '60 s'."
+  },
+  "argocd": {
+    "versao": "v3.5.3",
+    "manifestoKB": 1873,
+    "intervaloPadraoDeConsulta": "~3m",
+    "segundosParaDesfazer": [
+      0.34,
+      175.93,
+      113.57
+    ],
+    "_nota": "O selfHeal do ArgoCD observa o cluster, então a primeira correção é sub-segundo. Mas ele recua exponencialmente sob provocação repetida, e o pior caso não tem teto — medido até 175,9 s."
+  },
+  "_comparacao": "A troca é de arquitetura, não de qualidade: o ArgoCD é mais rápido no melhor caso e ILIMITADO no pior; o Flux é mais lento no melhor caso e LIMITADO no pior. Quem opera um cluster onde algo insiste em causar drift — um operador mal comportado, uma pessoa que continua escalando à mão — vê o ArgoCD ficar progressivamente mais lento enquanto o Flux permanece previsível."
 }
