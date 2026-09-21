@@ -7,12 +7,12 @@
       "rodada": 1,
       "replicasAntes": 2,
       "replicasDepois": 4,
-      "segundosAtePerceber": 19.2,
-      "segundosAteEscalar": 19.2,
+      "segundosAtePerceber": 17.1,
+      "segundosAteEscalar": 17.1,
       "resolucaoDosCarimbosSegundos": 1,
       "segundosAtePodPronto": 19.2,
       "segundosDeBootDoPod": 1.0,
-      "janelaCegaSegundos": 19.2
+      "janelaCegaSegundos": 17.1
     },
     {
       "rodada": 2,
@@ -22,30 +22,30 @@
       "segundosAteEscalar": 29.9,
       "resolucaoDosCarimbosSegundos": 1,
       "segundosAtePodPronto": 32.0,
-      "segundosDeBootDoPod": 1.0,
+      "segundosDeBootDoPod": 2.0,
       "janelaCegaSegundos": 29.9
     },
     {
       "rodada": 3,
       "replicasAntes": 3,
-      "replicasDepois": 4,
-      "segundosAtePerceber": 29.9,
-      "segundosAteEscalar": 29.9,
+      "replicasDepois": 5,
+      "segundosAtePerceber": 44.7,
+      "segundosAteEscalar": 44.7,
       "resolucaoDosCarimbosSegundos": 1,
-      "segundosAtePodPronto": 32.1,
+      "segundosAtePodPronto": 46.9,
       "segundosDeBootDoPod": 1.0,
-      "janelaCegaSegundos": 29.9
+      "janelaCegaSegundos": 44.7
     }
   ],
-  "janelaCegaMinSegundos": 19.2,
-  "janelaCegaMaxSegundos": 29.9,
+  "janelaCegaMinSegundos": 17.1,
+  "janelaCegaMaxSegundos": 44.7,
   "limiteTeoricoSegundos": 45,
   "limiteTeoricoTermos": {
     "raspagensParaFormarTaxa": 2,
     "metricResolutionSegundos": 15,
     "hpaSyncPeriodSegundos": 15
   },
-  "bootMaxSegundos": 1.0,
+  "bootMaxSegundos": 2.0,
   "resolucaoDosCarimbosSegundos": 1,
   "estabilizacaoParaDescerSegundos": 300
 }
