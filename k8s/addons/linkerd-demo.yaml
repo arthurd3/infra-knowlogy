@@ -1,0 +1,214 @@
+# Dois serviços conversando, para o mTLS ser PROVADO e não afirmado.
+#
+# ─── Por que num namespace separado ─────────────────────────────────────────
+# Injetar sidecar na stack de `infra-knowlogy` mudaria o objeto que todas as
+# outras checagens medem: o pod da api ganharia um segundo container, o
+# desligamento gracioso passaria a ter outro tempo, e as provas de
+# NetworkPolicy passariam a atravessar um proxy. Nada disso é errado — é
+# apenas outro experimento, e misturá-lo invalidaria os números anteriores.
+#
+# Aqui a malha é medida onde ela não contamina nada.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: linkerd-demo
+  annotations:
+    # A anotação que faz o proxy-injector agir. Ela vale para o NAMESPACE:
+    # todo pod criado aqui ganha o sidecar, sem o manifesto dele saber.
+    #
+    # É o ponto que mais desconcerta: a aplicação não é alterada, não é
+    # recompilada e não sabe que está numa malha. O que muda é o iptables
+    # dentro do netns do pod, posto lá por um init container.
+    linkerd.io/inject: enabled
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: servidor
+  namespace: linkerd-demo
+  labels: {app: servidor}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: servidor}
+  template:
+    metadata:
+      labels: {app: servidor}
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: servidor
+          image: infra-knowlogy/web:dev
+          imagePullPolicy: Never
+          ports:
+            - {name: http, containerPort: 8080}
+          readinessProbe:
+            httpGet: {path: /, port: http}
+            periodSeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+              add: [NET_BIND_SERVICE, CHOWN, DAC_OVERRIDE, SETGID, SETUID]
+          resources:
+            limits: {cpu: "200m", memory: 64Mi}
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+            - {name: caddy-data, mountPath: /data}
+            - {name: caddy-config, mountPath: /config}
+      volumes:
+        - name: tmp
+          emptyDir: {medium: Memory, sizeLimit: 16Mi}
+        - name: caddy-data
+          emptyDir: {sizeLimit: 16Mi}
+        - name: caddy-config
+          emptyDir: {sizeLimit: 8Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: servidor
+  namespace: linkerd-demo
+spec:
+  selector: {app: servidor}
+  ports:
+    - {name: http, port: 8080, targetPort: http}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cliente
+  namespace: linkerd-demo
+  labels: {app: cliente}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: cliente}
+  template:
+    metadata:
+      labels: {app: cliente}
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: cliente
+          image: infra-knowlogy/worker-py:dev
+          imagePullPolicy: Never
+          # Um pedido por segundo, para o proxy ter o que contar. A aplicação
+          # fala HTTP simples — ela não sabe que o tráfego dela é cifrado.
+          command: ["python3", "-c"]
+          args:
+            - |
+              import time, urllib.request
+              while True:
+                  try:
+                      urllib.request.urlopen("http://servidor:8080/", timeout=5).read()
+                  except Exception:
+                      pass
+                  time.sleep(1)
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          resources:
+            limits: {cpu: "100m", memory: 64Mi}
+---
+# ─── O par de controle, SEM malha ───────────────────────────────────────────
+# A afirmação mais repetida e menos medida sobre service mesh é "acrescenta
+# latência". Medir isso exige o mesmo par de serviços, na mesma máquina, no
+# mesmo instante — um dentro da malha e outro fora. Este namespace não tem a
+# anotação de injeção, e é só isso que o diferencia do outro.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: linkerd-demo-sem
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: servidor
+  namespace: linkerd-demo-sem
+  labels: {app: servidor}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: servidor}
+  template:
+    metadata:
+      labels: {app: servidor}
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: servidor
+          image: infra-knowlogy/web:dev
+          imagePullPolicy: Never
+          ports:
+            - {name: http, containerPort: 8080}
+          readinessProbe:
+            httpGet: {path: /, port: http}
+            periodSeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+              add: [NET_BIND_SERVICE, CHOWN, DAC_OVERRIDE, SETGID, SETUID]
+          resources:
+            limits: {cpu: "200m", memory: 64Mi}
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+            - {name: caddy-data, mountPath: /data}
+            - {name: caddy-config, mountPath: /config}
+      volumes:
+        - name: tmp
+          emptyDir: {medium: Memory, sizeLimit: 16Mi}
+        - name: caddy-data
+          emptyDir: {sizeLimit: 16Mi}
+        - name: caddy-config
+          emptyDir: {sizeLimit: 8Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: servidor
+  namespace: linkerd-demo-sem
+spec:
+  selector: {app: servidor}
+  ports:
+    - {name: http, port: 8080, targetPort: http}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cliente
+  namespace: linkerd-demo-sem
+  labels: {app: cliente}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: cliente}
+  template:
+    metadata:
+      labels: {app: cliente}
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: cliente
+          image: infra-knowlogy/worker-py:dev
+          imagePullPolicy: Never
+          command: ["python3", "-c"]
+          args:
+            - |
+              import time, urllib.request
+              while True:
+                  try:
+                      urllib.request.urlopen("http://servidor:8080/", timeout=5).read()
+                  except Exception:
+                      pass
+                  time.sleep(1)
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          resources:
+            limits: {cpu: "100m", memory: 64Mi}

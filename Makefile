@@ -140,6 +140,10 @@ k8s-gateway: ## Instala a Gateway API (Envoy Gateway) e publica a stack em 8083
 k8s-gitops: ## Instala o ArgoCD no kind e registra a Application deste repositório
 	@bash tools/scripts/k8s-gitops-install.sh
 
+.PHONY: k8s-mesh
+k8s-mesh: ## Instala o Linkerd e os dois pares (com e sem malha) para comparar
+	@bash tools/scripts/k8s-mesh-install.sh
+
 .PHONY: k8s-verify
 k8s-verify: ## O portão do módulo Kubernetes, end-to-end
 	@bash tools/scripts/k8s-verify.sh

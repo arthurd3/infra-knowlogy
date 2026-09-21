@@ -1,0 +1,31 @@
+{
+  "_comentario": "Medido contra o cluster kind com Linkerd edge-26.9.3. Dois pares idênticos de serviços, um em namespace com `linkerd.io/inject: enabled` e outro sem — a única diferença entre eles é a anotação.",
+  "versao": "edge-26.9.3",
+  "cliBinarioMB": 87,
+  "mTLS": {
+    "seriesComTlsTrue": 122,
+    "identidadeDoServidor": "default.linkerd-demo.serviceaccount.identity.linkerd.cluster.local",
+    "_nota": "A identidade é a SERVICEACCOUNT, não o IP. É isso que a NetworkPolicy não consegue expressar: ela diz QUEM PODE FALAR (por rótulo ou endereço), e o mTLS diz QUEM É QUEM (por certificado). As duas não se substituem."
+  },
+  "sidecar": {
+    "memoriaMiB": 3,
+    "cpuMili": 1,
+    "_nota": "O container da aplicação usa 10–12 MiB; o proxy acrescenta 3 MiB por pod."
+  },
+  "latenciaMs": {
+    "comMalha": {
+      "mediana": 0.64,
+      "p95": 1.08,
+      "p99": 76.23,
+      "n": 200
+    },
+    "semMalha": {
+      "mediana": 0.46,
+      "p95": 1.63,
+      "p99": 79.66,
+      "n": 200
+    },
+    "deltaMediana": 0.18,
+    "_nota": "A afirmação mais repetida sobre service mesh é que ela acrescenta latência. Medida aqui: 0,18 ms na mediana. No p95 a malha ficou MAIS RÁPIDA (1,08 contra 1,63 ms), provavelmente por reuso de conexão no proxy. Ressalva honesta: são dois pods no MESMO nó, com carga útil trivial e um pedido por vez — payload grande, tráfego entre nós e concorrência alta mudam o número."
+  }
+}

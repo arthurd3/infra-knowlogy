@@ -12,6 +12,7 @@
 #   SKIP_GATEWAY=1   pula a instalação e as provas da Gateway API (~4 MB + 1 min)
 #   SKIP_GITOPS=1    pula a instalação do ArgoCD e a prova de drift (~2 MB + 2 min)
 #   SKIP_FLUX=1      pula o Flux (o ArgoCD sozinho não permite a comparação)
+#   SKIP_MESH=1      pula o Linkerd (CLI de 87 MB + plano de controle com PKI)
 #   KEEP_CLUSTER=1   reaproveita o cluster existente e não o destrói no final
 #                    (para iterar; a medição de criação do cluster fica de fora)
 set -uo pipefail
@@ -900,6 +901,65 @@ print("       fora de sincronia:", [f"{x[\"kind\"]}/{x[\"name\"]}" for x in r] o
     else
       bad 'o Deployment eco não existe — o Flux não aplicou gitops/flux-demo'
     fi
+  fi
+fi
+
+# ─── 10c. Service mesh: mTLS que a aplicação não pediu ───────────────────────
+step "10c/11 Service mesh (Linkerd)"
+
+if [ "${SKIP_MESH:-}" = "1" ]; then
+  skip "service mesh (SKIP_MESH=1)"
+elif ! bash tools/scripts/k8s-mesh-install.sh >/tmp/mesh.log 2>&1; then
+  bad "a instalação do Linkerd falhou — $(tail -1 /tmp/mesh.log)"
+else
+  LK="$ROOT/k8s/.cache/linkerd"
+  ok "Linkerd instalado (binário conferido por sha256)"
+
+  # `linkerd check` é a melhor checagem de malha que existe: ela valida a PKI,
+  # a validade dos certificados, a versão dos proxies e o webhook de injeção.
+  if "$LK" check >/tmp/lkcheck.txt 2>&1; then
+    ok "linkerd check: plano de controle, PKI e proxies saudáveis"
+  else
+    bad "linkerd check reprovou"; grep -E '^×|^‼' /tmp/lkcheck.txt | head -4 | sed 's/^/       /'
+  fi
+
+  # ── A injeção acontece por ANOTAÇÃO DE NAMESPACE. A aplicação não é
+  # alterada, não é recompilada e não sabe que está numa malha — o que muda é
+  # o iptables dentro do netns do pod, posto lá por um init container.
+  POD_MALHA=$(kubectl -n linkerd-demo get pod -l app=cliente \
+    -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
+  INJ=$(kubectl -n linkerd-demo get pod "$POD_MALHA" \
+    -o jsonpath='{.spec.initContainers[*].name}' 2>/dev/null)
+  case "$INJ" in
+    *linkerd-proxy*) ok "o sidecar entrou sem o manifesto pedir (init: $INJ)" ;;
+    *) bad "o proxy não foi injetado (initContainers: ${INJ:-nenhum})" ;;
+  esac
+
+  # ── A prova do mTLS, e ela é sobre IDENTIDADE e não sobre cifra. O rótulo
+  # `server_id` do proxy nomeia a SERVICEACCOUNT do outro lado — é isso que a
+  # NetworkPolicy não consegue expressar: ela diz quem pode falar, o mTLS diz
+  # quem é quem.
+  MET=$("$LK" diagnostics proxy-metrics -n linkerd-demo "po/$POD_MALHA" 2>/dev/null)
+  N_TLS=$(printf '%s' "$MET" | grep -c 'tls="true"' || true)
+  if [ "${N_TLS:-0}" -ge 1 ]; then
+    ok "mTLS: ${N_TLS} séries com tls=\"true\" no proxy do cliente"
+  else
+    bad "nenhuma série com tls=\"true\" — o tráfego não está sendo cifrado"
+  fi
+  case "$MET" in
+    *serviceaccount.identity.linkerd.cluster.local*)
+      ok "a identidade do outro lado é a ServiceAccount, não o IP" ;;
+    *) bad "o proxy não reporta identidade de ServiceAccount no server_id" ;;
+  esac
+
+  # ── E o par de CONTROLE, sem malha. Sem ele a comparação de custo da lição
+  # seria contra um número lembrado.
+  SEM=$(kubectl -n linkerd-demo-sem get pod -l app=cliente \
+    -o jsonpath='{.items[0].spec.initContainers[*].name}' 2>/dev/null)
+  if [ -z "$SEM" ]; then
+    ok "o par de controle NÃO tem sidecar (a anotação é a única diferença)"
+  else
+    bad "o namespace de controle foi injetado — a comparação perdeu o sentido"
   fi
 fi
 

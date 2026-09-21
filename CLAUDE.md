@@ -391,6 +391,20 @@ justamente por isso.
     server. Mesma família da armadilha 53: reconciliação se mede com linha de
     base FRIA, e o portão afirma que DESFAZ, nunca em quanto tempo.
 
+63. **O Linkerd EXIGE os CRDs da Gateway API**, e a mensagem de erro fala de
+    Gateway API — não de Linkerd. O `linkerd check --pre` reprova mandando
+    aplicar `standard-install.yaml` do `gateway-api`, o que parece um problema
+    de outro componente. Ele os usa para HTTPRoute. O `k8s-mesh-install.sh`
+    instala o Envoy Gateway antes se os CRDs faltarem.
+64. **`linkerd install` GERA uma PKI nova a cada execução.** Reaplicar num
+    cluster que já tem o plano de controle troca a âncora de confiança, e todo
+    proxy já injetado passa a apresentar certificado que o novo emissor não
+    reconhece — a malha quebra **em silêncio, pod a pod**, conforme eles
+    reiniciam. Um instalador idempotente precisa checar se o
+    `linkerd-identity` existe antes. (E o `linkerd check --pre` é para cluster
+    LIMPO: com o Linkerd instalado ele reprova dizendo que o namespace já
+    existe, fazendo um script correto parecer quebrado.)
+
 ## Ao mexer na stack
 
 - Rode `make verify` antes de considerar qualquer coisa pronta. Para iterar

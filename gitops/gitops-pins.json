@@ -21,5 +21,11 @@
     "version": "v2.9.5",
     "url": "https://github.com/fluxcd/flux2/releases/download/v2.9.5/install.yaml",
     "sha256": "cc3dcd743af16215838b6937e1fce83745bf24c0dcc6c59737c59df15429caaf"
+  },
+  "linkerd": {
+    "version": "edge-26.9.3",
+    "url": "https://github.com/linkerd/linkerd2/releases/download/edge-26.9.3/linkerd2-cli-edge-26.9.3-linux-amd64",
+    "sha256": "79045fbc9352e3886127015a671d86ca78237ad72a32353df4602f6c6f235694",
+    "_nota": "Binario de 89 MB: fica no cache, nunca no repositorio."
   }
 }
