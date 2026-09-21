@@ -78,22 +78,24 @@ setembro de 2026, depois de a trilha de Fundamentos ser retrabalhada
 
 | trilha | lições | `Term` | `Tradeoff` | `FieldNote` |
 |---|---|---|---|---|
-| kubernetes | 10 | 12 | 10 | 10 |
-| operacao | 7 | 8 | 7 | 7 |
-| fundamentos | 8 | 15 | 1 | 1 |
-| **cicd** | 8 | **0** | 1 | 1 |
-| iac | 8 | 6 | 7 | 7 |
-| observabilidade | 7 | 7 | 3 | 1 |
-| producao | 6 | 6 | 6 | 2 |
 | seguranca | 6 | 13 | 3 | 9 |
+| cicd | 9 | 18 | 6 | 5 |
+| fundamentos | 8 | 15 | 1 | 1 |
+| operacao | 8 | 10 | 8 | 8 |
+| kubernetes | 11 | 13 | 11 | 11 |
+| producao | 7 | 8 | 7 | 3 |
+| observabilidade | 9 | 10 | 6 | 4 |
+| iac | 8 | 6 | 7 | 7 |
 
-O Kubernetes era o pior caso e era também a trilha mais curta — as duas coisas
-pelo mesmo motivo, e as duas resolvidas na mesma passada: as sete lições novas
-nasceram com os primitivos e as três antigas receberam o retrofit — a trilha
-passou de zero a ser a mais bem coberta das sete. Hoje o pior caso é o **cicd**,
-com 8 lições e nenhum `Term`. A `library.json` cobre
-Fundamentos, Observabilidade e Produção; estendê-la para as outras trilhas é
-trabalho declarado, não esquecido.
+Duas passadas de retrofit, e a dívida está paga. O Kubernetes era o pior caso e
+era também a trilha mais curta — as duas coisas pelo mesmo motivo, e as duas
+resolvidas juntas. Depois foi a vez do **cicd**, que tinha 9 lições e **um**
+`Term`: hoje tem 18, dois por lição, mais 6 `Tradeoff` e 5 `FieldNote`.
+
+**Nenhuma trilha tem lição sem conceito aberto**, e a `library.json` deixou de
+cobrir três trilhas para cobrir **todas as 66 lições**, com 36 conceitos e 142
+referências conferidas — os 25 links audiovisuais checados pelo título que o
+YouTube devolve, porque id inventado responde 200 com página de erro.
 
 ## Itens dentro dos módulos já abertos
 
@@ -105,8 +107,12 @@ trabalho declarado, não esquecido.
   [ADR 0019](adr/0019-reescopar-a-trilha-producao.md) registra a auditoria e o
   critério: só entrou o que o repositório TEM e ninguém ensinava.
 
-  Ficou de fora e continua sem dono: **Alertmanager** (o `firing` da trilha de
-  Observabilidade não notifica ninguém) e **tracing/OpenTelemetry**.
+  Os dois itens que ficaram de fora **foram feitos**: o **Alertmanager**
+  ([ADR 0023](adr/0023-o-alerta-que-sai.md)), com roteamento, inibição,
+  silenciamento e um receptor que registra a entrega; e o **tracing ponta a
+  ponta** ([ADR 0024](adr/0024-tracing-e-o-que-ele-custa.md)), com um `trace_id`
+  atravessando edge, api, a fila do Redis e o worker — e o custo medido contra
+  uma imagem provadamente sem OTel (+63% na imagem da api, +88% no binário).
 - **Módulo 4:** de pé e verde (28 checagens), com as 8 lições escritas. Ficou
   para depois: um backend remoto de verdade (com lock) para a lição 2 deixar de
   citar concorrência sem medi-la, e o espelho do módulo 2 — provisionar o
@@ -117,9 +123,15 @@ trabalho declarado, não esquecido.
   faltar até setembro de 2026, muito depois de existirem. Ficou de fora:
   **GitOps** (ArgoCD ou Flux), que é o chip de mercado que o módulo não cobre.
 
-  A assimetria da assinatura continua sendo a parte interessante e está na
-  lição `cicd-07`: no GitHub Actions ela é keyless pelo OIDC do workflow; num
-  Jenkins self-hosted custa uma chave gerenciada.
+  O **GitOps** também saiu: ArgoCD v3.5.3 e Flux v2.9.5 no mesmo cluster,
+  reconciliando o mesmo repositório, na lição `cicd-09` e no
+  [ADR 0025](adr/0025-gitops-com-dois-reconciliadores.md). O portão afirma que o
+  desvio é DESFEITO, nunca em quanto tempo — o `selfHeal` tem recuo exponencial,
+  e juntar 0,34 s com 96 s numa mediana seria mentira.
+
+  A assimetria da assinatura continua sendo a parte interessante e está na lição
+  `cicd-07`: no GitHub Actions ela é keyless pelo OIDC do workflow; num Jenkins
+  self-hosted custa uma chave gerenciada.
 - **Segurança:** as 6 lições estão escritas e o portão está verde (10 ataques
   repelidos, o passo 6 vazando de propósito). Ficou para depois: um ataque de
   força bruta com taxa medida (hoje o passo 4 prova a recusa, não a velocidade),

@@ -7,19 +7,19 @@
   "corrida_sigpipe": [
     {
       "bytes": 1024,
-      "falhas_com_pipe": 14,
-      "falhas_sem_pipe": 0,
-      "rodadas": 40
-    },
-    {
-      "bytes": 16384,
       "falhas_com_pipe": 13,
       "falhas_sem_pipe": 0,
       "rodadas": 40
     },
     {
+      "bytes": 16384,
+      "falhas_com_pipe": 19,
+      "falhas_sem_pipe": 0,
+      "rodadas": 40
+    },
+    {
       "bytes": 65536,
-      "falhas_com_pipe": 25,
+      "falhas_com_pipe": 28,
       "falhas_sem_pipe": 0,
       "rodadas": 40
     },

@@ -4,15 +4,15 @@
   "repouso_medido": true,
   "repouso": {
     "api_go": {
-      "mib": 9.617,
+      "mib": 9.43,
       "container": "infra-knowlogy-api-1"
     },
     "worker_py": {
-      "mib": 42.21,
+      "mib": 44.99,
       "container": "infra-knowlogy-worker-1"
     },
     "web_node": {
-      "mib": 10.34,
+      "mib": 10.3,
       "container": "infra-knowlogy-web-1"
     }
   },

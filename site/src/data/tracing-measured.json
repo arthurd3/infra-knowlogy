@@ -2,7 +2,7 @@
   "_comentario": "Gerado por tools/scripts/tracing-measure.py — não edite à mão.",
   "medido_em": "2026-09-21",
   "caminho_feliz": {
-    "trace": "95c40a40cc43b1e8473a1d25eaafcc99",
+    "trace": "b4b869e2bbcbd21fb96651d25628ed30",
     "spans": 7,
     "servicos": [
       "api-go",
@@ -10,61 +10,61 @@
       "worker-py"
     ],
     "profundidade": 5,
-    "duracao_ms": 78.9,
+    "duracao_ms": 67.28,
     "arvore": [
       {
         "servico": "edge",
         "nome": "edge-api",
         "offset_ms": 0.0,
-        "duracao_ms": 1.76,
+        "duracao_ms": 2.54,
         "nivel": 0
       },
       {
         "servico": "api-go",
         "nome": "POST /api/links",
-        "offset_ms": 0.18,
-        "duracao_ms": 1.42,
+        "offset_ms": 0.28,
+        "duracao_ms": 2.03,
         "nivel": 1
       },
       {
         "servico": "api-go",
         "nome": "db.insert",
-        "offset_ms": 0.21,
-        "duracao_ms": 1.17,
+        "offset_ms": 0.32,
+        "duracao_ms": 1.68,
         "nivel": 2
       },
       {
         "servico": "api-go",
         "nome": "cache.enqueue",
-        "offset_ms": 1.4,
-        "duracao_ms": 0.15,
+        "offset_ms": 2.02,
+        "duracao_ms": 0.24,
         "nivel": 2
       },
       {
         "servico": "worker-py",
         "nome": "worker.enrich",
-        "offset_ms": 1.79,
-        "duracao_ms": 77.11,
+        "offset_ms": 2.55,
+        "duracao_ms": 64.74,
         "nivel": 3
       },
       {
         "servico": "worker-py",
         "nome": "http.fetch",
-        "offset_ms": 9.49,
-        "duracao_ms": 67.44,
+        "offset_ms": 9.99,
+        "duracao_ms": 55.27,
         "nivel": 4
       },
       {
         "servico": "worker-py",
         "nome": "db.update",
-        "offset_ms": 77.03,
-        "duracao_ms": 0.73,
+        "offset_ms": 65.38,
+        "duracao_ms": 0.54,
         "nivel": 4
       }
     ]
   },
   "caminho_retentativa": {
-    "trace": "a4d9e0931e495e8a567c5249088e4f32",
+    "trace": "2eda3bd762212458f91a700fd9b6c58b",
     "spans": 10,
     "servicos": [
       "api-go",
@@ -72,83 +72,83 @@
       "worker-py"
     ],
     "profundidade": 7,
-    "duracao_ms": 169.07,
+    "duracao_ms": 167.51,
     "arvore": [
       {
         "servico": "edge",
         "nome": "edge-api",
         "offset_ms": 0.0,
-        "duracao_ms": 1.82,
+        "duracao_ms": 2.07,
         "nivel": 0
       },
       {
         "servico": "api-go",
         "nome": "POST /api/links",
-        "offset_ms": 0.21,
-        "duracao_ms": 1.46,
+        "offset_ms": 0.24,
+        "duracao_ms": 1.67,
         "nivel": 1
       },
       {
         "servico": "api-go",
         "nome": "db.insert",
-        "offset_ms": 0.24,
-        "duracao_ms": 1.25,
+        "offset_ms": 0.28,
+        "duracao_ms": 1.44,
         "nivel": 2
       },
       {
         "servico": "api-go",
         "nome": "cache.enqueue",
-        "offset_ms": 1.5,
-        "duracao_ms": 0.14,
+        "offset_ms": 1.73,
+        "duracao_ms": 0.15,
         "nivel": 2
       },
       {
         "servico": "worker-py",
         "nome": "worker.enrich",
-        "offset_ms": 1.88,
-        "duracao_ms": 36.17,
+        "offset_ms": 2.13,
+        "duracao_ms": 33.36,
         "nivel": 3
       },
       {
         "servico": "worker-py",
         "nome": "http.fetch",
-        "offset_ms": 9.05,
-        "duracao_ms": 26.78,
+        "offset_ms": 9.82,
+        "duracao_ms": 23.25,
         "nivel": 4
       },
       {
         "servico": "worker-py",
         "nome": "worker.enrich",
-        "offset_ms": 38.32,
-        "duracao_ms": 67.03,
+        "offset_ms": 35.74,
+        "duracao_ms": 68.65,
         "nivel": 4
       },
       {
         "servico": "worker-py",
         "nome": "http.fetch",
-        "offset_ms": 47.02,
-        "duracao_ms": 56.03,
+        "offset_ms": 43.29,
+        "duracao_ms": 58.31,
         "nivel": 5
       },
       {
         "servico": "worker-py",
         "nome": "worker.enrich",
-        "offset_ms": 105.59,
-        "duracao_ms": 63.48,
+        "offset_ms": 104.81,
+        "duracao_ms": 62.7,
         "nivel": 5
       },
       {
         "servico": "worker-py",
         "nome": "http.fetch",
-        "offset_ms": 113.28,
-        "duracao_ms": 54.04,
+        "offset_ms": 112.08,
+        "duracao_ms": 53.39,
         "nivel": 6
       }
     ]
   },
   "codigos": {
-    "feliz": "4tHQur4",
-    "retentativa": "2cmikzM"
+    "feliz": "6nCtTM2",
+    "retentativa": "cJs9yRB"
   },
   "custo": {
     "api_go": {

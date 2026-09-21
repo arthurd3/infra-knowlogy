@@ -83,7 +83,8 @@ English page: it is the real response, not a caption.
 make            # list everything you can do
 make up         # bring up the hardened stack and wait for every healthcheck
 make site-dev   # open the lessons at http://localhost:4321
-make verify     # the quality gate: build, boot, test, and prove the hardening
+make verify     # the quality gate — 65 checks: build, boot, test, prove the
+                # hardening, and measure SLOs, alerting and end-to-end tracing
 make site-verify # the site alone — types, tests, build, generated HTML (no Docker)
 
 make k8s-up     # module 2: the SAME stack in a kind cluster, at 127.0.0.1:8081
@@ -93,8 +94,10 @@ make k8s-verify # its own gate — 65 checks, from scratch, cluster destroyed af
 make iac-up     # module 4: the SAME stack again, declared in HCL, at 127.0.0.1:8082
 make iac-verify # its own gate — 28 checks, including idempotence and drift
 
-make obs        # Prometheus, Grafana, Loki, Alloy and four exporters
-                # with SLO rules that load and a burn-rate alert the gate makes fire
+make obs        # Prometheus, Grafana, Loki, Alloy, Alertmanager, an OTel
+                # collector and four exporters — with SLO rules that load, a
+                # burn-rate alert the gate makes fire and delivers to a receiver,
+                # and one trace_id crossing edge -> api -> Redis queue -> worker
 make shutdown-test  # proves every service stops gracefully in under 3s
 ```
 
@@ -146,9 +149,11 @@ seconds instead of paying for fifteen containers.
 
 ## The lessons
 
-106 lessons — 53 topics, in English and Portuguese — under
-`site/src/content/lessons/`, across seven tracks, with 56 hand-drawn SVG
-diagrams, 53 quiz sets and eight interactive widgets. The diagrams are written as markup, not exported as
+132 lessons — 66 topics, in English and Portuguese — under
+`site/src/content/lessons/`, across eight tracks, with 69 hand-drawn SVG
+diagrams, 66 quiz sets and eight interactive widgets. Every lesson has a study
+path: `site/src/data/library.json` maps 36 concepts to 142 verified
+references. The diagrams are written as markup, not exported as
 pictures: they inherit the light/dark theme from CSS custom properties, stay
 sharp at any zoom and show up in `git diff` as text.
 
@@ -184,6 +189,41 @@ shared one volume · **rollouts, PDBs and what actually drops requests** · and
 cited with prices verified on the providers' own pages. The numbers these
 lessons cite are written by `make k8s-verify` into
 `site/src/data/k8s-measured.json` and `k8s-hpa.json`.
+
+**Observability track**, nine lessons: what observing adds to monitoring · why
+Prometheus pulls · the four metric types and what each one cannot answer ·
+cardinality, with the explosion measured · logs without indexing, and the label
+that quietly became three spellings (`ERROR`, `error`, `warn` × `warning`) · SLI,
+SLO and error budget · **burn-rate alerting**, with the alert that stays firing
+after you fix it, because a window drains rather than resets · **alert routing**,
+where severity decides who wakes up, and a receiver's access log proves the
+notification arrived · and **the trace that crosses the queue** — one `trace_id`
+through edge → api → Redis → worker, with the honest bill attached: the api image
+grows 63% and its binary 88%, and in the worker OTel, gRPC and protobuf are 43.9%
+of every installed package byte. Measured by `tools/scripts/obs-measure.py` and
+`tracing-measure.py`.
+
+**Operations track**, eight lessons — transversal, like Security: it ports the
+stack nowhere and measures the one that exists. A container is a process (the UID
+inside *is* the UID on the host) · cgroup v2 and the OOM killer, where Docker's
+`OOMKilled` flag said `false` on an OOM the kernel counted · pressure is not
+utilisation · where DNS costs eight seconds, and a two-label miss costs
+milliseconds · the Postgres you operate · blameless postmortems and on-call cost
+(both `cited`, not measured) · and **the script that does not lie**, where
+`text | grep -q PATTERN` under `pipefail` is measured failing 40 times out of 40
+above the pipe buffer — because finding the pattern early kills the writer with
+SIGPIPE.
+
+**CI/CD** (module 3), nine lessons and `make cicd-verify`: a Jenkins that comes
+up configured, 67 pinned plugins, a controller that builds nothing, and a
+rootless buildkitd so an agent never touches the host's Docker socket.
+**Infrastructure as code** (module 4), eight lessons and `make iac-verify`: the
+same stack in HCL under OpenTofu, with idempotence, drift, both graph edges and a
+tampered-lock negative proof. **Production**, seven lessons: multi-stage in three
+idioms, choosing a base image, hardening service by service, rootless and Podman,
+the twelve factors audited, reproducible builds, and **three languages in one
+stack** — Go, Python and Node measured side by side on the same host, where the
+same typo in the same dead branch blocks the Go build and ships in Python.
 
 **Two kinds of claim, told apart on the page.** Everything this repository
 measures is proven by a command in the gate. Plenty of what matters, though,

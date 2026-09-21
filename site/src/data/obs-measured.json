@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-21T19:33:51Z",
+  "generatedAt": "2026-09-21T19:59:29Z",
   "prometheusVersion": "3.7.3",
   "targets": {
     "total": 7,
@@ -15,9 +15,9 @@
     ]
   },
   "tsdb": {
-    "activeSeries": 5072,
+    "activeSeries": 5481,
     "samplesPerSecond": 311.4,
-    "residentBytes": 106356736
+    "residentBytes": 99016704
   },
   "collection": {
     "perJob": [
@@ -53,8 +53,8 @@
       },
       {
         "job": "redis",
-        "scraped": 417,
-        "kept": 417,
+        "scraped": 420,
+        "kept": 420,
         "dropped": 0
       },
       {
@@ -64,8 +64,8 @@
         "dropped": 0
       }
     ],
-    "scrapedTotal": 5830,
-    "keptTotal": 4644,
+    "scrapedTotal": 5833,
+    "keptTotal": 4647,
     "droppedTotal": 1186
   },
   "apiTraffic": {
@@ -74,16 +74,16 @@
         "route": "unmatched",
         "method": "POST",
         "status": "201",
-        "total": 12
-      },
-      {
-        "route": "/readyz",
-        "method": "GET",
-        "status": "200",
         "total": 11
       },
       {
         "route": "/healthz",
+        "method": "GET",
+        "status": "200",
+        "total": 10
+      },
+      {
+        "route": "/readyz",
         "method": "GET",
         "status": "200",
         "total": 10
@@ -98,12 +98,12 @@
         "route": "/metrics",
         "method": "GET",
         "status": "200",
-        "total": 7
+        "total": 6
       }
     ],
-    "infrastructureTotal": 28,
-    "userTotal": 22,
-    "infraPerUserRequest": 1.3,
+    "infrastructureTotal": 26,
+    "userTotal": 21,
+    "infraPerUserRequest": 1.2,
     "infrastructurePerMinute": 15.0
   },
   "rules": {
@@ -111,8 +111,8 @@
     "alerting": 3
   },
   "latency": {
-    "p50Seconds": 0.00252,
-    "p90Seconds": 0.00453,
-    "p99Seconds": 0.00498
+    "p50Seconds": 0.00253,
+    "p90Seconds": 0.00455,
+    "p99Seconds": 0.00518
   }
 }

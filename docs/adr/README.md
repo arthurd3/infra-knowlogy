@@ -33,3 +33,7 @@ não material didático.
 | [0020](0020-o-estado-citado.md) | `citado`: o quarto estado do mapa de mercado | aceita |
 | [0021](0021-gateway-api-e-o-envoy-gateway.md) | Gateway API, e por que o controlador é o Envoy Gateway | aceita |
 | [0022](0022-operacao-como-trilha-transversal.md) | Operação como trilha transversal, medida na stack que já existe | aceita |
+| [0023](0023-o-alerta-que-sai.md) | O alerta que sai, e o receptor que prova que saiu | aceita |
+| [0024](0024-tracing-e-o-que-ele-custa.md) | Tracing ponta a ponta, e o custo que ele cobra em bytes | aceita |
+| [0025](0025-gitops-com-dois-reconciliadores.md) | GitOps com dois reconciliadores, e o que o portão pode afirmar | aceita |
+| [0026](0026-malha-de-servico-e-a-identidade.md) | Malha de serviço, e por que ela não substitui a NetworkPolicy | aceita |
