@@ -1,0 +1,54 @@
+# O equivalente do `web` que o ArgoCD gerencia, para a medição ser comparável.
+#
+# Reusa a imagem que o `kind load` já pôs no nó — `imagePullPolicy: Never`
+# garante que um erro de carga apareça como ErrImageNeverPull em vez de o
+# cluster puxar outra coisa de um registry.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: eco
+  namespace: flux-demo
+  labels: {app: eco}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: eco}
+  template:
+    metadata:
+      labels: {app: eco}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: eco
+          image: infra-knowlogy/web:dev
+          imagePullPolicy: Never
+          ports:
+            - {name: http, containerPort: 8080}
+          readinessProbe:
+            httpGet: {path: /, port: http}
+            periodSeconds: 15
+            timeoutSeconds: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+              # O binário do Caddy tem cap_net_bind_service gravado nele, e o
+              # kernel recusa o exec() sem ela no bounding set (armadilha 6).
+              add: [NET_BIND_SERVICE, CHOWN, DAC_OVERRIDE, SETGID, SETUID]
+          resources:
+            limits: {cpu: "200m", memory: 64Mi}
+            requests: {memory: 32Mi}
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+            - {name: caddy-data, mountPath: /data}
+            - {name: caddy-config, mountPath: /config}
+      volumes:
+        - name: tmp
+          emptyDir: {medium: Memory, sizeLimit: 16Mi}
+        - name: caddy-data
+          emptyDir: {sizeLimit: 16Mi}
+        - name: caddy-config
+          emptyDir: {sizeLimit: 8Mi}

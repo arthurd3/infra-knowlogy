@@ -1,0 +1,16 @@
+# A carga que o Flux gerencia, num namespace só dela.
+#
+# Dois reconciliadores no mesmo cluster não podem disputar os mesmos objetos:
+# cada um desfaria o trabalho do outro num laço, e o cluster ficaria oscilando
+# para sempre. O ArgoCD é dono de `k8s/base` no namespace `infra-knowlogy`; o
+# Flux é dono deste diretório no namespace `flux-demo`.
+#
+# A comparação continua justa porque os dois reconciliam a MESMA coisa — um
+# Deployment com `replicas` declarado — e a medição é a mesma: mudar à mão e
+# cronometrar até ser desfeito.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: flux-demo
+  labels:
+    app.kubernetes.io/managed-by: flux

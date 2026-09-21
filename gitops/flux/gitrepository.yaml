@@ -1,0 +1,20 @@
+# A fonte, para o Flux.
+#
+# ─── A diferença de modelo que já aparece aqui ──────────────────────────────
+# O ArgoCD tem UM objeto (a Application) que junta fonte, destino e política.
+# O Flux separa: `GitRepository` é só a fonte, e `Kustomization` é só o que
+# fazer com ela. A mesma fonte pode alimentar várias Kustomizations.
+#
+# E repare no `interval:` — ele é OBRIGATÓRIO. No ArgoCD o intervalo de
+# consulta ao repositório é um padrão global de ~3 minutos que muita gente
+# nunca viu; aqui ele está no manifesto, e quem lê sabe.
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: stack
+  namespace: flux-system
+spec:
+  interval: 1m
+  url: REPO_URL_AQUI
+  ref:
+    branch: main

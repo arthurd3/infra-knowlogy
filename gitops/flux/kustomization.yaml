@@ -1,0 +1,22 @@
+# O que fazer com a fonte.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: flux-demo
+  namespace: flux-system
+spec:
+  # Também obrigatório, e também separado do intervalo da FONTE: o Flux pode
+  # buscar o repositório de minuto em minuto e reconciliar de dez em dez, ou
+  # o contrário. O ArgoCD junta as duas coisas num ciclo só.
+  interval: 1m
+  sourceRef:
+    kind: GitRepository
+    name: stack
+  path: ./gitops/flux-demo
+  # `prune` apaga do cluster o que sumiu do Git — o equivalente do `prune` da
+  # Application do ArgoCD.
+  prune: true
+  # E este é o equivalente do `selfHeal`: sem ele, o Flux aplica a cada
+  # intervalo mas NÃO reverte mudança manual entre intervalos.
+  wait: true
+  timeout: 3m

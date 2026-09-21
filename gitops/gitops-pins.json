@@ -6,11 +6,20 @@
     "o portao para e diz qual hash esperava.",
     "",
     "Atualizar: baixe a versao nova, rode sha256sum, cole aqui, rode",
-    "make k8s-verify. Nunca edite o hash sem ter baixado o arquivo."
+    "make k8s-verify. Nunca edite o hash sem ter baixado o arquivo.",
+    "",
+    "O Flux entra aqui pelo mesmo regime. O manifesto dele tem 341 KB contra",
+    "1,9 MB do ArgoCD \u2014 cinco vezes e meia menos, e e a primeira diferenca",
+    "medivel entre os dois."
   ],
   "argocd": {
     "version": "v3.5.3",
     "url": "https://raw.githubusercontent.com/argoproj/argo-cd/v3.5.3/manifests/install.yaml",
     "sha256": "7efe2d6bbc03f63623640f1e4198f16c84009d510fb810ef71e56df1b7614ba9"
+  },
+  "flux": {
+    "version": "v2.9.5",
+    "url": "https://github.com/fluxcd/flux2/releases/download/v2.9.5/install.yaml",
+    "sha256": "cc3dcd743af16215838b6937e1fce83745bf24c0dcc6c59737c59df15429caaf"
   }
 }

@@ -19,31 +19,43 @@ URL=$(python3 -c "import json;print(json.load(open('$PIN'))['argocd']['url'])")
 SOMA=$(python3 -c "import json;print(json.load(open('$PIN'))['argocd']['sha256'])")
 VER=$(python3 -c "import json;print(json.load(open('$PIN'))['argocd']['version'])")
 
+FLUX_URL=$(python3 -c "import json;print(json.load(open('$PIN'))['flux']['url'])")
+FLUX_SOMA=$(python3 -c "import json;print(json.load(open('$PIN'))['flux']['sha256'])")
+FLUX_VER=$(python3 -c "import json;print(json.load(open('$PIN'))['flux']['version'])")
+
 CACHE="${GITOPS_CACHE:-$ROOT/k8s/.cache}"
 mkdir -p "$CACHE"
 ARQ="$CACHE/argocd-$VER.yaml"
 
 step() { printf '\n\033[1m── %s\033[0m\n' "$1"; }
 
+# Baixa e CONFERE. Cache validado, não confiado: o hash é checado mesmo
+# quando o arquivo já está no disco.
+baixar() {
+  local url="$1" soma="$2" arq="$3"
+  if [ -f "$arq" ] && [ "$(sha256sum "$arq" | cut -d' ' -f1)" = "$soma" ]; then
+    echo "   cache íntegro em $arq"
+    return 0
+  fi
+  echo "   baixando $url"
+  curl -sS -L --max-time 300 -o "$arq.tmp" "$url"
+  local obtido
+  obtido=$(sha256sum "$arq.tmp" | cut -d' ' -f1)
+  if [ "$obtido" != "$soma" ]; then
+    rm -f "$arq.tmp"
+    echo "   ✗ sha256 NÃO confere para $url" >&2
+    echo "     esperado: $soma" >&2
+    echo "     obtido:   $obtido" >&2
+    return 1
+  fi
+  mv "$arq.tmp" "$arq"
+  echo "   sha256 confere"
+}
+
 step "manifesto do ArgoCD $VER"
 # Cache validado, não confiado: o hash é conferido mesmo quando o arquivo já
 # está no disco.
-if [ -f "$ARQ" ] && [ "$(sha256sum "$ARQ" | cut -d' ' -f1)" = "$SOMA" ]; then
-  echo "   cache íntegro em $ARQ"
-else
-  echo "   baixando $URL"
-  curl -sS -L --max-time 300 -o "$ARQ.tmp" "$URL"
-  OBTIDO=$(sha256sum "$ARQ.tmp" | cut -d' ' -f1)
-  if [ "$OBTIDO" != "$SOMA" ]; then
-    rm -f "$ARQ.tmp"
-    echo "   ✗ sha256 NÃO confere" >&2
-    echo "     esperado: $SOMA" >&2
-    echo "     obtido:   $OBTIDO" >&2
-    exit 1
-  fi
-  mv "$ARQ.tmp" "$ARQ"
-  echo "   sha256 confere"
-fi
+baixar "$URL" "$SOMA" "$ARQ" || exit 1
 
 step "aplicando o ArgoCD"
 kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply -f - >/dev/null
@@ -98,3 +110,53 @@ kubectl -n argocd get application stack \
 
 printf '\n   a senha inicial do admin: kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d\n'
 printf '   a interface: kubectl -n argocd port-forward svc/argocd-server 8084:443\n'
+
+# ─── Flux, ao lado ───────────────────────────────────────────────────────────
+# Dois reconciliadores no mesmo cluster, cada um dono de um conjunto próprio de
+# objetos. Sem isso a comparação da lição seria entre um que roda aqui e outro
+# descrito de ouvido.
+if [ "${SKIP_FLUX:-}" = "1" ]; then
+  printf '\n   Flux pulado (SKIP_FLUX=1)\n'
+  exit 0
+fi
+
+FLUX_ARQ="$CACHE/flux-$FLUX_VER.yaml"
+
+step "manifesto do Flux $FLUX_VER"
+baixar "$FLUX_URL" "$FLUX_SOMA" "$FLUX_ARQ" || exit 1
+printf '   tamanho: %s KB (o do ArgoCD tem %s KB)\n' \
+  "$(( $(stat -c %s "$FLUX_ARQ") / 1024 ))" "$(( $(stat -c %s "$ARQ") / 1024 ))"
+
+step "aplicando o Flux"
+kubectl apply --server-side -f "$FLUX_ARQ" >/dev/null
+
+step "esperando os controladores do Flux"
+for d in source-controller kustomize-controller; do
+  kubectl -n flux-system rollout status "deployment/$d" --timeout=300s
+done
+
+step "registrando a fonte e a Kustomization"
+kubectl wait --for=condition=Established --timeout=120s \
+  crd/gitrepositories.source.toolkit.fluxcd.io \
+  crd/kustomizations.kustomize.toolkit.fluxcd.io >/dev/null
+# A URL e o ramo saem do git, como na Application do ArgoCD — um manifesto com
+# a URL de outra pessoa gravada dentro faria um fork sincronizar o repositório
+# alheio.
+sed -e "s|REPO_URL_AQUI|$REPO|" -e "s|branch: main|branch: $RAMO|" \
+  gitops/flux/gitrepository.yaml | kubectl apply -f - >/dev/null
+kubectl apply -f gitops/flux/kustomization.yaml >/dev/null
+
+LIDO_FLUX=$(kubectl -n flux-system get gitrepository stack -o jsonpath='{.spec.url}' 2>/dev/null)
+[ "$LIDO_FLUX" = "$REPO" ] || { echo "   ✗ o GitRepository aponta para $LIDO_FLUX, não para $REPO" >&2; exit 1; }
+
+step "esperando o Flux reconciliar"
+for _ in $(seq 1 60); do
+  PRONTO=$(kubectl -n flux-system get kustomization flux-demo \
+    -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || true)
+  printf '   Ready=%s\n' "${PRONTO:-...}"
+  [ "$PRONTO" = "True" ] && break
+  sleep 5
+done
+
+kubectl -n flux-system get gitrepository,kustomization
+printf '\n   a carga do Flux: kubectl -n flux-demo get deploy\n'
