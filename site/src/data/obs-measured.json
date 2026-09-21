@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-20T19:24:25Z",
+  "generatedAt": "2026-09-21T13:07:53Z",
   "prometheusVersion": "3.7.3",
   "targets": {
     "total": 7,
@@ -15,9 +15,9 @@
     ]
   },
   "tsdb": {
-    "activeSeries": 4749,
-    "samplesPerSecond": 295.2,
-    "residentBytes": 108765184
+    "activeSeries": 4770,
+    "samplesPerSecond": 289.7,
+    "residentBytes": 102440960
   },
   "collection": {
     "perJob": [
@@ -41,8 +41,8 @@
       },
       {
         "job": "postgres",
-        "scraped": 593,
-        "kept": 593,
+        "scraped": 597,
+        "kept": 597,
         "dropped": 0
       },
       {
@@ -53,8 +53,8 @@
       },
       {
         "job": "redis",
-        "scraped": 414,
-        "kept": 414,
+        "scraped": 416,
+        "kept": 416,
         "dropped": 0
       },
       {
@@ -64,8 +64,8 @@
         "dropped": 0
       }
     ],
-    "scrapedTotal": 5594,
-    "keptTotal": 4414,
+    "scrapedTotal": 5600,
+    "keptTotal": 4420,
     "droppedTotal": 1180
   },
   "apiTraffic": {
@@ -74,19 +74,7 @@
         "route": "/healthz",
         "method": "GET",
         "status": "200",
-        "total": 19
-      },
-      {
-        "route": "/readyz",
-        "method": "GET",
-        "status": "200",
-        "total": 19
-      },
-      {
-        "route": "/metrics",
-        "method": "GET",
-        "status": "200",
-        "total": 12
+        "total": 10
       },
       {
         "route": "/{code}",
@@ -99,20 +87,32 @@
         "method": "POST",
         "status": "201",
         "total": 10
+      },
+      {
+        "route": "/readyz",
+        "method": "GET",
+        "status": "200",
+        "total": 9
+      },
+      {
+        "route": "/metrics",
+        "method": "GET",
+        "status": "200",
+        "total": 6
       }
     ],
-    "infrastructureTotal": 50,
+    "infrastructureTotal": 25,
     "userTotal": 20,
-    "infraPerUserRequest": 2.5,
-    "infrastructurePerMinute": 16.0
+    "infraPerUserRequest": 1.2,
+    "infrastructurePerMinute": 15.7
   },
   "rules": {
     "recording": 7,
     "alerting": 3
   },
   "latency": {
-    "p50Seconds": 0.0025,
-    "p90Seconds": 0.00451,
-    "p99Seconds": 0.00496
+    "p50Seconds": 0.00251,
+    "p90Seconds": 0.00452,
+    "p99Seconds": 0.00497
   }
 }

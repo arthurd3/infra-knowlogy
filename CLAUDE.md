@@ -363,17 +363,35 @@ justamente por isso.
     dois espaços. **Toda edição programática precisa de `assert` da âncora
     ANTES e de conferência do resultado DEPOIS.**
 
+60. **O `kind:` de `sources:` numa lição e o `kind` da `library.json` são
+    vocabulários DIFERENTES.** A lição aceita
+    `spec|docs|blog|thread|postmortem|talk|book`; a biblioteca aceita esses
+    mais `zine`, `video` e **`article`**. Escrever `kind: article` no
+    frontmatter de uma lição derruba o build com
+    `InvalidContentEntryDataError`, e a mensagem não diz qual campo. Para
+    artigo de veículo editorial (LWN, por exemplo), use `blog` na lição.
+
 ## Ao mexer na stack
 
 - Rode `make verify` antes de considerar qualquer coisa pronta. Para iterar
   rápido: `SKIP_SCAN=1 SKIP_OBS=1 make verify`. O estado bom conhecido é
-  **37 passaram · 0 falharam** (o passo 9 saiu de 4 para 9 checagens com as
-  regras de SLO — ADR 0018; com os dois SKIP, **27 passaram**).
+  **45 checagens**, das quais **44 passam e 1 falha** — e a que falha é o passo 7,
+  por CVEs HIGH de `curl` no Alpine da imagem `web`, com correção disponível
+  (`make pins`). O passo 9 saiu de 4 para 9 checagens com as regras de SLO
+  (ADR 0018) e o passo 10 acrescentou 8 de operação (ADR 0022); `SKIP_OPS=1`
+  pula estas, que precisam da stack no ar.
 - O profile `obs` deixou de ser só infraestrutura: `rules/slo.yml` tem 7 regras
   de gravação e 3 de alerta que o Prometheus carrega de verdade, e o portão
   prova que elas avaliam, que o SLI tem valor e que o relabel do cAdvisor ainda
   corta. `python3 tools/scripts/obs-measure.py` regrava
   `site/src/data/obs-measured.json`, que as lições e os diagramas citam.
+- A trilha **Operação** é transversal como a de Segurança: ela não porta a stack
+  para lugar nenhum, mede a que já existe. As checagens são o passo 10 do
+  `verify`, e `python3 tools/scripts/ops-measure.py` regrava
+  `site/src/data/ops-measured.json` (com `SKIP_PSI=1` para pular a carga de
+  CPU, que leva ~1,5 min). O `db` ganhou `shared_preload_libraries` e
+  `effective_cache_size` no `command:` do compose — mexer ali exige recriar
+  o container, não só reiniciar.
 - O módulo CI/CD também: `make cicd-verify` (estado bom: **35 passaram ·
   0 falharam**). Para iterar sem reconstruir tudo:
   `KEEP_JENKINS=1 SKIP_BUILD=1 SKIP_NEGATIVE=1 make cicd-verify`. Antes de

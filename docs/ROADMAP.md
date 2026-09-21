@@ -17,6 +17,7 @@ lado a lado só é honesta porque a aplicação é a mesma.
 | 4 | **IaC (OpenTofu)** — a mesma stack declarada em HCL e provisionada contra o daemon local | `iac/` | `make iac-verify` (28 checagens) | **feito (v1)** · [ADR 0015](adr/0015-opentofu-e-o-provider-docker.md) e [0016](adr/0016-como-o-tofu-alcanca-o-daemon.md) · 8 lições bilíngues na trilha `iac` |
 | 5 | **Configuração (Ansible)** — preparar um host Fedora real: Docker, SELinux, firewall, usuários — as coisas que o módulo 1 encontrou na marra | `config/` | a definir | reservado |
 | 6 | **Observabilidade** — o profile `obs` que já existia, agora com regras de SLO que rodam e alerta de burn rate que dispara | `stack/` (profile) | `make verify` (passo 9, 9 checagens) | **feito (v1)** · [ADR 0018](adr/0018-slo-como-regra-que-roda.md) · 7 lições bilíngues na trilha `observabilidade` · pendências: Alertmanager e tracing |
+| — | **Operação (transversal)** — o Linux por baixo do container, a rede que falha de um jeito só, e o Postgres que você opera | `stack/` | `make verify` (passo 10, 8 checagens) | **feito (v1)** · 7 lições bilíngues na trilha `operacao` · 4 chips do cartaz em `citado` |
 | — | **Segurança (transversal)** — a superfície de ataque da MESMA stack, atacada de dentro: portas, credenciais, injeção, exfiltração | `tools/scripts/attack-lab.sh` | `make attack-lab` (11 ataques) | **feito** · [ADR 0013](adr/0013-laboratorio-de-ataque-na-propria-stack.md) · 6 lições bilíngues na trilha `seguranca` |
 
 > **Por que a Segurança não tem número.** Os módulos numerados são *vistas de
@@ -64,9 +65,9 @@ As maiores lacunas hoje, em ordem de demanda:
 | Observabilidade | 80% | **coberta**: 7 lições, regras de SLO rodando, alerta de burn rate provado pelo portão. Falta Alertmanager e tracing |
 | Kubernetes | 88% | **coberta**: 10 lições, Gateway API roteando, RBAC provado por token real, HPA medido em 3 rodadas, PDB pela API de eviction, Helm × Kustomize comparados por diff. Falta o que um nó só não dá |
 | CI/CD | 75% | forte, menos **GitOps**: ArgoCD e Flux não existem aqui |
-| Linux & troubleshooting | 70% | falta o troubleshooting real: /proc, strace, eBPF, PSI, OOM |
-| Bancos & redes | 55% | falta operação do Postgres e DNS a fundo |
-| Resiliência & operação | — | **0%**: SLO, error budget, postmortem, on-call, FinOps, IAM |
+| Linux & troubleshooting | 70% | **coberta**: namespaces, cgroup v2, OOM provocado e PSI medidos contra os containers. Falta perf e eBPF |
+| Bancos & redes | 55% | **coberta**: vacuum, work_mem e pg_stat_statements medidos; a resolução de nome cronometrada de dentro do container. Falta replicação |
+| Resiliência & operação | — | **7 de 7**: 3 chips `coberto` (Linux, redes, PostgreSQL) com checagem de portão, 4 `citado` (RCA, on-call, FinOps, IAM) com lição e fonte |
 
 ## A dívida didática, medida
 
@@ -78,6 +79,7 @@ setembro de 2026, depois de a trilha de Fundamentos ser retrabalhada
 | trilha | lições | `Term` | `Tradeoff` | `FieldNote` |
 |---|---|---|---|---|
 | kubernetes | 10 | 12 | 10 | 10 |
+| operacao | 7 | 8 | 7 | 7 |
 | fundamentos | 8 | 15 | 1 | 1 |
 | **cicd** | 8 | **0** | 1 | 1 |
 | iac | 8 | 6 | 7 | 7 |

@@ -31,3 +31,5 @@ não material didático.
 | [0018](0018-slo-como-regra-que-roda.md) | SLO como regra que roda, e não como capítulo | aceita |
 | [0019](0019-reescopar-a-trilha-producao.md) | Reescopar a Trilha Produção: de doze lições para seis | aceita |
 | [0020](0020-o-estado-citado.md) | `citado`: o quarto estado do mapa de mercado | aceita |
+| [0021](0021-gateway-api-e-o-envoy-gateway.md) | Gateway API, e por que o controlador é o Envoy Gateway | aceita |
+| [0022](0022-operacao-como-trilha-transversal.md) | Operação como trilha transversal, medida na stack que já existe | aceita |
