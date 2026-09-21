@@ -178,25 +178,33 @@
       "id": "linux",
       "demand": 70,
       "quadrant": "resiliencia",
-      "status": "parcial",
+      "status": "coberto",
       "pt": {
         "label": "Linux & troubleshooting avançado",
-        "gap": "Namespaces, cgroups, PID 1 e o tratamento de sinais estão medidos nas lições 1, 3 e 5 — inclusive a correção da explicação difundida sobre a shell form do CMD. Falta o troubleshooting de verdade: /proc, strace, perf, eBPF, pressure stall information, o OOM killer e o que fazer com um processo travado em produção."
+        "gap": "A trilha `operacao` tem 7 lições e o portão, 8 checagens novas: o UID do container provado igual ao do host, o limite do cgroup lido de dentro, o OOM killer provocado com exit 137, e a resolução de nome cronometrada. Falta o que exige ferramenta ausente neste host — perf e eBPF, que rodariam conteinerizados mas ainda não rodam."
       },
       "en": {
         "label": "Linux & advanced troubleshooting",
-        "gap": "Namespaces, cgroups, PID 1 and signal handling are measured in lessons 1, 3 and 5 — including the correction of the widespread explanation about CMD shell form. Real troubleshooting is missing: /proc, strace, perf, eBPF, pressure stall information, the OOM killer and what to do with a stuck process in production."
+        "gap": "The `operacao` track has 7 lessons and the gate 8 new checks: the container UID proven equal to the host's, the cgroup limit read from inside, the OOM killer provoked with exit 137, and name resolution timed. What is missing needs tooling absent from this host — perf and eBPF, which would run containerised but do not yet."
       },
       "evidence": {
         "lessons": [
-          "what-is-a-container",
-          "dockerfile-instruction-by-instruction",
-          "container-lifecycle"
+          "a-container-is-a-process",
+          "cgroups-and-the-oom-killer",
+          "pressure-is-not-utilisation",
+          "where-dns-costs-eight-seconds",
+          "the-postgres-you-operate"
         ],
         "checks": [
-          "todos os serviços param em menos de 3s"
+          "o UID do container é o do host",
+          "cgroup v2: o worker lê seu próprio limite",
+          "OOM killer: OOMKilled=true e exit 137",
+          "DNS: rótulo único desconhecido custa",
+          "postgres: pg_stat_statements carregado"
         ],
-        "measurements": []
+        "measurements": [
+          "ops-measured.json"
+        ]
       }
     },
     {
@@ -224,24 +232,33 @@
       "id": "dados-redes",
       "demand": 55,
       "quadrant": "resiliencia",
-      "status": "parcial",
+      "status": "coberto",
       "pt": {
         "label": "Bancos de dados & redes (PostgreSQL, DNS, Ingress)",
-        "gap": "Rede de container, DNS embutido e segmentação estão provados (a lição 7 e a checagem de que o edge não alcança o db); o ataque a banco tem lição e laboratório. Falta a operação do banco: shared_buffers, work_mem, autovacuum, wraparound de transação, pg_stat_statements e pool de conexão — e falta DNS a fundo, onde mora a armadilha mais cara do Kubernetes."
+        "gap": "O Postgres desta stack passou a ser OPERADO e não só ligado: pg_stat_statements carregado e provado, vacuum medido (14 MB antes, 14 MB depois do VACUUM, 6672 kB só com FULL) e work_mem com o derrame quantificado. A rede tem a resolução de nome medida de dentro do container. Falta replicação e failover, que exigem mais de uma instância."
       },
       "en": {
         "label": "Databases & networking (PostgreSQL, DNS, Ingress)",
-        "gap": "Container networking, embedded DNS and segmentation are proven (lesson 7 and the check that edge cannot reach db); attacking a database has a lesson and a lab. Operating the database is missing: shared_buffers, work_mem, autovacuum, transaction wraparound, pg_stat_statements and connection pooling — and so is DNS in depth, where Kubernetes' most expensive trap lives."
+        "gap": "This stack's Postgres is now OPERATED rather than merely started: pg_stat_statements loaded and proven, vacuum measured (14 MB before, 14 MB after VACUUM, 6672 kB only with FULL) and work_mem with the spill quantified. The network side has name resolution measured from inside the container. Replication and failover are missing, and they need more than one instance."
       },
       "evidence": {
         "lessons": [
-          "networking-and-dns",
-          "attacking-a-database"
+          "a-container-is-a-process",
+          "cgroups-and-the-oom-killer",
+          "pressure-is-not-utilisation",
+          "where-dns-costs-eight-seconds",
+          "the-postgres-you-operate"
         ],
         "checks": [
-          "segmentação de rede: o edge não alcança o db"
+          "o UID do container é o do host",
+          "cgroup v2: o worker lê seu próprio limite",
+          "OOM killer: OOMKilled=true e exit 137",
+          "DNS: rótulo único desconhecido custa",
+          "postgres: pg_stat_statements carregado"
         ],
-        "measurements": []
+        "measurements": [
+          "ops-measured.json"
+        ]
       }
     }
   ],
@@ -389,31 +406,49 @@
       "items": [
         {
           "name": "Linux deep dive",
-          "status": "parcial"
+          "status": "coberto",
+          "note_pt": "namespaces, cgroup v2 e PSI medidos contra os containers desta stack",
+          "note_en": "namespaces, cgroup v2 and PSI measured against this stack's containers"
         },
         {
           "name": "Redes",
-          "status": "parcial"
+          "status": "coberto",
+          "note_pt": "a resolução de nome que custa 8 s medida de dentro do worker",
+          "note_en": "the name resolution costing 8 s, measured from inside the worker"
         },
         {
           "name": "PostgreSQL tuning",
-          "status": "ausente"
+          "status": "coberto",
+          "note_pt": "vacuum, work_mem e pg_stat_statements no `db` que já estava no ar",
+          "note_en": "vacuum, work_mem and pg_stat_statements on the `db` already running"
         },
         {
           "name": "RCA · Postmortem",
-          "status": "ausente"
+          "status": "citado",
+          "lesson": "blameless-postmortems",
+          "note_pt": "Allspaw, Cook e o SRE Book; cultura de incidente não se mede num laptop",
+          "note_en": "Allspaw, Cook and the SRE Book; incident culture is not measurable on a laptop"
         },
         {
           "name": "On-call",
-          "status": "ausente"
+          "status": "citado",
+          "lesson": "on-call-cost-and-access",
+          "note_pt": "o limite de 2 incidentes por turno de 12 h vem do SRE Book, não daqui",
+          "note_en": "the 2-incidents-per-12-hour-shift limit comes from the SRE Book, not from here"
         },
         {
           "name": "FinOps",
-          "status": "ausente"
+          "status": "citado",
+          "lesson": "on-call-cost-and-access",
+          "note_pt": "exige uma fatura; o framework da FinOps Foundation e o OpenCost estão citados",
+          "note_en": "needs an invoice; the FinOps Foundation framework and OpenCost are cited"
         },
         {
           "name": "IAM",
-          "status": "ausente"
+          "status": "citado",
+          "lesson": "on-call-cost-and-access",
+          "note_pt": "a ponte medida é o OIDC keyless do módulo 3; política de acesso não é medível aqui",
+          "note_en": "the measured bridge is module 3's keyless OIDC; access policy is not measurable here"
         }
       ]
     }
