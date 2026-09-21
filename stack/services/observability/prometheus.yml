@@ -11,6 +11,14 @@ global:
 # As regras de SLO. Separadas do scrape de propósito: o que raspar é
 # configuração de coleta; o que é "bom" e quanto de ruim se tolera é decisão de
 # produto, e decisão de produto merece arquivo próprio.
+# ─── Para onde os alertas vão ────────────────────────────────────────────────
+# Sem este bloco o Prometheus avalia as regras, marca `firing` na própria
+# interface, e não conta a ninguém. É a metade que faltava.
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: [alertmanager:9093]
+
 rule_files:
   - /etc/prometheus/rules/*.yml
 

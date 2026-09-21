@@ -283,6 +283,129 @@ elif docker compose "${OBS[@]}" --profile obs up -d --wait --wait-timeout 240 >/
   done
   sleep 20
 
+
+  # ─── Alertmanager: o alerta que SAI ───────────────────────────────────────
+  # Até agora o portão provava que a regra avalia e que o Prometheus a marca
+  # como `firing`. Isso é um estado numa página web. O que faltava — e o que a
+  # lição `burn-rate-alerting` admitia faltar — é provar que alguém é avisado.
+  #
+  # As checagens abaixo usam um alerta SINTÉTICO postado na API, e não uma
+  # queda de verdade: roteamento e entrega são o mesmo mecanismo para qualquer
+  # alerta, e forçar uma queda custaria três minutos para provar a mesma coisa.
+  APORT="$(grep -E '^ALERTMANAGER_PORT=' stack/.env 2>/dev/null | cut -d= -f2)"; APORT="${APORT:-9093}"
+
+  curl -fsS "http://127.0.0.1:${APORT}/-/healthy" >/dev/null 2>&1 \
+    && ok "alertmanager /-/healthy" || bad "alertmanager não responde"
+
+  # O Prometheus precisa SABER para onde mandar. Sem o bloco `alerting:` ele
+  # avalia, marca firing e não conta a ninguém — em silêncio.
+  AMS=$(curl -s "http://127.0.0.1:${PPORT}/api/v1/alertmanagers" 2>/dev/null)
+  case "$AMS" in
+    *alertmanager:9093*) ok "o prometheus conhece o alertmanager (activeAlertmanagers)" ;;
+    *) bad "o prometheus NÃO tem alertmanager ativo — falta o bloco alerting:" ;;
+  esac
+
+  # ── Roteamento por severidade. `page` acorda alguém, `ticket` não — e é essa
+  # separação que torna possível esperar mediana ZERO de páginas por turno.
+  N_ANTES=$(curl -s "http://127.0.0.1:${APORT}/metrics" 2>/dev/null \
+    | awk '/^alertmanager_notifications_total\{integration="webhook"\}/{print $2}')
+  # O nome do alerta é ÚNICO por execução, e isso não é capricho: o
+  # `group_by: [alertname, severity]` faz o Alertmanager agrupar por nome, e o
+  # `repeat_interval: 4h` impede que ele notifique de novo sobre um grupo que
+  # já notificou. Com nome fixo, esta checagem passaria na primeira execução do
+  # dia e falharia nas seguintes — um portão que só funciona uma vez.
+  MARCA="$(date +%s)"
+  curl -sS -XPOST "http://127.0.0.1:${APORT}/api/v2/alerts" -H 'content-type: application/json' \
+    -d "[{\"labels\":{\"alertname\":\"PortaoEntregaPage${MARCA}\",\"severity\":\"page\",\"service\":\"api\"}},
+         {\"labels\":{\"alertname\":\"PortaoEntregaTicket${MARCA}\",\"severity\":\"ticket\",\"service\":\"api\"}}]" \
+    -o /dev/null 2>/dev/null
+
+  sleep 3
+  ROTAS=$(curl -s "http://127.0.0.1:${APORT}/api/v2/alerts" 2>/dev/null \
+    | MARCA="$MARCA" python3 -c '
+import os, sys, json
+marca = os.environ["MARCA"]
+m = {}
+for a in json.load(sys.stdin):
+    n = a["labels"].get("alertname", "")
+    if n.endswith(marca):
+        m[n[: -len(marca)]] = sorted(r["name"] for r in a.get("receivers", []))
+print(json.dumps(m))' 2>/dev/null)
+  case "$ROTAS" in
+    *'"PortaoEntregaPage": ["plantao"]'*) ok "roteamento: severity=page vai para o receptor 'plantao'" ;;
+    *) bad "severity=page não foi roteado para 'plantao' (rotas: ${ROTAS:-vazio})" ;;
+  esac
+  case "$ROTAS" in
+    *'"PortaoEntregaTicket": ["fila"]'*) ok "roteamento: severity=ticket vai para 'fila' e NÃO acorda ninguém" ;;
+    *) bad "severity=ticket não foi roteado para 'fila' (rotas: ${ROTAS:-vazio})" ;;
+  esac
+
+  # ── Entrega. O contador do próprio Alertmanager mais o log de acesso do
+  # receptor: um diz que ele TENTOU e conseguiu, o outro diz que CHEGOU.
+  # Provar só pelo contador aceitaria um receptor que responde 200 e descarta.
+  sleep 35                                   # o group_wait de 'plantao'
+  N_DEPOIS=$(curl -s "http://127.0.0.1:${APORT}/metrics" 2>/dev/null \
+    | awk '/^alertmanager_notifications_total\{integration="webhook"\}/{print $2}')
+  N_FALHAS=$(curl -s "http://127.0.0.1:${APORT}/metrics" 2>/dev/null \
+    | awk '/^alertmanager_notifications_failed_total\{integration="webhook"/{s+=$2} END{print s+0}')
+  if [ "${N_DEPOIS:-0}" -gt "${N_ANTES:-0}" ] && [ "${N_FALHAS:-1}" -eq 0 ]; then
+    ok "entrega: notifications_total foi de ${N_ANTES:-0} para ${N_DEPOIS:-0}, com 0 falhas"
+  else
+    bad "o alertmanager não entregou (antes=${N_ANTES:-?} depois=${N_DEPOIS:-?} falhas=${N_FALHAS:-?})"
+  fi
+
+  # Parseia o JSON em vez de grepar substring: a ordem das chaves do log do
+  # Caddy põe `host` ENTRE `method` e `uri`, e um padrão colado da saída de um
+  # `print` não casa. Parser não se importa com ordem.
+  ENTREGAS=$(docker compose "${OBS[@]}" logs --no-log-prefix alert-sink 2>/dev/null | python3 -c '
+import sys, json
+n = 0
+for linha in sys.stdin:
+    linha = linha.strip()
+    if not linha.startswith("{"):
+        continue
+    try:
+        d = json.loads(linha)
+    except Exception:
+        continue
+    r = d.get("request", {})
+    if r.get("method") == "POST" and str(r.get("uri", "")).startswith("/plantao"):
+        n += 1
+print(n)' 2>/dev/null)
+  if [ "${ENTREGAS:-0}" -ge 1 ]; then
+    ok "o receptor registrou ${ENTREGAS} POST em /plantao (a entrega chegou do outro lado)"
+  else
+    bad "o receptor não registrou nenhum POST — o contador diz que saiu, e nada chegou"
+  fi
+
+  # ── Silenciamento: a única forma de calar um alerta sem apagar a regra.
+  # Quem está resolvendo um incidente precisa parar de ser avisado dele sem
+  # perder o alerta para o próximo.
+  FIM=$(python3 -c "import datetime;print((datetime.datetime.now(datetime.timezone.utc)+datetime.timedelta(minutes=10)).strftime('%Y-%m-%dT%H:%M:%SZ'))")
+  INI=$(python3 -c "import datetime;print(datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'))")
+  SIL=$(curl -sS -XPOST "http://127.0.0.1:${APORT}/api/v2/silences" -H 'content-type: application/json' \
+    -d "{\"matchers\":[{\"name\":\"alertname\",\"value\":\"PortaoEntregaPage${MARCA}\",\"isRegex\":false,\"isEqual\":true}],
+         \"startsAt\":\"$INI\",\"endsAt\":\"$FIM\",\"createdBy\":\"portao\",\"comment\":\"prova de silenciamento\"}" 2>/dev/null)
+  sleep 4
+  ESTADO=$(curl -s "http://127.0.0.1:${APORT}/api/v2/alerts" 2>/dev/null \
+    | MARCA="$MARCA" python3 -c '
+import os, sys, json
+alvo = "PortaoEntregaPage" + os.environ["MARCA"]
+for a in json.load(sys.stdin):
+    if a["labels"].get("alertname") == alvo:
+        print(a["status"]["state"]); break
+else:
+    print("ausente")' 2>/dev/null)
+  if [ "$ESTADO" = "suppressed" ]; then
+    ok "silenciamento: o alerta continua ATIVO e fica suppressed (a regra não foi apagada)"
+  else
+    bad "o silêncio não suprimiu o alerta (estado: ${ESTADO:-vazio})"
+  fi
+
+  # Limpa o que o portão criou, para a próxima execução partir do mesmo lugar.
+  SID=$(printf '%s' "$SIL" | python3 -c 'import sys,json;print(json.load(sys.stdin).get("silenceID",""))' 2>/dev/null)
+  [ -n "$SID" ] && curl -sS -XDELETE "http://127.0.0.1:${APORT}/api/v2/silence/$SID" -o /dev/null 2>/dev/null
+
   if python3 tools/scripts/obs-measure.py >/tmp/obsm.txt 2>&1; then
     ok "medições gravadas -> site/src/data/obs-measured.json"
     sed 's/^/    /' /tmp/obsm.txt | tail -4

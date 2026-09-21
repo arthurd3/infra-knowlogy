@@ -1,0 +1,70 @@
+# Alertmanager — o que acontece DEPOIS de o Prometheus decidir que há problema.
+#
+# A divisão de trabalho confunde quase todo mundo no começo:
+#
+#   Prometheus    avalia as regras e decide QUANDO um alerta está `firing`.
+#   Alertmanager  decide PARA QUEM, QUANDO e SE avisar.
+#
+# Sem esta metade, o `firing` do Prometheus é um estado numa página web que
+# ninguém está olhando às três da manhã — que é exatamente o que a lição
+# `burn-rate-alerting` admitia até agora.
+
+global:
+  # Quanto tempo um alerta continua sendo considerado ativo depois de o
+  # Prometheus parar de reenviá-lo. Precisa ser MAIOR que o intervalo de
+  # reenvio do Prometheus (que é 1m por padrão), ou alertas vivos "expiram"
+  # e reaparecem, gerando notificação duplicada.
+  resolve_timeout: 5m
+
+route:
+  # ─── Agrupamento: a diferença entre um aviso e trinta ──────────────────────
+  # Sem agrupar, um banco fora do ar gera uma notificação por série — e a
+  # pessoa de plantão recebe trinta mensagens dizendo a mesma coisa, o que é
+  # a forma mais rápida de treinar alguém a silenciar o canal.
+  group_by: [alertname, severity]
+  # Espera antes de mandar o PRIMEIRO aviso de um grupo novo, para os alertas
+  # irmãos chegarem e irem juntos.
+  group_wait: 30s
+  # Espera antes de avisar sobre alertas NOVOS num grupo que já notificou.
+  group_interval: 5m
+  # Só repete o mesmo aviso depois disto. Baixo demais vira spam; alto demais
+  # faz um incidente longo sumir do canal.
+  repeat_interval: 4h
+  receiver: plantao
+
+  routes:
+    # `severity: ticket` existe no slo.yml e NÃO deve acordar ninguém. É o
+    # burn rate de 1x: o orçamento vai acabar no fim do mês, e isso é trabalho
+    # de terça-feira. Separar as duas severidades é o que torna possível
+    # esperar mediana ZERO de páginas por turno.
+    - matchers: [severity="ticket"]
+      receiver: fila
+      group_wait: 5m
+      repeat_interval: 24h
+
+inhibit_rules:
+  # Se o burn rate RÁPIDO está disparando, o MÉDIO também está — eles medem a
+  # mesma queima em janelas diferentes. Notificar os dois conta a mesma
+  # história duas vezes.
+  - source_matchers: [alertname="OrcamentoDeErroQueimandoRapido"]
+    target_matchers: [alertname="OrcamentoDeErroQueimandoMedio"]
+    equal: [service]
+
+receivers:
+  # ─── Por que um webhook e não Slack/PagerDuty ──────────────────────────────
+  # Um destino de verdade exigiria credencial de terceiro, e este repositório
+  # não pede conta em lugar nenhum. O webhook aponta para um receptor que a
+  # própria stack sobe, e o portão prova a ENTREGA lendo o log de acesso dele
+  # e o contador `alertmanager_notifications_total` do próprio Alertmanager.
+  #
+  # Trocar por Slack é mudar estas três linhas. O que a lição ensina — rota,
+  # agrupamento, inibição, silenciamento — não muda com o destino.
+  - name: plantao
+    webhook_configs:
+      - url: http://alert-sink:8080/plantao
+        send_resolved: true
+
+  - name: fila
+    webhook_configs:
+      - url: http://alert-sink:8080/fila
+        send_resolved: false

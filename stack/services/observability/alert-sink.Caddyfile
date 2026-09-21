@@ -1,0 +1,38 @@
+# O receptor de alertas — vinte linhas que tornam "o alerta sai" verificável.
+#
+# Um webhook precisa de alguém do outro lado. Sem isso o Alertmanager tenta,
+# falha, e incrementa `alertmanager_notifications_failed_total` — o que também
+# é medível, e prova o contrário do que a lição quer.
+#
+# Reusa a imagem do Caddy que a stack já carrega: nenhuma imagem nova.
+{
+	admin off
+	auto_https off
+}
+
+:8080 {
+	# O `log` PRECISA estar aqui dentro, e não no bloco global.
+	#
+	# O global configura o logger do próprio Caddy — as mensagens de partida,
+	# de TLS, de recarga. O log de ACESSO é por site, e sem esta linha o
+	# receptor responde 200 e não registra nada: a primeira versão deste
+	# arquivo fez exatamente isso, e o portão ficou sem a prova de entrega
+	# enquanto o contador do Alertmanager já dizia que a notificação saiu.
+	log {
+		output stdout
+		format json
+	}
+
+	# Responde 200 a qualquer coisa. O que importa não é o corpo — é a linha
+	# de log provando que a requisição CHEGOU, com o caminho dizendo qual
+	# rota do Alertmanager a produziu.
+	handle /plantao* {
+		respond "recebido: plantao" 200
+	}
+	handle /fila* {
+		respond "recebido: fila" 200
+	}
+	handle {
+		respond "sink" 200
+	}
+}
