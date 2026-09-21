@@ -33,6 +33,26 @@ junto, volta atrás junto.
 
 ## O que isso cobra: o CI testa o que está commitado
 
+<Term word="Jenkinsfile" alt="Jenkinsfile">
+O arquivo, na raiz do repositório, que descreve os estágios do pipeline. O
+Jenkins o lê **do commit que está construindo**, não de uma configuração guardada
+nele.
+
+É o que faz "pipeline como código" ser literal: mudar o pipeline é um commit,
+com autor, data e revisão — e voltar atrás é `git revert`, não lembrar o que
+estava marcado na tela antes.
+</Term>
+
+<Term word="SCM" alt="SCM (source control management)">
+Sigla para o sistema de controle de versão de onde o Jenkins puxa o código —
+aqui, um `git daemon` servindo este repositório.
+
+Aparece no nome de quase tudo: `checkout scm`, "SCM polling", "Pipeline script
+from SCM". Sabendo que quer dizer "de onde vem o código", metade do vocabulário
+do Jenkins deixa de ser opaca.
+</Term>
+
+
 ```groovy
 scm {
     git {
@@ -162,6 +182,16 @@ menos chance de a mesma coisa acontecer de novo.
 </LabExercise>
 
 ## O que fica
+
+<Tradeoff
+  a="Jenkinsfile no repositório"
+  b="Pipeline configurado na interface"
+  whenA="Quando o pipeline e o código que ele constrói evoluem juntos — que é quase sempre. Uma mudança que exige etapa nova no build entra no mesmo pull request, e um branch antigo continua construindo pelo pipeline que ele conhecia."
+  whenB="Quando o pipeline é infraestrutura compartilhada por muitos repositórios e não deve mudar por commit de nenhum deles. Um job que faz release de produção é o exemplo: não convém que quem abre PR consiga editar as etapas dele."
+  chose="a"
+  verdict="e o preço apareceu na primeira hora: o CI passa a testar o que está COMMITADO. Alteração não commitada não existe para o pipeline, o que é exatamente o ponto — e uma surpresa garantida para quem está acostumado a rodar o build local."
+/>
+
 
 - O Jenkinsfile mora com o código: muda junto, é revisado junto, volta junto.
 - O CI constrói o que está **commitado**. Não é cache, é a definição de CI.

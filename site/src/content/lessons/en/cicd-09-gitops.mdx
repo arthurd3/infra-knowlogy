@@ -34,6 +34,18 @@ step, and about why the commonest answer to it is the wrong one.
 
 ## Who holds the credential
 
+<Term word="reconciliation" alt="reconciliation">
+The continuous loop in which a controller compares the **desired** state (what
+is in Git) with the **actual** state (what is in the cluster) and acts to close
+the gap.
+
+The word to keep is *continuous*. An `apply` happens once and ends;
+reconciliation does not end — which is why a change made by hand in the cluster
+is undone on its own, and why "it worked when I applied it" stops being a
+sufficient sentence.
+</Term>
+
+
 <PushVsPull />
 
 The question separating the two models is not "which tool". It is:

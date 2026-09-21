@@ -32,6 +32,26 @@ que um `RUN` escrito por quem abriu um pull request alcança?"**
 
 ## Por que o socket é root no host
 
+<Term word="socket Unix" alt="Unix socket">
+Um arquivo especial pelo qual dois processos da **mesma máquina** conversam.
+Parece arquivo no `ls`, mas não guarda conteúdo: é um canal.
+
+O `/var/run/docker.sock` é assim, e a consequência é a lição inteira: quem
+consegue escrever nesse arquivo consegue pedir ao daemon que rode um container —
+inclusive um com o sistema de arquivos do host montado dentro.
+</Term>
+
+<Term word="rootless" alt="rootless">
+Rodar a engine de container como usuário comum, sem privilégio de root no host.
+Os containers passam a existir dentro de um user namespace, onde o "root" de
+dentro é um UID sem poder nenhum lá fora.
+
+Custa: alguns recursos não funcionam, e a rede fica mais lenta. Compra: um
+escape do container encontra um usuário comum do outro lado, não o dono da
+máquina.
+</Term>
+
+
 O daemon do Docker roda como root. Quem fala com o socket pede ao daemon que crie
 containers — inclusive um com `--privileged` e o disco do host montado.
 
@@ -189,6 +209,16 @@ trancada, a chave também não fica debaixo do tapete.
 </LabExercise>
 
 ## O que fica
+
+<Tradeoff
+  a="Montar o socket do Docker no agente"
+  b="Um buildkitd rootless ao lado"
+  whenA="Nunca num agente que roda código de terceiro — é o caminho de todo tutorial e equivale a dar root no host a quem abrir um pull request. Defensável só quando o agente e o daemon já estão na mesma fronteira de confiança, e você sabe disso explicitamente."
+  whenB="Quando o agente executa `Jenkinsfile` que você não escreveu. O agente fala com o buildkitd por socket, sem nenhum acesso ao daemon do host, e o buildkitd roda sem privilégio. Custa a configuração de SELinux que este repositório mediu — três `unconfined` e um tipo específico."
+  chose="b"
+  verdict="e o custo real foi descobrir COMO, não se valia a pena: o workaround colado de todo tutorial desliga o SELinux, e a saída certa (um tipo feito para engine aninhada) não aparece em lugar nenhum. Está no ADR 0011."
+/>
+
 
 - Montar `docker.sock` no agente é dar root no host a quem abrir um pull request.
 - `--privileged` não é "mais permissivo": é o confinamento deixando de existir.

@@ -33,6 +33,26 @@ request executa código de quem abriu o pull request.
 
 ## A fronteira, em uma linha de YAML
 
+<Term word="executor" alt="executor">
+Um slot de execução. Cada executor roda **um** build por vez, e o número deles
+num nó é quantos builds cabem ali simultaneamente.
+
+`numExecutors: 0` no controller é a linha que diz "nenhum build acontece aqui".
+Ela não desliga o Jenkins nem impede que o controller faça trabalho — só que ele
+execute o código de alguém.
+</Term>
+
+<Term word="agente" alt="agent">
+O processo separado que de fato roda os builds. Ele se conecta ao controller,
+recebe instruções e executa; o controller coordena e nunca toca no código.
+
+A separação é de segurança, não de capacidade. Um `Jenkinsfile` é código
+arbitrário escrito por quem abre um pull request — rodá-lo no controller é
+rodá-lo com acesso às credenciais, à configuração e ao disco de toda a
+instalação.
+</Term>
+
+
 ```yaml
 jenkins:
   numExecutors: 0
@@ -142,6 +162,23 @@ docker compose -f cicd/compose.yaml exec agent sh -c \
 </RunIt>
 
 ## O que fica
+
+<FieldNote
+  source="Jenkins — Controller Isolation"
+  url="https://www.jenkins.io/doc/book/security/controller-isolation/"
+  kind="spec"
+  accessed="2026-09-21"
+>
+A documentação do próprio Jenkins é explícita: construir no controller dá ao
+build acesso ao sistema de arquivos dele, incluindo o `JENKINS_HOME`, onde ficam
+as credenciais de **todos** os jobs.
+
+Vale notar o que isso significa na prática: não é o build do seu time que
+preocupa, é o de um fork. Num projeto que aceita contribuição externa, a
+fronteira controller/agente é a única coisa entre um pull request e as chaves da
+organização.
+</FieldNote>
+
 
 - O controller guarda segredo; o agente constrói. Misturar os dois é dar o
   segredo ao build.

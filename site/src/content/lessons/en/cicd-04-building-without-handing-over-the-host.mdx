@@ -32,6 +32,26 @@ The question that choice answers is not "how do I build an image?". It is
 
 ## Why the socket is root on the host
 
+<Term word="Unix socket" alt="Unix socket">
+A special file through which two processes on the **same machine** talk. It
+looks like a file in `ls`, but holds no content: it is a channel.
+
+`/var/run/docker.sock` is one, and the consequence is the whole lesson: whoever
+can write to that file can ask the daemon to run a container — including one
+with the host's filesystem mounted inside.
+</Term>
+
+<Term word="rootless" alt="rootless">
+Running the container engine as an ordinary user, with no root privilege on the
+host. Containers then live inside a user namespace, where the "root" inside is a
+UID with no power outside.
+
+It costs: some features do not work, and networking gets slower. It buys: an
+escape from the container finds an ordinary user on the other side, not the
+machine's owner.
+</Term>
+
+
 The Docker daemon runs as root. Whoever talks to the socket asks the daemon to
 create containers — including one with `--privileged` and the host disk mounted.
 
@@ -190,6 +210,16 @@ enough, the key is not under the mat either.
 </LabExercise>
 
 ## What to take away
+
+<Tradeoff
+  a="Mount the Docker socket in the agent"
+  b="A rootless buildkitd alongside"
+  whenA="Never on an agent running third-party code — it is every tutorial's path and it amounts to handing root on the host to whoever opens a pull request. Defensible only when agent and daemon already sit inside the same trust boundary, and you know that explicitly."
+  whenB="When the agent runs a `Jenkinsfile` you did not write. The agent talks to buildkitd over a socket, with no access to the host daemon at all, and buildkitd runs unprivileged. It costs the SELinux configuration this repository measured — three `unconfined` flags and one specific type."
+  chose="b"
+  verdict="and the real cost was finding out HOW, not whether it was worth it: the workaround pasted from every tutorial switches SELinux off, and the right way out (a type made for nested engines) appears nowhere. It is in ADR 0011."
+/>
+
 
 - Mounting `docker.sock` into the agent hands root on the host to whoever opens a
   pull request.

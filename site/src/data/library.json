@@ -951,7 +951,8 @@
       "lessons": [
         "sli-slo-error-budget",
         "burn-rate-alerting",
-        "why-observe"
+        "why-observe",
+        "alert-routing"
       ],
       "pt": {
         "label": "SLI, SLO, orçamento de erro e alerta",
@@ -1189,7 +1190,9 @@
       "id": "supply-chain-and-reproducibility",
       "lessons": [
         "reproducible-builds",
-        "signing-what-you-ship"
+        "signing-what-you-ship",
+        "secrets-in-ci",
+        "building-without-a-daemon"
       ],
       "pt": {
         "label": "Cadeia de suprimentos e reprodutibilidade",
@@ -1301,7 +1304,8 @@
       "id": "k8s-reconciliation",
       "lessons": [
         "why-an-orchestrator",
-        "from-compose-to-deployment"
+        "from-compose-to-deployment",
+        "liveness-and-readiness"
       ],
       "pt": {
         "label": "Reconciliação e controladores",
@@ -1877,6 +1881,650 @@
           "accessed": "2026-09-21",
           "why_pt": "A parte de rede mostra como separar latência de resolução de latência de conexão, que é exatamente o passo que transforma 'a requisição está lenta' num diagnóstico. Útil aqui pelo método, não pela ferramenta.",
           "why_en": "The networking part shows how to separate resolution latency from connection latency, which is exactly the step that turns 'the request is slow' into a diagnosis. Useful here for the method rather than the tool."
+        }
+      ]
+    },
+    {
+      "id": "infrastructure-as-code",
+      "lessons": [
+        "why-infrastructure-becomes-code",
+        "plan-and-apply",
+        "the-provider-plugin",
+        "the-dependency-graph",
+        "opentofu-terraform-and-the-license"
+      ],
+      "pt": {
+        "label": "Infraestrutura como código",
+        "what": "Descrever o que deve existir num arquivo versionado, e deixar uma ferramenta calcular a diferença entre isso e a realidade. O ponto não é automatizar cliques: é que a descrição vire artefato revisável, com autor, histórico e possibilidade de voltar atrás."
+      },
+      "en": {
+        "label": "Infrastructure as code",
+        "what": "Describing what should exist in a versioned file and letting a tool compute the difference between that and reality. The point is not automating clicks: it is that the description becomes a reviewable artifact, with an author, history and a way back."
+      },
+      "refs": [
+        {
+          "kind": "docs",
+          "title": "OpenTofu — documentação",
+          "author": "OpenTofu (Linux Foundation)",
+          "where": "opentofu.org",
+          "year": 2026,
+          "lang": "en",
+          "url": "https://opentofu.org/docs/",
+          "free": true,
+          "accessed": "2026-09-21",
+          "why_pt": "A documentação da ferramenta que este módulo usa, e o lugar certo para começar porque descreve a linguagem e o fluxo sem assumir que você já conhece o Terraform. Leia `language/` antes de `cli/`: a maior parte da confusão inicial é de vocabulário, não de comando.",
+          "why_en": "The documentation for the tool this module uses, and the right place to start because it describes the language and the workflow without assuming you already know Terraform. Read `language/` before `cli/`: most early confusion is vocabulary, not commands."
+        },
+        {
+          "kind": "video",
+          "title": "Terraform in 100 Seconds",
+          "author": "Fireship",
+          "where": "YouTube",
+          "year": 2021,
+          "lang": "en",
+          "url": "https://www.youtube.com/watch?v=tomUWcQ0P3k",
+          "free": true,
+          "accessed": "2026-09-21",
+          "why_pt": "Cem segundos, e é exatamente para isso que serve: entender o formato do problema antes de abrir a documentação. Não ensina a operar nada, e a justificativa para estar aqui é essa — orientação, não profundidade. A profundidade está nas outras referências deste conceito.",
+          "why_en": "A hundred seconds, and that is exactly what it is for: grasping the shape of the problem before opening the documentation. It teaches you to operate nothing, and that is precisely its justification here — orientation, not depth. The depth is in this concept's other references."
+        },
+        {
+          "kind": "blog",
+          "title": "O manifesto do OpenTofu",
+          "author": "OpenTofu",
+          "where": "opentofu.org",
+          "year": 2023,
+          "lang": "en",
+          "url": "https://opentofu.org/manifesto/",
+          "free": true,
+          "accessed": "2026-09-21",
+          "why_pt": "O documento que originou o fork, escrito quando a mudança de licença do Terraform foi anunciada. Vale ler pelo argumento, não pelo desfecho: ele expõe o que uma empresa pode e não pode fazer com um projeto que virou infraestrutura de terceiros.",
+          "why_en": "The document that started the fork, written when Terraform's licence change was announced. Worth reading for the argument, not the outcome: it lays out what a company can and cannot do with a project that has become other people's infrastructure."
+        },
+        {
+          "kind": "spec",
+          "title": "BUSL-1.1 na lista do SPDX",
+          "author": "SPDX Workgroup",
+          "where": "spdx.org",
+          "year": 2026,
+          "lang": "en",
+          "url": "https://spdx.org/licenses/BUSL-1.1.html",
+          "free": true,
+          "accessed": "2026-09-21",
+          "why_pt": "O texto da licença que provocou o fork, no catálogo neutro que as ferramentas de compliance consultam. Ler a cláusula de uso em vez do resumo de blog é o que separa entender a restrição de repetir o que se disse dela na época.",
+          "why_en": "The text of the licence that triggered the fork, in the neutral catalogue compliance tooling consults. Reading the use clause instead of a blog summary is what separates understanding the restriction from repeating what was said about it at the time."
+        }
+      ]
+    },
+    {
+      "id": "state-and-drift",
+      "lessons": [
+        "the-state-file",
+        "drift-and-reconciliation",
+        "secrets-in-state",
+        "gitops-two-reconcilers"
+      ],
+      "pt": {
+        "label": "Estado, desvio e reconciliação",
+        "what": "Toda ferramenta declarativa precisa saber o que ela criou para saber o que mudar. Esse registro é o estado — e a diferença entre ele e o mundo real é o desvio. Reconciliação é o laço que fecha essa diferença, uma vez ou para sempre."
+      },
+      "en": {
+        "label": "State, drift and reconciliation",
+        "what": "Every declarative tool needs to know what it created in order to know what to change. That record is the state — and the difference between it and the real world is drift. Reconciliation is the loop that closes that gap, once or forever."
+      },
+      "refs": [
+        {
+          "kind": "docs",
+          "title": "Terraform — State",
+          "author": "HashiCorp",
+          "where": "developer.hashicorp.com",
+          "year": 2026,
+          "lang": "en",
+          "url": "https://developer.hashicorp.com/terraform/language/state",
+          "free": true,
+          "accessed": "2026-09-21",
+          "why_pt": "A explicação canônica de por que o estado existe e por que ele não pode ser reconstruído a partir da nuvem. A seção sobre dados sensíveis é a que importa para a lição de segredo: o estado guarda valor em claro, e isso é comportamento declarado, não defeito.",
+          "why_en": "The canonical explanation of why state exists and why it cannot be rebuilt from the cloud. The sensitive-data section is the one that matters for the secrets lesson: state stores values in the clear, and that is declared behaviour, not a defect."
+        },
+        {
+          "kind": "spec",
+          "title": "OpenGitOps — os quatro princípios",
+          "author": "OpenGitOps (CNCF)",
+          "where": "opengitops.dev",
+          "year": 2026,
+          "lang": "en",
+          "url": "https://opengitops.dev/",
+          "free": true,
+          "accessed": "2026-09-21",
+          "why_pt": "Quatro frases curtas que definem GitOps sem vender ferramenta nenhuma. Serve de régua: dá para ler a documentação do ArgoCD ou do Flux e checar qual princípio cada recurso implementa, em vez de aceitar a palavra como sinônimo de 'implanta a partir do Git'.",
+          "why_en": "Four short sentences defining GitOps without selling any tool. It works as a ruler: you can read ArgoCD's or Flux's docs and check which principle each feature implements, instead of taking the word as a synonym for 'deploys from Git'."
+        },
+        {
+          "kind": "video",
+          "title": "What is GitOps, How GitOps works and Why it's so useful",
+          "author": "TechWorld with Nana",
+          "where": "YouTube",
+          "year": 2021,
+          "lang": "en",
+          "url": "https://www.youtube.com/watch?v=f5EpcWp0THw",
+          "free": true,
+          "accessed": "2026-09-21",
+          "why_pt": "A explicação mais clara em vídeo da diferença entre empurrar e puxar, que é exatamente o que decide quem guarda a credencial do cluster. Ela chega ao ponto sem depender de nenhuma ferramenta específica, o que é raro nesse assunto.",
+          "why_en": "The clearest video explanation of the difference between push and pull, which is exactly what decides who holds the cluster credential. It gets to the point without depending on any specific tool, which is rare on this subject."
+        },
+        {
+          "kind": "video",
+          "title": "ArgoCD Tutorial for Beginners | GitOps CD for Kubernetes",
+          "author": "TechWorld with Nana",
+          "where": "YouTube",
+          "year": 2021,
+          "lang": "en",
+          "url": "https://www.youtube.com/watch?v=MeU5_k9ssrs",
+          "free": true,
+          "accessed": "2026-09-21",
+          "why_pt": "O par prático do vídeo acima: mostra a instalação, o objeto Application e a sincronização acontecendo. Assista depois de entender o modelo, porque a interface bonita esconde a parte que importa, que é o laço de reconciliação rodando sozinho.",
+          "why_en": "The practical companion to the video above: it shows the install, the Application object and synchronisation happening. Watch it after you understand the model, because the pretty UI hides the part that matters — the reconciliation loop running on its own."
+        },
+        {
+          "kind": "docs",
+          "title": "Flux — conceitos",
+          "author": "Flux (CNCF)",
+          "where": "fluxcd.io",
+          "year": 2026,
+          "lang": "en",
+          "url": "https://fluxcd.io/flux/concepts/",
+          "free": true,
+          "accessed": "2026-09-21",
+          "why_pt": "O outro reconciliador, e a leitura que torna a comparação possível. Repare no `interval` obrigatório de cada recurso: é a diferença de arquitetura com o ArgoCD que a lição mede, e ela está declarada aqui, na primeira página de conceitos.",
+          "why_en": "The other reconciler, and the reading that makes the comparison possible. Note the mandatory `interval` on every resource: it is the architectural difference from ArgoCD that the lesson measures, and it is declared right here, on the first page of concepts."
+        }
+      ]
+    },
+    {
+      "id": "continuous-integration",
+      "lessons": [
+        "what-a-pipeline-proves",
+        "jenkins-without-clicking",
+        "pipeline-as-code",
+        "jenkins-vs-github-actions",
+        "controller-and-agent"
+      ],
+      "pt": {
+        "label": "Integração contínua",
+        "what": "Integrar o trabalho de todo mundo com frequência, e ter uma máquina neutra afirmando que o resultado ainda funciona. A palavra difícil não é 'contínua': é 'integrar' — a prática nasceu para combater o merge de três semanas, não para ter um ícone verde."
+      },
+      "en": {
+        "label": "Continuous integration",
+        "what": "Integrating everyone's work frequently, with a neutral machine asserting the result still works. The hard word is not 'continuous': it is 'integrate' — the practice was born to fight the three-week merge, not to earn a green icon."
+      },
+      "refs": [
+        {
+          "kind": "article",
+          "title": "Continuous Integration",
+          "author": "Martin Fowler",
+          "where": "martinfowler.com",
+          "year": 2024,
+          "lang": "en",
+          "url": "https://martinfowler.com/articles/continuousIntegration.html",
+          "free": true,
+          "accessed": "2026-09-21",
+          "why_pt": "O artigo que definiu o termo, revisado pelo autor ao longo de vinte anos. Vale pela parte que quase todo mundo pula: a integração contínua é sobre o que o TIME faz com os branches, e o servidor de build é consequência disso, não a prática em si.",
+          "why_en": "The article that defined the term, revised by its author over twenty years. Worth it for the part almost everyone skips: continuous integration is about what the TEAM does with branches, and the build server is a consequence of that, not the practice itself."
+        },
+        {
+          "kind": "docs",
+          "title": "Jenkins — o livro do Pipeline",
+          "author": "Jenkins (CDF)",
+          "where": "jenkins.io",
+          "year": 2026,
+          "lang": "en",
+          "url": "https://www.jenkins.io/doc/book/pipeline/",
+          "free": true,
+          "accessed": "2026-09-21",
+          "why_pt": "A referência do Jenkinsfile, e o lugar onde a sintaxe declarativa fica clara sem os exemplos de blog que misturam as duas gerações da linguagem. Leia a seção de agentes junto com a de estágios: é onde a fronteira controller/agente aparece como decisão de escrita.",
+          "why_en": "The Jenkinsfile reference, and where the declarative syntax becomes clear without the blog examples that mix the language's two generations. Read the agent section alongside the stages one: it is where the controller/agent boundary shows up as a writing decision."
+        },
+        {
+          "kind": "docs",
+          "title": "Entendendo o GitHub Actions",
+          "author": "GitHub",
+          "where": "docs.github.com",
+          "year": 2026,
+          "lang": "en",
+          "url": "https://docs.github.com/en/actions/about-github-actions/understanding-github-actions",
+          "free": true,
+          "accessed": "2026-09-21",
+          "why_pt": "O outro mundo do módulo, e a leitura que torna a comparação honesta. O vocabulário é diferente do Jenkins de propósito — workflow, job, step, runner — e traduzir os termos é metade do trabalho de comparar as duas plataformas sem torcida.",
+          "why_en": "The module's other world, and the reading that makes the comparison honest. The vocabulary differs from Jenkins by design — workflow, job, step, runner — and translating the terms is half the work of comparing the two platforms without taking sides."
+        },
+        {
+          "kind": "talk",
+          "title": "SLSA, A Security Paradigm For Your Builds",
+          "author": "Teja Kummarikuntla",
+          "where": "YouTube",
+          "year": 2024,
+          "lang": "en",
+          "url": "https://www.youtube.com/watch?v=eqv4aR6LFeg",
+          "free": true,
+          "accessed": "2026-09-21",
+          "why_pt": "Entra aqui, e não só no conceito de cadeia de suprimentos, porque a palestra é sobre o que um PIPELINE precisa provar. Ela dá o vocabulário para julgar um pipeline pela evidência que ele produz, em vez de pelo número de estágios que tem.",
+          "why_en": "It belongs here, not only in the supply-chain concept, because the talk is about what a PIPELINE has to prove. It gives you the vocabulary to judge a pipeline by the evidence it produces rather than by how many stages it has."
+        },
+        {
+          "kind": "book",
+          "title": "Accelerate",
+          "author": "Nicole Forsgren, Jez Humble, Gene Kim",
+          "where": "IT Revolution",
+          "year": 2018,
+          "lang": "en",
+          "url": "https://itrevolution.com/product/accelerate/",
+          "free": false,
+          "accessed": "2026-09-21",
+          "why_pt": "O livro por trás dos indicadores do DORA, e a fonte para quem quiser discutir entrega com número em vez de opinião. A parte metodológica importa tanto quanto as conclusões: ele explica como os quatro indicadores foram derivados, o que permite discordar com fundamento.",
+          "why_en": "The book behind DORA's indicators, and the source for anyone wanting to argue about delivery with numbers instead of opinions. The methodology matters as much as the conclusions: it explains how the four indicators were derived, which lets you disagree on solid ground."
+        }
+      ]
+    },
+    {
+      "id": "ports-and-attack-surface",
+      "lessons": [
+        "what-a-port-is",
+        "remote-access-ports",
+        "web-ports-and-tls",
+        "abused-infrastructure-ports"
+      ],
+      "pt": {
+        "label": "Portas e superfície de ataque",
+        "what": "Uma porta é um número de 16 bits que diz a qual processo o kernel deve entregar um pacote. Superfície de ataque é a soma de tudo que responde — e a distância entre as duas ideias é onde mora quase todo incidente de infraestrutura exposta."
+      },
+      "en": {
+        "label": "Ports and attack surface",
+        "what": "A port is a 16-bit number telling the kernel which process should receive a packet. Attack surface is the sum of everything that answers — and the distance between those two ideas is where almost every exposed-infrastructure incident lives."
+      },
+      "refs": [
+        {
+          "kind": "spec",
+          "title": "RFC 9293 — Transmission Control Protocol",
+          "author": "Wesley Eddy (ed.)",
+          "where": "RFC Editor",
+          "year": 2022,
+          "lang": "en",
+          "url": "https://www.rfc-editor.org/rfc/rfc9293.html",
+          "free": true,
+          "accessed": "2026-09-21",
+          "why_pt": "A especificação consolidada do TCP, que substituiu a RFC 793 de 1981. Não se lê de ponta a ponta: vá à seção de portas e ao diagrama de estados, e o `ss -tlnp` do seu host deixa de ser uma tabela e vira uma leitura de máquina de estados.",
+          "why_en": "The consolidated TCP specification, which replaced RFC 793 from 1981. You do not read it end to end: go to the ports section and the state diagram, and `ss -tlnp` on your host stops being a table and becomes a state-machine reading."
+        },
+        {
+          "kind": "docs",
+          "title": "OWASP Top Ten",
+          "author": "OWASP Foundation",
+          "where": "owasp.org",
+          "year": 2026,
+          "lang": "en",
+          "url": "https://owasp.org/www-project-top-ten/",
+          "free": true,
+          "accessed": "2026-09-21",
+          "why_pt": "A lista que organiza o vocabulário de risco em aplicação web, e a referência que a maioria dos times de segurança assume que você conhece. Use-a como índice, não como checklist: cada item aponta para páginas com o mecanismo e as defesas medidas.",
+          "why_en": "The list that organises web application risk vocabulary, and the reference most security teams assume you know. Use it as an index, not a checklist: each item points to pages with the mechanism and the measured defences."
+        },
+        {
+          "kind": "video",
+          "title": "Linux Bridges, IP Tables, and CNI Plug-Ins — A Container Networking Deep Dive",
+          "author": "NetDevOps Live",
+          "where": "YouTube",
+          "year": 2020,
+          "lang": "en",
+          "url": "https://www.youtube.com/watch?v=z-ITjDQT7DU",
+          "free": true,
+          "accessed": "2026-09-21",
+          "why_pt": "Mostra o caminho de um pacote desde a interface do container até a regra de iptables que o publica, que é exatamente a mecânica por trás de 'publiquei uma porta'. Depois dele, a diferença entre publicar em 127.0.0.1 e em 0.0.0.0 deixa de ser decoreba.",
+          "why_en": "It traces a packet from the container interface to the iptables rule that publishes it, which is exactly the mechanics behind 'I published a port'. After it, the difference between publishing on 127.0.0.1 and on 0.0.0.0 stops being something you memorise."
+        },
+        {
+          "kind": "spec",
+          "title": "NIST SP 800-190 — Application Container Security Guide",
+          "author": "NIST",
+          "where": "csrc.nist.gov",
+          "year": 2017,
+          "lang": "en",
+          "url": "https://csrc.nist.gov/pubs/sp/800/190/final",
+          "free": true,
+          "accessed": "2026-09-21",
+          "why_pt": "O documento que organiza risco de container por camada — imagem, registry, orquestrador, host — e é a fonte que auditoria costuma citar. Serve para traduzir 'está seguro?' numa lista de perguntas específicas que dá para responder com comando.",
+          "why_en": "The document that organises container risk by layer — image, registry, orchestrator, host — and the source audits tend to cite. It turns 'is it secure?' into a list of specific questions you can answer with a command."
+        }
+      ]
+    },
+    {
+      "id": "attack-and-defence",
+      "lessons": [
+        "attacking-a-database",
+        "layered-defense",
+        "hardening-service-by-service"
+      ],
+      "pt": {
+        "label": "Ataque e defesa em camadas",
+        "what": "Toda defesa isolada falha em algum cenário; o que sustenta um sistema é a sobreposição delas. Estudar o ataque não é curiosidade mórbida — é a única forma de saber qual camada realmente estava segurando o peso."
+      },
+      "en": {
+        "label": "Attack and layered defence",
+        "what": "Every isolated defence fails in some scenario; what holds a system up is their overlap. Studying the attack is not morbid curiosity — it is the only way to know which layer was actually carrying the weight."
+      },
+      "refs": [
+        {
+          "kind": "docs",
+          "title": "SQL injection",
+          "author": "PortSwigger",
+          "where": "portswigger.net",
+          "year": 2026,
+          "lang": "en",
+          "url": "https://portswigger.net/web-security/sql-injection",
+          "free": true,
+          "accessed": "2026-09-21",
+          "why_pt": "O material de treino mais direto sobre o assunto, com laboratórios executáveis e a explicação do mecanismo em vez da regra decorada. A seção sobre consultas parametrizadas responde a pergunta que a lição faz: por que escapar caractere não é defesa.",
+          "why_en": "The most direct training material on the subject, with runnable labs and an explanation of the mechanism rather than a memorised rule. The parameterised-queries section answers the lesson's question: why escaping characters is not a defence."
+        },
+        {
+          "kind": "talk",
+          "title": "Evolution of Kubernetes Security",
+          "author": "KubeCon + CloudNativeCon",
+          "where": "YouTube",
+          "year": 2023,
+          "lang": "en",
+          "url": "https://www.youtube.com/watch?v=9aqnSqDmbMk",
+          "free": true,
+          "accessed": "2026-09-21",
+          "why_pt": "Uma retrospectiva de como os controles do Kubernetes mudaram, e por quê — o que é mais útil do que uma lista de boas práticas porque explica qual ataque motivou cada controle. Ajuda a decidir o que ligar primeiro num cluster que já existe.",
+          "why_en": "A retrospective of how Kubernetes controls changed, and why — more useful than a list of best practices because it explains which attack motivated each control. It helps decide what to switch on first in a cluster that already exists."
+        },
+        {
+          "kind": "talk",
+          "title": "Container Security with Liz Rice",
+          "author": "Liz Rice, entrevistada por Bret Fisher",
+          "where": "YouTube",
+          "year": 2020,
+          "lang": "en",
+          "url": "https://www.youtube.com/watch?v=UMtyHmu3_Do",
+          "free": true,
+          "accessed": "2026-09-21",
+          "why_pt": "Formato de conversa, o que aqui é vantagem: as perguntas são as que alguém operando faria, e as respostas separam o que é risco real do que é teatro. Bom antes de ler o NIST, porque dá o critério para priorizar o que aquele documento lista.",
+          "why_en": "A conversation format, which is an advantage here: the questions are the ones an operator would ask, and the answers separate real risk from theatre. Good before reading the NIST guide, because it gives you the criterion for prioritising what that document lists."
+        },
+        {
+          "kind": "docs",
+          "title": "OWASP Top Ten",
+          "author": "OWASP Foundation",
+          "where": "owasp.org",
+          "year": 2026,
+          "lang": "en",
+          "url": "https://owasp.org/www-project-top-ten/",
+          "free": true,
+          "accessed": "2026-09-21",
+          "why_pt": "Repetido aqui de propósito: no conceito de portas ele serve de índice de risco, e neste serve de ponte entre o ataque e o controle que o impede. Os capítulos de injeção e de configuração incorreta são os que as lições desta trilha exercitam de fato.",
+          "why_en": "Repeated here deliberately: in the ports concept it works as a risk index, and here as a bridge between the attack and the control that stops it. The injection and misconfiguration chapters are the ones this track's lessons actually exercise."
+        }
+      ]
+    },
+    {
+      "id": "incident-and-on-call",
+      "lessons": [
+        "blameless-postmortems",
+        "on-call-cost-and-access"
+      ],
+      "pt": {
+        "label": "Incidente, post-mortem e plantão",
+        "what": "O que acontece depois que o alerta dispara: quem é acionado, como a investigação é conduzida e o que fica escrito no fim. Sem culpado não é gentileza corporativa — é a condição para que alguém conte o que realmente fez."
+      },
+      "en": {
+        "label": "Incident, postmortem and on-call",
+        "what": "What happens after the alert fires: who gets paged, how the investigation is run and what ends up written down. Blameless is not corporate politeness — it is the precondition for anyone telling you what they actually did."
+      },
+      "refs": [
+        {
+          "kind": "book",
+          "title": "Site Reliability Engineering — Postmortem Culture",
+          "author": "Google SRE",
+          "where": "sre.google",
+          "year": 2016,
+          "lang": "en",
+          "url": "https://sre.google/sre-book/postmortem-culture/",
+          "free": true,
+          "accessed": "2026-09-21",
+          "why_pt": "O capítulo que popularizou a prática, com o detalhe que a maioria dos resumos corta: o post-mortem sem culpado depende de gatilhos definidos ANTES do incidente. Sem critério escrito, a decisão de escrever ou não vira política, e aí não há cultura que resista.",
+          "why_en": "The chapter that popularised the practice, with the detail most summaries cut: the blameless postmortem depends on triggers defined BEFORE the incident. With no written criterion, deciding whether to write one becomes politics, and no culture survives that."
+        },
+        {
+          "kind": "book",
+          "title": "The SRE Workbook — Incident Response",
+          "author": "Google SRE",
+          "where": "sre.google",
+          "year": 2018,
+          "lang": "en",
+          "url": "https://sre.google/workbook/incident-response/",
+          "free": true,
+          "accessed": "2026-09-21",
+          "why_pt": "O par prático do capítulo acima: papéis durante o incidente, como transferir comando e por que separar quem investiga de quem comunica. É a parte que se aprende errando, e ler antes custa menos do que descobrir às três da manhã.",
+          "why_en": "The practical companion to the chapter above: roles during an incident, how to hand off command and why to separate whoever investigates from whoever communicates. It is the part you learn by getting it wrong, and reading first costs less than finding out at 3 a.m."
+        },
+        {
+          "kind": "video",
+          "title": "Dev Deletes Entire Production Database, Chaos Ensues",
+          "author": "Kevin Fang",
+          "where": "YouTube",
+          "year": 2023,
+          "lang": "en",
+          "url": "https://www.youtube.com/watch?v=tLdRBsuvVKc",
+          "free": true,
+          "accessed": "2026-09-21",
+          "why_pt": "Uma reconstituição de incidente real, contada pela linha do tempo em vez da moral da história. Serve exatamente ao argumento do post-mortem sem culpado: a cadeia de decisões razoáveis que termina em desastre fica visível, e nenhuma delas foi burrice.",
+          "why_en": "A reconstruction of a real incident, told through the timeline rather than the moral. It serves the blameless argument precisely: the chain of reasonable decisions ending in disaster becomes visible, and not one of them was stupidity."
+        },
+        {
+          "kind": "book",
+          "title": "The Phoenix Project",
+          "author": "Gene Kim, Kevin Behr, George Spafford",
+          "where": "IT Revolution",
+          "year": 2013,
+          "lang": "en",
+          "url": "https://itrevolution.com/product/the-phoenix-project/",
+          "free": false,
+          "accessed": "2026-09-21",
+          "why_pt": "Romance, e é essa a vantagem: ele mostra o custo organizacional do trabalho não planejado de um jeito que relatório nenhum consegue. Leia pelo retrato do plantão que consome a capacidade do time — é o argumento que a lição de orçamento de plantão faz com número.",
+          "why_en": "A novel, and that is the advantage: it shows the organisational cost of unplanned work in a way no report manages. Read it for its portrait of on-call consuming a team's capacity — the argument the on-call budget lesson makes with numbers."
+        }
+      ]
+    },
+    {
+      "id": "distributed-tracing",
+      "lessons": [
+        "distributed-tracing",
+        "service-mesh-identity"
+      ],
+      "pt": {
+        "label": "Rastreamento distribuído",
+        "what": "Seguir UMA requisição através de todos os processos que ela toca, costurando os pedaços por um identificador que viaja junto. Métrica agrega e perde a identidade; log descreve um evento e não sabe o que veio antes. O trace liga as duas pontas."
+      },
+      "en": {
+        "label": "Distributed tracing",
+        "what": "Following ONE request through every process it touches, stitching the pieces together with an identifier that travels along. A metric aggregates and loses identity; a log describes one event and knows nothing of what came before. A trace connects the ends."
+      },
+      "refs": [
+        {
+          "kind": "spec",
+          "title": "W3C Trace Context",
+          "author": "W3C",
+          "where": "w3.org",
+          "year": 2021,
+          "lang": "en",
+          "url": "https://www.w3.org/TR/trace-context/",
+          "free": true,
+          "accessed": "2026-09-21",
+          "why_pt": "A especificação do cabeçalho `traceparent`, e o motivo de bibliotecas de fornecedores diferentes conseguirem participar do mesmo trace. Leia o formato do campo: entender que ele é uma linha de texto é o que faz o problema da fila deixar de ser misterioso.",
+          "why_en": "The specification of the `traceparent` header, and the reason libraries from different vendors can take part in the same trace. Read the field format: understanding it is a single line of text is what makes the queue problem stop being mysterious."
+        },
+        {
+          "kind": "docs",
+          "title": "OpenTelemetry — Traces",
+          "author": "OpenTelemetry (CNCF)",
+          "where": "opentelemetry.io",
+          "year": 2026,
+          "lang": "en",
+          "url": "https://opentelemetry.io/docs/concepts/signals/traces/",
+          "free": true,
+          "accessed": "2026-09-21",
+          "why_pt": "O vocabulário canônico: span, contexto, propagador, atributo, evento. Vale ler antes de instrumentar qualquer coisa, porque quase todo erro de instrumentação é confusão entre span e contexto — e os dois têm nomes parecidos em toda API.",
+          "why_en": "The canonical vocabulary: span, context, propagator, attribute, event. Worth reading before instrumenting anything, because nearly every instrumentation mistake is confusion between span and context — and the two have similar names in every API."
+        },
+        {
+          "kind": "video",
+          "title": "Introduction to Tracing: OpenTelemetry & Opentracing",
+          "author": "That DevOps Guy",
+          "where": "YouTube",
+          "year": 2021,
+          "lang": "en",
+          "url": "https://www.youtube.com/watch?v=idDu_jXqf4E",
+          "free": true,
+          "accessed": "2026-09-21",
+          "why_pt": "Uma introdução curta que mostra o trace aparecendo num backend, o que resolve o problema de imaginar a coisa antes de tê-la visto. A parte histórica sobre OpenTracing explica por que ainda se encontra as duas APIs em tutoriais antigos.",
+          "why_en": "A short introduction that shows a trace appearing in a backend, which solves the problem of imagining the thing before you have seen one. The historical part about OpenTracing explains why you still find both APIs in older tutorials."
+        },
+        {
+          "kind": "video",
+          "title": "OpenTelemetry Course — Understand Software Performance",
+          "author": "freeCodeCamp.org",
+          "where": "YouTube",
+          "year": 2021,
+          "lang": "en",
+          "url": "https://www.youtube.com/watch?v=r8UvWSX3KA8",
+          "free": true,
+          "accessed": "2026-09-21",
+          "why_pt": "O caminho longo, para quem vai instrumentar de verdade: percorre SDK, coletor e exportador com exemplo rodando. Complementa a documentação porque mostra a ordem em que as peças precisam existir, que é onde a primeira tentativa costuma travar.",
+          "why_en": "The long road, for anyone actually instrumenting: it walks through SDK, collector and exporter with a running example. It complements the documentation by showing the order in which the pieces have to exist, which is where the first attempt usually stalls."
+        }
+      ]
+    },
+    {
+      "id": "shell-and-tooling",
+      "lessons": [
+        "scripts-that-dont-lie",
+        "three-languages-one-stack"
+      ],
+      "pt": {
+        "label": "Shell, linguagens e o ferramental",
+        "what": "O código que não vai para produção mas decide o que vai: portões, scripts de medição, automação de release. Ele erra de um jeito específico — não parando, mas continuando e dizendo que deu certo."
+      },
+      "en": {
+        "label": "Shell, languages and tooling",
+        "what": "The code that does not ship but decides what does: gates, measurement scripts, release automation. It fails in a specific way — not by stopping, but by carrying on and reporting success."
+      },
+      "refs": [
+        {
+          "kind": "docs",
+          "title": "ShellCheck — SC2155",
+          "author": "ShellCheck",
+          "where": "shellcheck.net",
+          "year": 2026,
+          "lang": "en",
+          "url": "https://www.shellcheck.net/wiki/SC2155",
+          "free": true,
+          "accessed": "2026-09-21",
+          "why_pt": "Uma página por aviso, com o porquê e a correção — e esta em particular é a armadilha do `local` que a lição mede. Use o site inteiro como referência: colar um script nele encontra em segundos o que revisão humana não vê.",
+          "why_en": "One page per warning, with the reason and the fix — and this one in particular is the `local` trap the lesson measures. Use the whole site as a reference: pasting a script into it finds in seconds what human review does not see."
+        },
+        {
+          "kind": "docs",
+          "title": "Google Shell Style Guide",
+          "author": "Google",
+          "where": "google.github.io",
+          "year": 2026,
+          "lang": "en",
+          "url": "https://google.github.io/styleguide/shellguide.html",
+          "free": true,
+          "accessed": "2026-09-21",
+          "why_pt": "Curto e opinativo, e o valor está justamente nas opiniões: ele diz quando PARAR de usar shell, e esse é o conselho que falta em quase todo material de bash. A seção sobre substituição de comando e citação resolve metade dos bugs de script.",
+          "why_en": "Short and opinionated, and the value is precisely in the opinions: it says when to STOP using shell, and that is the advice missing from almost every bash resource. The command-substitution and quoting section resolves half of all script bugs."
+        },
+        {
+          "kind": "talk",
+          "title": "LISA19 — Linux Systems Performance",
+          "author": "Brendan Gregg",
+          "where": "YouTube",
+          "year": 2019,
+          "lang": "en",
+          "url": "https://www.youtube.com/watch?v=fhBHvsi0Ql0",
+          "free": true,
+          "accessed": "2026-09-21",
+          "why_pt": "Entra aqui pelo ferramental: é o mapa das ferramentas de linha de comando que respondem perguntas sobre um sistema, e a metodologia para escolher qual usar. Um portão só é bom se quem o escreve souber o que dá para medir — essa palestra é esse catálogo.",
+          "why_en": "It belongs here for the tooling: it is the map of command-line tools that answer questions about a system, and the methodology for picking which to use. A gate is only as good as its author's sense of what can be measured — this talk is that catalogue."
+        },
+        {
+          "kind": "docs",
+          "title": "The Twelve-Factor App",
+          "author": "Adam Wiggins et al.",
+          "where": "12factor.net",
+          "year": 2011,
+          "lang": "en",
+          "url": "https://12factor.net/",
+          "free": true,
+          "accessed": "2026-09-21",
+          "why_pt": "Referência aqui por causa dos fatores de build, release e run, que são exatamente a fronteira que um script de portão atravessa. Os doze fatores envelheceram bem porque descrevem restrições, não ferramentas — e restrição não sai de moda com a stack.",
+          "why_en": "Referenced here because of the build, release and run factors, which are exactly the boundary a gate script crosses. The twelve factors aged well because they describe constraints, not tools — and constraints do not go out of fashion with the stack."
+        }
+      ]
+    },
+    {
+      "id": "managed-kubernetes",
+      "lessons": [
+        "managed-clusters"
+      ],
+      "pt": {
+        "label": "Cluster gerenciado",
+        "what": "Um provedor opera o plano de controle e você opera as cargas. A fronteira parece administrativa e é técnica: ela define o que você pode configurar, o que pode depurar e o que precisa abrir chamado para descobrir."
+      },
+      "en": {
+        "label": "Managed clusters",
+        "what": "A provider runs the control plane and you run the workloads. The boundary looks administrative and is technical: it defines what you can configure, what you can debug, and what you have to open a ticket to find out."
+      },
+      "refs": [
+        {
+          "kind": "docs",
+          "title": "Kubernetes — componentes do cluster",
+          "author": "Kubernetes",
+          "where": "kubernetes.io",
+          "year": 2026,
+          "lang": "en",
+          "url": "https://kubernetes.io/docs/concepts/overview/components/",
+          "free": true,
+          "accessed": "2026-09-21",
+          "why_pt": "A lista do que existe num cluster, e a leitura que torna a fronteira do gerenciado legível: o que está do lado do provedor é quase exatamente esta página. Saber os nomes é o que permite entender o que um erro de API server está dizendo.",
+          "why_en": "The list of what exists in a cluster, and the reading that makes the managed boundary legible: what sits on the provider's side is almost exactly this page. Knowing the names is what lets you understand what an API server error is telling you."
+        },
+        {
+          "kind": "docs",
+          "title": "GKE — visão geral",
+          "author": "Google Cloud",
+          "where": "cloud.google.com",
+          "year": 2026,
+          "lang": "en",
+          "url": "https://cloud.google.com/kubernetes-engine/docs/concepts/kubernetes-engine-overview",
+          "free": true,
+          "accessed": "2026-09-21",
+          "why_pt": "Um gerenciado concreto, para comparar com o kind deste repositório. Leia a parte de modos de operação: a diferença entre gerenciar nós e não ver nó nenhum muda o que você depura, e é a decisão mais consequente ao escolher um provedor.",
+          "why_en": "A concrete managed offering, to compare with this repository's kind cluster. Read the operating-modes part: the difference between managing nodes and never seeing a node changes what you debug, and it is the most consequential decision when picking a provider."
+        },
+        {
+          "kind": "talk",
+          "title": "TGI Kubernetes (série completa)",
+          "author": "Joe Beda",
+          "where": "YouTube",
+          "year": 2017,
+          "lang": "en",
+          "url": "https://www.youtube.com/playlist?list=PL7bmigfV0EqQzxcNpmcdTJ9eFRPBe-iZa",
+          "free": true,
+          "accessed": "2026-09-21",
+          "why_pt": "A série do cocriador do Kubernetes, e o melhor material para entender o plano de controle por dentro — que é exatamente a parte que o gerenciado esconde de você. Saber o que está escondido é o que torna possível avaliar o que se perde.",
+          "why_en": "The series by a Kubernetes co-creator, and the best material for understanding the control plane from the inside — which is exactly the part a managed offering hides from you. Knowing what is hidden is what makes it possible to judge what you give up."
         }
       ]
     }

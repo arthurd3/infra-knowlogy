@@ -737,6 +737,12 @@ opção gratuita** (bibliografia só de livro pago exclui quem mais precisa) e
 ou link de editora, vídeo apontando para o YouTube, e toda lição de Fundamentos
 coberta por algum conceito.
 
+Hoje são **36 conceitos** e **142 referências**, e **toda lição do repositório
+tem trilha de estudo** — a checagem é um laço sobre as chaves das lições contra
+`concepts[].lessons`. Os 43 links audiovisuais foram
+conferidos pelo título que o YouTube devolve, não pelo status HTTP: id inventado
+responde 200 com página de erro.
+
 **Referência nunca entra sem ser conferida.** ISBN ou link de YouTube inventado
 envenena a credibilidade que o resto do repositório constrói; o campo `accessed`
 registra a data da checagem. Quando não achei vídeo confiável para um conceito,

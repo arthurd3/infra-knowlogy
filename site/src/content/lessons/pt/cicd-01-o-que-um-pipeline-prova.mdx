@@ -34,6 +34,26 @@ um prova, e o que ele **não** prova.
 
 ## As seis perguntas
 
+<Term word="pipeline" alt="pipeline">
+A sequência de etapas automáticas que um commit atravessa antes de virar algo
+que roda em algum lugar. Cada etapa recebe o resultado da anterior, e qualquer
+uma pode interromper a fila.
+
+O nome vem de encanamento, e a analogia ajuda: o que entra de um lado sai do
+outro **ou vaza no meio**, e o ponto do vazamento é a informação. Um pipeline
+que só diz "falhou" no fim perdeu a parte útil.
+</Term>
+
+<Term word="artefato" alt="artifact">
+O que sobra quando o job termina: a imagem construída, o binário, o relatório do
+scanner, o arquivo de assinatura.
+
+Importa porque o diretório de trabalho de um job é **descartado**. Sem declarar
+o que deve ser arquivado, o pipeline roda, passa, e não deixa nada — o que
+parece sucesso e é trabalho jogado fora.
+</Term>
+
+
 | estágio | a pergunta que ele responde | o que ele NÃO responde |
 |---|---|---|
 | `lint` | isto está escrito segundo as regras da casa? | se funciona |
@@ -110,6 +130,23 @@ make cicd-down
 </RunIt>
 
 ## O que fica
+
+<FieldNote
+  source="DORA — DevOps Research and Assessment"
+  url="https://dora.dev/"
+  kind="scale"
+  accessed="2026-09-21"
+>
+A pesquisa do DORA mede desempenho de entrega por quatro indicadores, e dois
+deles são sobre falhar: **taxa de falha em mudança** e **tempo para restaurar
+serviço**. Os outros dois são frequência de implantação e tempo de espera.
+
+O detalhe que muda a leitura do pipeline: as equipes de alto desempenho não são
+as que falham menos — são as que **descobrem mais cedo e restauram mais
+rápido**. Um pipeline desenhado para nunca reprovar está otimizando o indicador
+errado.
+</FieldNote>
+
 
 - Cada estágio responde a **uma** pergunta. Saber qual é metade do trabalho.
 - A ordem existe porque assinar uma imagem não escaneada acrescenta uma garantia

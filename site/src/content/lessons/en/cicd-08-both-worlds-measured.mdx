@@ -33,6 +33,26 @@ That is the only condition under which this comparison is honest.
 
 ## The trade-off, with a rule
 
+<Term word="runner" alt="runner">
+The machine that executes a CI job. On GitHub Actions it is an ephemeral VM the
+platform creates and destroys; on Jenkins it is the agent, usually long-lived.
+
+That lifecycle difference explains almost every behavioural difference. An
+ephemeral runner starts clean every time — it accumulates no rubbish, and it
+also reuses no cache unless somebody restores it explicitly.
+</Term>
+
+<Term word="CI minute" alt="CI minute">
+The billing unit of managed CI: wall-clock time a job occupies a runner, rounded
+up, multiplied by a factor depending on the operating system.
+
+Worth knowing because it changes engineering decisions. Parallelising into ten
+one-minute jobs does not cost the same as one ten-minute job when rounding is
+per job — and it is the arithmetic that turns "just run everything on every
+push" into an invoice.
+</Term>
+
+
 <Tradeoff
   a="Managed CI (GitHub Actions)"
   b="Self-hosted CI (Jenkins)"

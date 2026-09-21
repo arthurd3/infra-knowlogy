@@ -33,6 +33,26 @@ e o exemplo que todo mundo usa para explicar isso está desatualizado.
 
 ## O que medimos
 
+<Term word="mascaramento" alt="masking">
+A substituição do valor de um segredo por `****` na saída do build. O Jenkins faz
+isso para as credenciais que ele conhece, enquanto elas passam pelo log.
+
+A palavra a guardar é **enquanto**. Mascaramento é filtro de texto na saída, não
+proteção do valor: ele não impede que o segredo seja escrito num arquivo, mandado
+por rede ou transformado — `echo $SEGREDO | base64` sai limpo, porque o que
+apareceu no log não é a string que o filtro procura.
+</Term>
+
+<Term word="variável de ambiente" alt="environment variable">
+Um par nome/valor que o processo recebe ao nascer e **herda para todo filho**.
+
+É essa herança que faz dela um lugar ruim para segredo: qualquer subprocesso a
+enxerga, ela aparece em `/proc/<pid>/environ`, vaza em dump de erro e costuma ser
+impressa por bibliotecas de diagnóstico. Arquivo em `/run/secrets/` não herda,
+não aparece em listagem de processo, e tem permissão própria.
+</Term>
+
+
 A versão que circula diz: *"`echo $TOK | base64` vaza o segredo, porque o Jenkins
 só procura o valor literal"*.
 
@@ -146,6 +166,16 @@ numa versão futura do Jenkins, ele reprova — e a lição para de mentir.
 </LabExercise>
 
 ## O que fica
+
+<Tradeoff
+  a="CI que é seu"
+  b="CI gerenciado"
+  whenA="Quando o segredo não pode sair do seu perímetro — chave de assinatura, credencial de produção, dado regulado. Você controla onde ele é gravado, com que permissão e por quanto tempo, e ninguém mais tem plano de acesso emergencial à sua máquina."
+  whenB="Quando a operação do CI é o que custa caro. Atualizar 67 plugins, cuidar do disco do controller e responder por uma CVE do Jenkins é trabalho de pessoa, toda semana — e o provedor faz isso por você, em troca de o segredo passar pela infraestrutura dele."
+  chose="a"
+  verdict="a assimetria medida está na lição: no CI que é seu, o segredo está onde você o pôs; no gerenciado, você confia no isolamento entre inquilinos. Nenhuma das duas é errada — errada é escolher sem saber qual está escolhendo."
+/>
+
 
 - Mascaramento pega o literal e as formas codificadas comuns. Não pega o resto.
 - Não é fronteira de segurança: é higiene de log contra acidente.

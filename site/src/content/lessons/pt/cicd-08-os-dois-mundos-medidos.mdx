@@ -34,6 +34,26 @@ com os mesmos `target`.
 
 ## O tradeoff, com critério
 
+<Term word="runner" alt="runner">
+A máquina que executa um job de CI. No GitHub Actions é uma VM efêmera que a
+plataforma cria e destrói; no Jenkins é o agente, que costuma ser duradouro.
+
+A diferença de ciclo de vida explica quase toda a diferença de comportamento.
+Um runner efêmero começa limpo toda vez — não acumula lixo, e também não
+aproveita cache nenhum sem que alguém o restaure explicitamente.
+</Term>
+
+<Term word="minuto de CI" alt="CI minute">
+A unidade de cobrança do CI gerenciado: tempo de parede que um job ocupa um
+runner, arredondado para cima, multiplicado por um fator conforme o sistema
+operacional.
+
+Vale saber porque muda decisão de engenharia. Paralelizar em dez jobs de um
+minuto não custa o mesmo que um job de dez minutos quando há arredondamento por
+job — e é a conta que faz "só rodar tudo em toda push" virar uma fatura.
+</Term>
+
+
 <Tradeoff
   a="CI gerenciado (GitHub Actions)"
   b="CI self-hosted (Jenkins)"

@@ -33,6 +33,26 @@ is reviewed with it, is reverted with it.
 
 ## What it charges you: CI tests what is committed
 
+<Term word="Jenkinsfile" alt="Jenkinsfile">
+The file, at the repository root, describing the pipeline's stages. Jenkins
+reads it **from the commit it is building**, not from configuration stored
+inside itself.
+
+That is what makes "pipeline as code" literal: changing the pipeline is a
+commit, with an author, a date and review — and rolling back is `git revert`,
+not remembering what was ticked on screen before.
+</Term>
+
+<Term word="SCM" alt="SCM (source control management)">
+The acronym for the version control system Jenkins pulls code from — here, a
+`git daemon` serving this repository.
+
+It shows up in the name of nearly everything: `checkout scm`, "SCM polling",
+"Pipeline script from SCM". Once you know it means "where the code comes from",
+half of Jenkins's vocabulary stops being opaque.
+</Term>
+
+
 ```groovy
 scm {
     git {
@@ -165,6 +185,16 @@ escaping, less chance of the same thing happening again.
 </LabExercise>
 
 ## What to take away
+
+<Tradeoff
+  a="Jenkinsfile in the repository"
+  b="Pipeline configured in the UI"
+  whenA="When the pipeline and the code it builds evolve together — which is nearly always. A change requiring a new build step arrives in the same pull request, and an old branch keeps building with the pipeline it knew."
+  whenB="When the pipeline is shared infrastructure across many repositories and must not change on any one of their commits. A production release job is the example: you do not want whoever opens a PR to be able to edit its steps."
+  chose="a"
+  verdict="and the price showed up in the first hour: CI now tests what is COMMITTED. An uncommitted change does not exist for the pipeline, which is exactly the point — and a guaranteed surprise for anyone used to running the build locally."
+/>
+
 
 - The Jenkinsfile lives with the code: changes, review and reverts travel together.
 - CI builds what is **committed**. Not a cache — the definition of CI.

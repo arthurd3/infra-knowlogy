@@ -32,6 +32,26 @@ autorização, nó de build, jobs e 67 plugins — e ninguém clicou em nada.
 
 ## Quatro arquivos, quatro responsabilidades
 
+<Term word="Configuration as Code" alt="Configuration as Code (JCasC)">
+O plugin que faz o Jenkins ler sua configuração inteira de um YAML em vez de
+guardá-la no disco a cada clique da interface.
+
+A diferença prática aparece no dia em que o container morre. Com a configuração
+na UI, ela vive num volume que alguém precisa ter feito backup; com JCasC, ela
+vive no repositório e o Jenkins novo nasce igual ao antigo — o que é o único
+jeito de "recriar do zero" ser uma frase verdadeira.
+</Term>
+
+<Term word="plugin" alt="plugin">
+Uma extensão que acrescenta funcionalidade ao Jenkins. Quase tudo que se conhece
+como Jenkins é plugin: pipeline, git, credenciais, a própria interface moderna.
+
+Isso é ao mesmo tempo a força e o problema. Um plugin traz outros como
+dependência, cada um com sua versão, e a lista cresce sozinha — é por isso que
+esta instalação declara **67** e não os 7 que alguém pediria.
+</Term>
+
+
 ```
 cicd/controller/Dockerfile      a imagem, com os plugins baixados no BUILD
 cicd/controller/plugins.txt     67 plugins, pinados por versão
@@ -138,6 +158,16 @@ lembrar de limpar.
 </LabExercise>
 
 ## O que fica
+
+<Tradeoff
+  a="Configurar pelo JCasC"
+  b="Configurar pela interface"
+  whenA="Quando a instância precisa ser reproduzível: recriar do zero, revisar mudança em pull request, ou ter duas instâncias iguais. A configuração vira texto versionado, e texto versionado tem histórico, autor e revisão."
+  whenB="Quando você está descobrindo o que quer. A UI mostra as opções, valida na hora e não exige saber o nome da chave no YAML — e há configuração que simplesmente não tem equivalente documentado no JCasC."
+  chose="a"
+  verdict="e o caminho prático é misto: descobrir na UI, ler o resultado em /manage/configuration-as-code (o Jenkins exporta o YAML do estado atual) e versionar isso. A UI vira rascunho, não fonte."
+/>
+
 
 - Plugin baixado no build da imagem; portão rodando offline depois disso.
 - Pin do fecho transitivo inteiro, ou o pin é decoração.

@@ -34,6 +34,26 @@ what it does **not**.
 
 ## The six questions
 
+<Term word="pipeline" alt="pipeline">
+The sequence of automated steps a commit crosses before becoming something that
+runs somewhere. Each step takes the previous one's result, and any of them can
+stop the line.
+
+The name comes from plumbing, and the analogy helps: what goes in one end comes
+out the other **or leaks in the middle**, and the leak point is the information.
+A pipeline that only says "failed" at the end has thrown the useful part away.
+</Term>
+
+<Term word="artifact" alt="artifact">
+What is left when the job ends: the built image, the binary, the scanner report,
+the signature file.
+
+It matters because a job's working directory is **discarded**. Without declaring
+what to archive, the pipeline runs, passes, and leaves nothing — which looks
+like success and is work thrown away.
+</Term>
+
+
 | stage | the question it answers | what it does NOT answer |
 |---|---|---|
 | `lint` | is this written the way this house writes? | whether it works |
@@ -112,6 +132,22 @@ make cicd-down
 </RunIt>
 
 ## What to take away
+
+<FieldNote
+  source="DORA — DevOps Research and Assessment"
+  url="https://dora.dev/"
+  kind="scale"
+  accessed="2026-09-21"
+>
+DORA's research measures delivery performance through four indicators, and two
+of them are about failing: **change failure rate** and **time to restore
+service**. The other two are deployment frequency and lead time.
+
+The detail that changes how you read a pipeline: high-performing teams are not
+the ones that fail less — they are the ones that **find out sooner and restore
+faster**. A pipeline designed never to fail is optimising the wrong indicator.
+</FieldNote>
+
 
 - Every stage answers **one** question. Knowing which is half the work.
 - The order exists because signing an unscanned image adds a false guarantee —

@@ -15,6 +15,10 @@ sources:
     url: "https://slsa.dev/"
     kind: spec
     accessed: "2026-09-19"
+  - label: "SLSA — os níveis, v1.0"
+    url: "https://slsa.dev/spec/v1.0/levels"
+    kind: spec
+    accessed: "2026-09-21"
   - label: "OpenSSF — SLSA"
     url: "https://openssf.org/projects/slsa/"
     kind: spec
@@ -34,6 +38,26 @@ o deploy.
 <SigningChain />
 
 ## Assina-se o digest, nunca a tag
+
+<Term word="digest" alt="digest">
+O hash SHA-256 do conteúdo de uma imagem. Ele **é** o conteúdo, no sentido em
+que qualquer alteração produz outro digest.
+
+É isso que o torna assinável. Uma tag como `:v1.2` é um rótulo que alguém pode
+mover para outra imagem amanhã; o digest não se move, porque não é um nome — é
+uma impressão digital.
+</Term>
+
+<Term word="attestation" alt="attestation">
+Uma afirmação assinada **sobre** um artefato, em vez de uma assinatura do
+artefato em si: "esta imagem foi construída por este pipeline, a partir deste
+commit, nesta data".
+
+A diferença importa quando a pergunta deixa de ser "alguém trocou isto?" e passa
+a ser "de onde isto veio?". É o vocabulário do SLSA, e é a metade de proveniência
+que uma assinatura sozinha não cobre.
+</Term>
+
 
 ```groovy
 digest=$(meta_digest "$OUT/$svc.meta.json")
@@ -173,6 +197,22 @@ cosign verify --key cosign.pub "registry:5000/infra-knowlogy/api-go@$digest" \
 </LabExercise>
 
 ## O que fica
+
+<FieldNote
+  source="SLSA — Supply-chain Levels for Software Artifacts, v1.0"
+  url="https://slsa.dev/spec/v1.0/levels"
+  kind="spec"
+  accessed="2026-09-21"
+>
+O SLSA organiza a cadeia de suprimentos em níveis, e o primeiro salto real é o
+Nível 2: **proveniência assinada, gerada pelo serviço de build**. Não basta
+assinar — a afirmação precisa vir de quem construiu, não de quem publicou.
+
+A distinção é a mesma da lição: assinar responde "não trocaram", e proveniência
+responde "veio daqui". Um pipeline que assina localmente, na mão de quem faz o
+release, atende à primeira pergunta e não à segunda.
+</FieldNote>
+
 
 - Assinatura responde "estes bytes são os meus?" — e só isso.
 - Assina-se o **digest**; assinar a tag assina o que ela apontar amanhã.

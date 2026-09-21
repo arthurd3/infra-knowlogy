@@ -89,7 +89,7 @@ describe("a referência é real e está descrita", () => {
     // leitor conferir que o livro que ele comprou é o que está escrito aqui.
     const erros = ALL_REFS
       .filter(({ r }) => r.kind === "book")
-      .filter(({ r }) => !r.isbn && !/^https:\/\/(www\.)?(nostarch|oreilly|informit|leanpub|man7|ostep|brendangregg|sre\.google|livro\.descomplicando)/.test(r.url))
+      .filter(({ r }) => !r.isbn && !/^https:\/\/(www\.)?(nostarch|oreilly|informit|leanpub|man7|ostep|brendangregg|sre\.google|itrevolution|livro\.descomplicando)/.test(r.url))
       .map(({ c, r }) => `${c.id}/${r.title}`);
     expect(erros).toEqual([]);
   });

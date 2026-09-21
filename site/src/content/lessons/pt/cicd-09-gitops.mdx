@@ -34,6 +34,17 @@ passo, e sobre por que a resposta mais comum para ele é a errada.
 
 ## Quem guarda a credencial
 
+<Term word="reconciliação" alt="reconciliation">
+O laço contínuo em que um controlador compara o estado **desejado** (o que está
+no Git) com o estado **real** (o que está no cluster) e age para aproximá-los.
+
+A palavra a guardar é *contínuo*. Um `apply` acontece uma vez e termina;
+reconciliação não termina — é por isso que uma alteração feita à mão no cluster
+é desfeita sozinha, e é por isso que "funcionou quando apliquei" deixa de ser
+uma frase suficiente.
+</Term>
+
+
 <PushVsPull />
 
 A pergunta que separa os dois modelos não é "qual ferramenta". É:

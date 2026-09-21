@@ -33,6 +33,26 @@ and nobody clicked anything.
 
 ## Four files, four responsibilities
 
+<Term word="Configuration as Code" alt="Configuration as Code (JCasC)">
+The plugin that makes Jenkins read its entire configuration from a YAML file
+instead of storing it on disk with every click in the UI.
+
+The practical difference shows up the day the container dies. With UI
+configuration, it lives in a volume somebody had to back up; with JCasC it lives
+in the repository and the new Jenkins comes up identical to the old one — which
+is the only way "recreate from scratch" is a true sentence.
+</Term>
+
+<Term word="plugin" alt="plugin">
+An extension that adds functionality to Jenkins. Almost everything known as
+Jenkins is a plugin: pipeline, git, credentials, even the modern interface.
+
+That is both the strength and the problem. A plugin pulls others as
+dependencies, each with its own version, and the list grows on its own — which
+is why this installation declares **67** and not the 7 somebody would ask for.
+</Term>
+
+
 ```
 cicd/controller/Dockerfile      the image, with plugins downloaded at BUILD time
 cicd/controller/plugins.txt     67 plugins, pinned by version
@@ -140,6 +160,16 @@ remembering to tidy up.
 </LabExercise>
 
 ## What to take away
+
+<Tradeoff
+  a="Configure through JCasC"
+  b="Configure through the interface"
+  whenA="When the instance has to be reproducible: recreated from scratch, reviewed in a pull request, or duplicated identically. Configuration becomes versioned text, and versioned text has history, an author and review."
+  whenB="When you are still figuring out what you want. The UI shows the options, validates immediately and does not require knowing the YAML key's name — and some configuration simply has no documented JCasC equivalent."
+  chose="a"
+  verdict="and the practical path is mixed: discover in the UI, read the result at /manage/configuration-as-code (Jenkins exports the YAML of its current state) and version that. The UI becomes a draft, not the source."
+/>
+
 
 - Plugins downloaded at image build; gate running offline afterwards.
 - Pin the whole transitive closure, or the pin is decoration.
