@@ -1,0 +1,67 @@
+---
+/** ops-06 — a cadeia linear que se procura, contra a rede de condições que existe. */
+import Figure from "../Figure.astro";
+import type { Lang } from "../../i18n/ui";
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+const C = {
+  pt: {
+    a: "O QUE SE PROCURA — uma cadeia",
+    b: "O QUE EXISTE — condições que se somaram",
+    a1: "fulano fez deploy", a2: "o deploy quebrou", a3: "o site caiu",
+    aconc: "conclusão: “erro humano”  ·  ação: “ter mais cuidado”",
+    b1: "o painel escondia a métrica", b2: "o rollback levava 20 min",
+    b3: "era sexta, 18h", b4: "o teste de canário estava mudo há semanas",
+    b5: "a mesma pessoa era a única de plantão",
+    bconc: "nenhuma delas causou sozinha · todas foram necessárias · TODAS são acionáveis",
+    pergunta: "a pergunta que troca uma pela outra: “por que fazia sentido fazer isso, para quem fez, naquele momento?”",
+    caption:
+      "A busca por “a causa raiz” encontra sempre a última pessoa que tocou o sistema, porque é onde a cadeia termina de contar. O relato útil descreve as <b>condições que tornaram o erro provável</b> — e cada uma delas é algo que dá para mudar, ao contrário de “ter mais cuidado”.",
+    alt: "À esquerda uma cadeia linear terminando em erro humano; à direita cinco condições que se somaram.",
+  },
+  en: {
+    a: "WHAT IS LOOKED FOR — a chain",
+    b: "WHAT EXISTS — conditions that added up",
+    a1: "someone deployed", a2: "the deploy broke", a3: "the site went down",
+    aconc: "conclusion: “human error”  ·  action: “be more careful”",
+    b1: "the dashboard hid the metric", b2: "rollback took 20 min",
+    b3: "it was Friday, 6pm", b4: "the canary test had been mute for weeks",
+    b5: "the same person was the only one on call",
+    bconc: "none of them caused it alone · all were necessary · ALL are actionable",
+    pergunta: "the question that swaps one for the other: “why did this make sense, to the person doing it, at that moment?”",
+    caption:
+      "The hunt for “the root cause” always finds the last person who touched the system, because that is where the chain stops being told. The useful write-up describes the <b>conditions that made the error likely</b> — and each of those is something you can change, unlike “be more careful”.",
+    alt: "On the left a linear chain ending in human error; on the right five conditions that added up.",
+  },
+}[lang];
+---
+<Figure caption={C.caption} alt={C.alt}>
+  <svg viewBox="0 0 720 250" xmlns="http://www.w3.org/2000/svg" font-size="11">
+    <text x="14" y="16" class="dg-muted" font-weight="640" font-size="10.5">{C.a}</text>
+    {[C.a1, C.a2, C.a3].map((t, i) => (
+      <g>
+        <rect x="14" y={26 + i * 42} width="300" height="30" rx="6" class="dg-box dg-box--warn" />
+        <text x="164" y={46 + i * 42} text-anchor="middle" font-size="10">{t}</text>
+        {i < 2 && <path d={`M164 ${58 + i * 42} L164 ${66 + i * 42}`} class="dg-line dg-line--warn" marker-end="url(#cc-arrow)" />}
+      </g>
+    ))}
+    <text x="164" y="170" text-anchor="middle" class="dg-fill-warn" font-size="9">{C.aconc}</text>
+
+    <text x="378" y="16" class="dg-muted" font-weight="640" font-size="10.5">{C.b}</text>
+    {[C.b1, C.b2, C.b3, C.b4, C.b5].map((t, i) => (
+      <g>
+        <rect x="378" y={26 + i * 25} width="328" height="20" rx="4" class="dg-box" />
+        <text x="392" y={40 + i * 25} class="dg-faint" font-size="9">{t}</text>
+      </g>
+    ))}
+    <text x="542" y="170" text-anchor="middle" class="dg-muted" font-size="8.5">{C.bconc}</text>
+
+    <line x1="14" y1="196" x2="706" y2="196" class="dg-line" stroke-dasharray="3 3" />
+    <text x="360" y="218" text-anchor="middle" class="dg-muted" font-size="10" font-weight="620">{C.pergunta}</text>
+    <defs>
+      <marker id="cc-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+        <path d="M0 0 L10 5 L0 10 z" fill="var(--border-strong)" />
+      </marker>
+    </defs>
+  </svg>
+</Figure>

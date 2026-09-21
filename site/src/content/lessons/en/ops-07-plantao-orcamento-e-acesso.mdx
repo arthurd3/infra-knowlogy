@@ -1,0 +1,184 @@
+---
+key: on-call-cost-and-access
+lang: en
+track: operacao
+order: 7
+title: "On-call, budget and access"
+summary: "Three costs that never show up in a diff and decide whether a system survives its second year. None is measurable on one machine — so this lesson is cited, with one exception: the IAM bridge module 3 already proves by command."
+minutes: 14
+tags: [on-call, finops, iam, cost, operations]
+sources:
+  - label: "Google SRE Book — Being On-Call (ch. 11)"
+    url: "https://sre.google/sre-book/being-on-call/"
+    kind: book
+    accessed: "2026-09-21"
+  - label: "Google SRE Workbook — Alerting on SLOs"
+    url: "https://sre.google/workbook/alerting-on-slos/"
+    kind: book
+    accessed: "2026-09-21"
+  - label: "FinOps Foundation — The FinOps Framework"
+    url: "https://www.finops.org/framework/"
+    kind: docs
+    accessed: "2026-09-21"
+  - label: "OpenCost — vendor-neutral cost monitoring (CNCF incubating)"
+    url: "https://www.opencost.io/"
+    kind: docs
+    accessed: "2026-09-21"
+  - label: "GitHub Docs — About security hardening with OpenID Connect"
+    url: "https://docs.github.com/en/actions/deployment/security-hardening-your-deployments/about-security-hardening-with-openid-connect"
+    kind: docs
+    accessed: "2026-09-21"
+---
+
+import OnCallCosts from "../../../components/diagrams/OnCallCosts.astro";
+
+<OnCallCosts />
+
+This lesson is **cited**, like the previous one: on-call, invoices and access
+policy are not measurable on a laptop. There is one exception, and it is at the
+end.
+
+## Sleep
+
+<Term word="Alert fatigue" alt="alert fatigue">
+The state in which an on-call person stops reacting to alerts because most of
+them required no action.
+
+It is not indiscipline: it is adaptation. An alert that fires and asks for
+nothing **trains** whoever receives it to ignore it, and the training does not
+distinguish that alert from the others. The cost shows up in the next incident,
+when the alert that mattered arrives inside the noise.
+
+The remedy is unpopular because it means **deleting alerts** — and an existing
+alert always looks useful to whoever wrote it.
+</Term>
+
+Chapter 11 of the SRE Book gives a number that works as a ruler:
+
+> **At most 2 incidents per 12-hour shift.**
+
+The justification is arithmetic, not philosophical: responding to an incident
+with analysis, remediation and follow-up takes **about 6 hours** on average. Two
+incidents already fill the shift. Beyond that, either the analysis does not
+happen or the next shift inherits the debt.
+
+The book adds the expectation that bothers people most: the median number of
+pages per shift should be **zero**.
+
+This stack already has the piece that makes that possible, and it lives in
+another track: the [burn-rate alert](/en/lessons/burn-rate-alerting) fires on
+**error budget being consumed too fast**, not on a threshold being crossed. It is
+the difference between "latency went above 300 ms" — which happens every Tuesday
+— and "we are spending the month in two days".
+
+## Money
+
+<Term word="FinOps" alt="FinOps">
+The practice of treating infrastructure cost as an engineering decision, with the
+same cycles as other decisions: measure, allocate, optimise.
+
+The FinOps Foundation organises that into three phases — **Inform**,
+**Optimize**, **Operate** — and four domains, the first of which is
+*understanding usage and cost*. The order matters: nearly every attempt to
+optimise before allocating cost ends up cutting whatever was cheap.
+</Term>
+
+The structural problem is **delay and distance**:
+
+- the architecture decision happens today;
+- the invoice arrives in thirty or sixty days;
+- and whoever picks the instance type **never sees the invoice**.
+
+The consequence is that cost gets no course correction, unlike latency or error
+rate, which come back in minutes.
+
+The metric the FinOps Foundation pushes is not total cost: it is **cost per unit
+of business** — per order, per active user, per gigabyte served. A total cost
+that doubles while traffic triples is good news, and the absolute number cannot
+say so.
+
+On Kubernetes, **OpenCost** (CNCF incubating) does that allocation per container,
+summing CPU, memory, volumes and load balancers. It is the piece that translates
+`requests` and `limits` — which this repository measures — into currency.
+
+## Access
+
+Here there is a **measured** bridge, and it is the only part of this lesson that
+is not cited.
+
+Module 3 proves, by command, the asymmetry of signing artefacts in two worlds:
+
+- on **GitHub Actions** the signature is *keyless*: the runner presents a
+  very short-lived OIDC token, the certificate service validates it and issues an
+  ephemeral certificate. **No key is stored anywhere.**
+- on **self-hosted Jenkins** the same signature costs a managed key — which
+  exists, must be rotated, and can leak.
+
+<Tradeoff
+  a="Long-lived secret"
+  b="OIDC federation"
+  whenA="When the consumer cannot speak OIDC — a legacy system, a vendor accepting only an API key, a script running outside any platform with an identity."
+  whenB="Whenever workload identity is available. You trade a stored secret for verifiable trust, and what leaks stops being worth anything within minutes."
+>
+  <Fragment slot="a">
+    Works anywhere and is trivial to configure. In exchange: it exists until
+    somebody rotates it, and a leak is valid until somebody notices.
+  </Fragment>
+  <Fragment slot="b">
+    The token lives for minutes and is bound to the repository, the branch and the
+    workflow. In exchange: it needs a trust relationship configured on both sides,
+    and misconfiguration is harder to diagnose.
+  </Fragment>
+</Tradeoff>
+
+The audit question that sums the subject up: **how many long-lived secrets exist,
+and who may use them?** It is countable — and almost never counted.
+
+<FieldNote
+  source="Google SRE Book — Being On-Call (ch. 11), Andrea Spadaccini"
+  url="https://sre.google/sre-book/being-on-call/"
+  accessed="2026-09-21"
+>
+The chapter states a limit of **2 incidents per 12-hour shift**, derived from an
+estimate of ~6 hours per incident once analysis and follow-up are included. And
+it records that pages should be "very flat over time, with a likely median value
+of 0", warning that a component paging daily will eventually break some other
+way. These are numbers from an organisation with large teams and wide rotations;
+on a team of five the same arithmetic gives a different answer. Not measured
+here: this stack has no on-call.
+</FieldNote>
+
+<LabExercise
+  question="You inherited an on-call rotation with 30 configured alerts and nobody remembers why they exist. Where do you start?"
+  check="postgres: a extensão existe no banco"
+>
+  <Fragment slot="hint">
+    Do not start with the alerts. Start with the history of what they caused.
+  </Fragment>
+  <Fragment slot="answer">
+
+For each alert over the last 90 days, answer two questions:
+
+1. **How many times did it fire?**
+2. **How many times did anyone do something because of it?**
+
+The ratio between the two is what matters. An alert with a **high fire rate and a
+low action rate** is not an alert: it is noise with interrupt priority, and it is
+actively training the team to ignore the whole queue.
+
+Three destinations, and none of them is "leave as is":
+
+- **delete** — nobody acted on it in 90 days;
+- **demote to a ticket** — it deserves attention, it does not deserve waking
+  somebody (this stack's `slo.yml` uses exactly that severity);
+- **rewrite as burn rate** — the symptom is real, but the fixed threshold fires
+  on normal variation.
+
+The deciding test: **if this alert fires at 3 a.m., is there an action the
+on-call person can take right now?** If the answer is "look at it and see whether
+it gets worse", it is a ticket.
+
+  </Fragment>
+</LabExercise>
+
+<Quiz set="on-call-cost-and-access" />

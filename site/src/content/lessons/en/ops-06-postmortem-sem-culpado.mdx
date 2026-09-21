@@ -1,0 +1,177 @@
+---
+key: blameless-postmortems
+lang: en
+track: operacao
+order: 6
+title: "Postmortems without a culprit"
+summary: "This lesson has no measured number: incident culture is not measurable on one machine. What it has is the question that swaps “who made the mistake” for something actionable — and the sources that invented it, each one verified."
+minutes: 13
+tags: [postmortem, rca, incidents, culture, sre]
+sources:
+  - label: "John Allspaw — Blameless PostMortems and a Just Culture (Etsy Code as Craft)"
+    url: "https://www.etsy.com/codeascraft/blameless-postmortems/"
+    kind: blog
+    accessed: "2026-09-21"
+  - label: "Richard I. Cook — How Complex Systems Fail (Revision G, 2018)"
+    url: "https://how.complexsystems.fail/"
+    kind: blog
+    accessed: "2026-09-21"
+  - label: "Google SRE Book — Postmortem Culture: Learning from Failure"
+    url: "https://sre.google/sre-book/postmortem-culture/"
+    kind: book
+    accessed: "2026-09-21"
+  - label: "Etsy — Debriefing Facilitation Guide"
+    url: "https://www.etsy.com/codeascraft/debriefing-facilitation-guide"
+    kind: blog
+    accessed: "2026-09-21"
+---
+
+import CauseVsContext from "../../../components/diagrams/CauseVsContext.astro";
+
+Every other lesson in this track quotes a number that came out of a command on
+this machine. **This one does not.**
+
+Incident culture is not measurable on a laptop. What follows is **cited**, with
+source and access date — and it is knowledge of a different nature, not of lesser
+quality: it comes from decades of safety research into complex systems, done in
+aviation and medicine before it reached software.
+
+## The problem with "the root cause"
+
+<CauseVsContext />
+
+<Term word="Root cause" alt="root cause">
+The idea that every incident has **one** cause, findable if you ask "why" enough
+times.
+
+The criticism is not philosophical. It is that the search **always ends in the
+same place**: at the last person who touched the system. Not because they are
+guilty, but because that is where the chain of "whys" stops having mechanical
+answers and starts having human ones — and the investigation stops, satisfied.
+
+The result is a corrective action that corrects nothing: "be more careful",
+"review more thoroughly", "train the team". None of them changes a condition of
+the system.
+</Term>
+
+Richard Cook formulated this in 1998, about operating theatres rather than
+servers:
+
+> Complex systems run in degraded mode. They are always carrying latent faults,
+> because the system is too complex not to have defects. No single fault causes
+> an accident; it takes **several** combining.
+
+Translated to a stack: your system **already** has the defects of the next
+incident. They are there right now, and nothing has fallen over yet because no
+combination has closed.
+
+## The question that replaces it
+
+> **"Why did this make sense, to the person doing it, at that moment?"**
+
+It is the central question of what Allspaw called a *just culture*, and it
+changes what the investigation finds.
+
+If the answer is "because the dashboard was green", you found a dashboard to fix.
+If it is "because the procedure says to do it that way", you found a procedure.
+If it is "because it was the third time that night", you found an on-call
+problem.
+
+None of those answers is "the person was careless" — and all of them are
+actionable.
+
+<Callout type="warn" title="“Blameless” is not “accountability-free”">
+It is the commonest misunderstanding, and it discredits the whole practice.
+
+A *just culture* does not say nobody answers for anything. It distinguishes
+**error** from **deliberate violation**, and treats the two differently. What it
+refuses is the shortcut of stopping the investigation once a name appears.
+
+Allspaw's formulation is operational: the organisation gains more by letting
+whoever made the mistake **describe in detail what happened** than by punishing.
+Punishment does not remove the condition — it removes the account.
+</Callout>
+
+## What a useful write-up contains
+
+<Tradeoff
+  a="Postmortem as a record"
+  b="Postmortem as learning"
+  whenA="When there is an obligation to account to third parties — contract, audit, regulation. The document has to exist and be consistent, and that is a legitimate end."
+  whenB="When the goal is for the next incident not to happen. There the value is in the process of writing, and a document nobody read afterwards still did half the work."
+>
+  <Fragment slot="a">
+    Timeline, impact, duration, corrective action with an owner and a deadline.
+    In exchange: it becomes ritual, and the form becomes the product.
+  </Fragment>
+  <Fragment slot="b">
+    Adds what **surprised** the responders, what was hard to find out, and which
+    hypotheses were discarded along the way. In exchange: it takes longer and
+    needs somebody to facilitate.
+  </Fragment>
+</Tradeoff>
+
+The section that teaches most and is almost always missing is **"what surprised
+us"**. It records the distance between the operators' mental model and the real
+system — and that distance is the same one that will cause the next incident.
+
+## Where this touches this repository
+
+The earlier lessons in this track are all examples of a wrong mental model found
+by measurement:
+
+- the host's `ps` calling Postgres `avahi`;
+- the application reading 31 GiB and dying at 384 MiB;
+- the load-average alert firing after the load ended;
+- the mistyped service name costing eight seconds and looking like the network.
+
+None of those surprises was found by somebody being careful. They were found by
+somebody **measuring**. It is the engineering version of the same idea: the
+system only tells you what you ask it.
+
+<FieldNote
+  source="Richard I. Cook, MD — How Complex Systems Fail (Revision G)"
+  url="https://how.complexsystems.fail/"
+  accessed="2026-09-21"
+>
+Cook's treatise has eighteen points and fits in four pages. Three of them change
+how you read an incident: complex systems **run in degraded mode** all the time;
+root-cause attribution is **fundamentally wrong** because there is no isolated
+point of failure; and the work of the people at the sharp end simultaneously
+produces safety **and** is the most visible source of failure — which guarantees
+they are the easiest target. Written in 1998 about medicine, and cited in nearly
+every serious SRE text since. Not measured here: it is systems-safety research,
+not the state of this machine.
+</FieldNote>
+
+<LabExercise
+  question="You are facilitating a postmortem and somebody says “the root cause was human error”. What is the next question?"
+  check="postgres: pg_stat_statements carregado"
+>
+  <Fragment slot="hint">
+    Not "why" again — that continues the chain in the same direction.
+  </Fragment>
+  <Fragment slot="answer">
+
+> **"Why did that action make sense, to that person, at that moment?"**
+
+It forces the investigation to describe **context** instead of continuing the
+chain, and that is where the actionable conditions appear: what the dashboard
+showed, what the procedure said, how long the person had been awake, how many
+alerts they had already taken that night.
+
+Two follow-ups that usually yield more than the rest of the meeting:
+
+- **"What surprised you?"** — measures the distance between the mental model and
+  the real system.
+- **"What was hard to find out?"** — becomes an observability item, and is the
+  one part of a postmortem that generates direct technical work.
+
+And the final test for a corrective action: **would it be effective if the same
+person did the same thing again tomorrow?** "Be more careful" fails that test.
+"Rollback takes 20 minutes and needs to take 2" passes.
+
+  </Fragment>
+</LabExercise>
+
+<Quiz set="blameless-postmortems" />

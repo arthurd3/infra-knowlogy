@@ -1,0 +1,69 @@
+---
+/** ops-07 — três custos de operar que não aparecem no código. */
+import Figure from "../Figure.astro";
+import type { Lang } from "../../i18n/ui";
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+const C = {
+  pt: {
+    titulo: "o que custa manter algo de pé, além de escrever o código",
+    c1: "SONO", c1s: "plantão",
+    c1a: "alerta que não exige ação treina a ignorar o que exige",
+    c1b: "rotação pequena demais = a mesma pessoa sempre",
+    c1c: "medida: quantas páginas por turno, e quantas eram acionáveis",
+    c2: "DINHEIRO", c2s: "FinOps",
+    c2a: "custo é decisão de arquitetura, e chega dois meses depois dela",
+    c2b: "quem escolhe o tipo de instância não vê a fatura",
+    c2c: "medida: custo por unidade de negócio, não custo total",
+    c3: "ACESSO", c3s: "IAM",
+    c3a: "credencial de longa duração é a que vaza",
+    c3b: "federação por OIDC troca segredo por confiança verificável",
+    c3c: "medida: quantos segredos de longa duração existem, e quem pode usá-los",
+    ponte: "a ponte medível deste repositório: o módulo 3 assina no GitHub Actions por OIDC keyless — sem chave guardada — e no Jenkins self-hosted custa uma chave gerenciada",
+    naomedido: "o resto desta lição é CITADO: plantão, fatura e política de acesso não se medem numa máquina só",
+    caption:
+      "Três custos que não aparecem no diff e decidem se um sistema sobrevive ao segundo ano. Eles têm em comum a forma de errar: cada um é invisível para quem o cria e doloroso para quem o herda — o alerta ruidoso, a instância superdimensionada, a credencial eterna.",
+    alt: "Três colunas — sono, dinheiro e acesso — com o que cada uma mede e como cada uma falha.",
+  },
+  en: {
+    titulo: "what keeping something up costs, beyond writing the code",
+    c1: "SLEEP", c1s: "on-call",
+    c1a: "an alert requiring no action trains you to ignore the ones that do",
+    c1b: "a rotation that is too small = the same person, always",
+    c1c: "measure: pages per shift, and how many were actionable",
+    c2: "MONEY", c2s: "FinOps",
+    c2a: "cost is an architecture decision, and it arrives two months later",
+    c2b: "whoever picks the instance type never sees the invoice",
+    c2c: "measure: cost per unit of business, not total cost",
+    c3: "ACCESS", c3s: "IAM",
+    c3a: "the long-lived credential is the one that leaks",
+    c3b: "OIDC federation trades a secret for verifiable trust",
+    c3c: "measure: how many long-lived secrets exist, and who may use them",
+    ponte: "this repository's measurable bridge: module 3 signs on GitHub Actions via keyless OIDC — no stored key — while self-hosted Jenkins costs a managed key",
+    naomedido: "the rest of this lesson is CITED: on-call, invoices and access policy are not measurable on one machine",
+    caption:
+      "Three costs that never show up in a diff and decide whether a system survives its second year. They share a failure shape: each is invisible to whoever creates it and painful for whoever inherits it — the noisy alert, the oversized instance, the eternal credential.",
+    alt: "Three columns — sleep, money and access — with what each measures and how each fails.",
+  },
+}[lang];
+---
+<Figure caption={C.caption} alt={C.alt}>
+  <svg viewBox="0 0 720 262" xmlns="http://www.w3.org/2000/svg" font-size="11">
+    <text x="360" y="16" text-anchor="middle" class="dg-muted" font-size="10">{C.titulo}</text>
+    {[[C.c1, C.c1s, C.c1a, C.c1b, C.c1c], [C.c2, C.c2s, C.c2a, C.c2b, C.c2c],
+      [C.c3, C.c3s, C.c3a, C.c3b, C.c3c]].map(([t, s, a, b, m], i) => (
+      <g>
+        <rect x={14 + i * 236} y="26" width="226" height="130" rx="6" class="dg-box dg-box--accent" />
+        <text x={127 + i * 236} y="48" text-anchor="middle" font-weight="640" font-size="13">{t}</text>
+        <text x={127 + i * 236} y="62" text-anchor="middle" class="dg-faint" font-size="9">{s}</text>
+        <line x1={30 + i * 236} y1="70" x2={224 + i * 236} y2="70" class="dg-line" stroke-dasharray="2 3" />
+        <text x={28 + i * 236} y="88" class="dg-faint" font-size="8">{a}</text>
+        <text x={28 + i * 236} y="106" class="dg-faint" font-size="8">{b}</text>
+        <text x={28 + i * 236} y="132" class="dg-muted" font-size="8">{m}</text>
+      </g>
+    ))}
+    <line x1="14" y1="176" x2="706" y2="176" class="dg-line" stroke-dasharray="3 3" />
+    <text x="360" y="196" text-anchor="middle" class="dg-muted" font-size="9">{C.ponte}</text>
+    <text x="360" y="222" text-anchor="middle" class="dg-fill-warn" font-size="9.5" font-weight="620">{C.naomedido}</text>
+  </svg>
+</Figure>

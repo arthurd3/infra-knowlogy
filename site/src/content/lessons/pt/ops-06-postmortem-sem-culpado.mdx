@@ -1,0 +1,177 @@
+---
+key: blameless-postmortems
+lang: pt
+track: operacao
+order: 6
+title: "Postmortem sem culpado"
+summary: "Esta lição não tem número medido: cultura de incidente não se mede numa máquina. O que ela tem é a pergunta que troca “quem errou” por algo acionável — e as fontes que a inventaram, conferidas uma a uma."
+minutes: 13
+tags: [postmortem, rca, incidentes, cultura, sre]
+sources:
+  - label: "John Allspaw — Blameless PostMortems and a Just Culture (Etsy Code as Craft)"
+    url: "https://www.etsy.com/codeascraft/blameless-postmortems/"
+    kind: blog
+    accessed: "2026-09-21"
+  - label: "Richard I. Cook — How Complex Systems Fail (Revisão G, 2018)"
+    url: "https://how.complexsystems.fail/"
+    kind: blog
+    accessed: "2026-09-21"
+  - label: "Google SRE Book — Postmortem Culture: Learning from Failure"
+    url: "https://sre.google/sre-book/postmortem-culture/"
+    kind: book
+    accessed: "2026-09-21"
+  - label: "Etsy — Debriefing Facilitation Guide"
+    url: "https://www.etsy.com/codeascraft/debriefing-facilitation-guide"
+    kind: blog
+    accessed: "2026-09-21"
+---
+
+import CauseVsContext from "../../../components/diagrams/CauseVsContext.astro";
+
+Todas as outras lições desta trilha citam um número que saiu de um comando
+nesta máquina. **Esta não.**
+
+Cultura de incidente não se mede num laptop. O que segue é **citado**, com
+fonte e data de consulta — e é conhecimento de outra natureza, não de qualidade
+menor: ele vem de décadas de pesquisa em segurança de sistemas complexos, feita
+em aviação e medicina antes de chegar a software.
+
+## O problema com "a causa raiz"
+
+<CauseVsContext />
+
+<Term word="Causa raiz" alt="root cause">
+A ideia de que todo incidente tem **uma** causa, encontrável se você perguntar
+"por quê" vezes suficiente.
+
+A crítica não é filosófica. É que a busca **sempre termina no mesmo lugar**: na
+última pessoa que tocou o sistema. Não porque ela seja culpada, mas porque é aí
+que a cadeia de "por quês" deixa de ter respostas mecânicas e começa a ter
+respostas humanas — e a investigação para, satisfeita.
+
+O resultado é uma ação corretiva que não corrige nada: "ter mais cuidado",
+"revisar melhor", "treinar a equipe". Nenhuma delas muda uma condição do
+sistema.
+</Term>
+
+Richard Cook formulou isso em 1998, sobre salas de cirurgia e não sobre
+servidores:
+
+> Sistemas complexos rodam em modo degradado. Estão sempre carregando falhas
+> latentes, porque o sistema é complexo demais para não ter defeitos. Nenhuma
+> falha isolada causa um acidente; é preciso que **várias** se combinem.
+
+Traduzido para uma stack: seu sistema **já** tem os defeitos do próximo
+incidente. Eles estão lá agora, e não derrubaram nada ainda porque nenhuma
+combinação se fechou.
+
+## A pergunta que substitui
+
+> **"Por que fazia sentido fazer isso, para quem fez, naquele momento?"**
+
+É a pergunta central do que Allspaw chamou de *just culture*, e ela muda o que
+a investigação encontra.
+
+Se a resposta for "porque o painel mostrava verde", você achou um painel para
+consertar. Se for "porque o procedimento diz para fazer assim", achou um
+procedimento. Se for "porque era a terceira vez na madrugada", achou um problema
+de plantão.
+
+Nenhuma dessas respostas é "a pessoa foi descuidada" — e todas são acionáveis.
+
+<Callout type="warn" title="“Sem culpado” não é “sem responsabilidade”">
+É o mal-entendido mais comum, e ele desacredita a prática inteira.
+
+A *just culture* não diz que ninguém responde por nada. Ela distingue **erro**
+de **violação deliberada**, e trata os dois de formas diferentes. O que ela
+recusa é o atalho de parar a investigação quando um nome aparece.
+
+A formulação de Allspaw é operacional: a organização ganha mais permitindo que
+quem cometeu o erro **conte em detalhe o que aconteceu** do que punindo.
+Punição não remove a condição — remove o relato.
+</Callout>
+
+## O que um relato útil contém
+
+<Tradeoff
+  a="Postmortem como registro"
+  b="Postmortem como aprendizado"
+  whenA="Quando há obrigação de prestar contas a terceiros — contrato, auditoria, regulação. O documento precisa existir e ser consistente, e isso é um fim legítimo."
+  whenB="Quando o objetivo é o próximo incidente não acontecer. Aí o valor está no processo de escrever, e um documento que ninguém leu depois cumpriu metade do trabalho."
+>
+  <Fragment slot="a">
+    Linha do tempo, impacto, duração, ação corretiva com responsável e prazo.
+    Em troca: vira ritual, e o formulário passa a ser o produto.
+  </Fragment>
+  <Fragment slot="b">
+    Acrescenta o que **surpreendeu** quem respondeu, o que foi difícil de
+    descobrir e quais hipóteses foram descartadas pelo caminho. Em troca: leva
+    mais tempo e exige que alguém facilite.
+  </Fragment>
+</Tradeoff>
+
+A seção que mais ensina e que quase sempre falta é **"o que nos surpreendeu"**.
+Ela registra a distância entre o modelo mental de quem operava e o sistema real
+— e essa distância é a mesma que vai causar o próximo incidente.
+
+## Onde isto encosta neste repositório
+
+As lições anteriores desta trilha são, todas, exemplos de modelo mental errado
+encontrado por medição:
+
+- o `ps` do host que chama o Postgres de `avahi`;
+- a aplicação que lê 31 GiB e morre aos 384 MiB;
+- o alerta de load average que dispara depois de a carga acabar;
+- o nome de serviço errado que custa oito segundos e parece rede.
+
+Nenhuma dessas surpresas foi descoberta por alguém ser cuidadoso. Foram
+descobertas por alguém **medir**. É a versão de engenharia da mesma ideia: o
+sistema só te conta o que você pergunta a ele.
+
+<FieldNote
+  source="Richard I. Cook, MD — How Complex Systems Fail (Revisão G)"
+  url="https://how.complexsystems.fail/"
+  accessed="2026-09-21"
+>
+O tratado de Cook tem dezoito pontos e cabe em quatro páginas. Três deles
+mudam como se lê um incidente: sistemas complexos **rodam em modo degradado**
+o tempo todo; a atribuição de causa raiz é **fundamentalmente errada** porque
+não há um ponto de falha isolado; e o trabalho das pessoas na ponta é
+simultaneamente produzir segurança **e** ser a fonte mais visível de falha — o
+que garante que elas sejam o alvo mais fácil. Escrito em 1998 sobre medicina, e
+citado em quase todo material sério de SRE desde então. Não medido aqui: é
+pesquisa em segurança de sistemas, não estado desta máquina.
+</FieldNote>
+
+<LabExercise
+  question="Você está facilitando um postmortem e alguém diz “a causa raiz foi erro humano”. Qual a pergunta seguinte?"
+  check="postgres: pg_stat_statements carregado"
+>
+  <Fragment slot="hint">
+    Não é "por quê" de novo — isso continua a cadeia na mesma direção.
+  </Fragment>
+  <Fragment slot="answer">
+
+> **"Por que essa ação fez sentido, para essa pessoa, naquele momento?"**
+
+Ela força a investigação a descrever o **contexto** em vez de continuar a
+cadeia, e é a partir dali que aparecem as condições acionáveis: o que o painel
+mostrava, o que o procedimento dizia, quanto tempo fazia que a pessoa estava
+acordada, quantos alertas ela já tinha recebido naquela noite.
+
+Duas perguntas de acompanhamento que costumam render mais que o resto da
+reunião:
+
+- **"O que te surpreendeu?"** — mede a distância entre o modelo mental e o
+  sistema real.
+- **"O que foi difícil de descobrir?"** — vira item de observabilidade, e é a
+  única parte do postmortem que gera trabalho técnico direto.
+
+E o teste final de uma ação corretiva: **ela seria eficaz se a mesma pessoa
+fizesse a mesma coisa de novo amanhã?** "Ter mais cuidado" falha nesse teste.
+"O rollback leva 20 minutos e precisa levar 2" passa.
+
+  </Fragment>
+</LabExercise>
+
+<Quiz set="blameless-postmortems" />

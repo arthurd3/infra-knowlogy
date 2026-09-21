@@ -1,0 +1,182 @@
+---
+key: on-call-cost-and-access
+lang: pt
+track: operacao
+order: 7
+title: "Plantão, orçamento e acesso"
+summary: "Três custos que não aparecem no diff e decidem se um sistema sobrevive ao segundo ano. Nenhum deles se mede numa máquina só — então esta lição é citada, com uma exceção: a ponte de IAM que o módulo 3 já prova por comando."
+minutes: 14
+tags: [on-call, finops, iam, custo, operacao]
+sources:
+  - label: "Google SRE Book — Being On-Call (cap. 11)"
+    url: "https://sre.google/sre-book/being-on-call/"
+    kind: book
+    accessed: "2026-09-21"
+  - label: "Google SRE Workbook — Alerting on SLOs"
+    url: "https://sre.google/workbook/alerting-on-slos/"
+    kind: book
+    accessed: "2026-09-21"
+  - label: "FinOps Foundation — The FinOps Framework"
+    url: "https://www.finops.org/framework/"
+    kind: docs
+    accessed: "2026-09-21"
+  - label: "OpenCost — vendor-neutral cost monitoring (CNCF incubating)"
+    url: "https://www.opencost.io/"
+    kind: docs
+    accessed: "2026-09-21"
+  - label: "GitHub Docs — About security hardening with OpenID Connect"
+    url: "https://docs.github.com/en/actions/deployment/security-hardening-your-deployments/about-security-hardening-with-openid-connect"
+    kind: docs
+    accessed: "2026-09-21"
+---
+
+import OnCallCosts from "../../../components/diagrams/OnCallCosts.astro";
+
+<OnCallCosts />
+
+Esta lição é **citada**, como a anterior: plantão, fatura e política de acesso
+não se medem num laptop. Há uma exceção, e ela está no fim.
+
+## Sono
+
+<Term word="Fadiga de alerta" alt="alert fatigue">
+O estado em que uma pessoa de plantão para de reagir a alertas porque a maioria
+deles não exigia ação.
+
+Não é indisciplina: é adaptação. Um alerta que dispara e não pede nada **treina**
+quem o recebe a ignorá-lo, e o treino não distingue esse alerta dos outros. O
+custo aparece no incidente seguinte, quando o alerta que importava chega no meio
+do ruído.
+
+O remédio é impopular porque significa **apagar alertas** — e alerta existente
+sempre parece útil para quem o escreveu.
+</Term>
+
+O capítulo 11 do SRE Book dá um número que serve de régua:
+
+> **No máximo 2 incidentes por turno de 12 horas.**
+
+A justificativa é aritmética, não filosófica: responder a um incidente com
+análise, correção e acompanhamento leva **cerca de 6 horas** em média. Dois
+incidentes já ocupam o turno inteiro. Acima disso, ou a análise não acontece ou
+o turno seguinte herda a dívida.
+
+O livro acrescenta a expectativa que mais incomoda: a mediana de páginas por
+turno deveria ser **zero**.
+
+Esta stack já tem a peça que torna isso possível, e ela está noutra trilha: o
+[alerta de burn rate](/pt/lessons/burn-rate-alerting) dispara por **orçamento de
+erro sendo consumido rápido demais**, não por um limiar cruzado. É a diferença
+entre "a latência passou de 300 ms" — que acontece toda terça — e "estamos
+gastando o mês em dois dias".
+
+## Dinheiro
+
+<Term word="FinOps" alt="FinOps">
+A prática de tratar custo de infraestrutura como uma decisão de engenharia, com
+os mesmos ciclos de outras decisões: medir, atribuir, otimizar.
+
+A FinOps Foundation organiza isso em três fases — **Inform**, **Optimize**,
+**Operate** — e quatro domínios, sendo o primeiro deles *entender uso e custo*.
+A ordem importa: quase toda tentativa de otimizar antes de atribuir custo
+resulta em cortar o que era barato.
+</Term>
+
+O problema estrutural é de **atraso e distância**:
+
+- a decisão de arquitetura acontece hoje;
+- a fatura chega em trinta ou sessenta dias;
+- e quem escolhe o tipo de instância **não vê a fatura**.
+
+A consequência é que custo não recebe correção de curso, ao contrário de
+latência ou taxa de erro, que voltam em minutos.
+
+A métrica que a FinOps Foundation empurra não é o custo total: é **custo por
+unidade de negócio** — por pedido, por usuário ativo, por gigabyte servido. Um
+custo total que dobra enquanto o tráfego triplica é uma boa notícia, e o número
+absoluto não consegue dizer isso.
+
+No Kubernetes, o **OpenCost** (incubando na CNCF) faz a atribuição por
+container, somando CPU, memória, volumes e balanceadores. É a peça que traduz
+`requests` e `limits` — que este repositório mede — em moeda.
+
+## Acesso
+
+Aqui há uma ponte **medida**, e é o único pedaço desta lição que não é citado.
+
+O módulo 3 prova, por comando, a assimetria de assinar artefatos em dois mundos:
+
+- no **GitHub Actions**, a assinatura é *keyless*: o runner apresenta um token
+  OIDC de vida curtíssima, o serviço de certificados o valida e emite um
+  certificado efêmero. **Nenhuma chave é guardada em lugar nenhum.**
+- no **Jenkins self-hosted**, a mesma assinatura custa uma chave gerenciada —
+  que existe, precisa ser rotacionada e pode vazar.
+
+<Tradeoff
+  a="Segredo de longa duração"
+  b="Federação por OIDC"
+  whenA="Quando o consumidor não sabe falar OIDC — sistema legado, fornecedor que só aceita chave de API, script que roda fora de qualquer plataforma com identidade."
+  whenB="Sempre que houver identidade de carga de trabalho disponível. Troca-se um segredo guardado por uma confiança verificável, e o que vaza deixa de ter valor em minutos."
+>
+  <Fragment slot="a">
+    Funciona em qualquer lugar e é trivial de configurar. Em troca: existe
+    enquanto ninguém o rotacionar, e um vazamento vale até alguém perceber.
+  </Fragment>
+  <Fragment slot="b">
+    O token vive minutos e é atrelado ao repositório, ao branch e ao workflow.
+    Em troca: exige uma relação de confiança configurada dos dois lados, e o
+    erro de configuração é mais difícil de diagnosticar.
+  </Fragment>
+</Tradeoff>
+
+A pergunta de auditoria que resume o assunto: **quantos segredos de longa
+duração existem, e quem pode usá-los?** É contável — e quase nunca contado.
+
+<FieldNote
+  source="Google SRE Book — Being On-Call (cap. 11), Andrea Spadaccini"
+  url="https://sre.google/sre-book/being-on-call/"
+  accessed="2026-09-21"
+>
+O capítulo declara o limite de **2 incidentes por turno de 12 horas**, derivado
+de uma estimativa de ~6 horas por incidente quando se inclui análise e
+acompanhamento. E registra que páginas deveriam ser "muito planas ao longo do
+tempo, com mediana provável de 0", alertando que um componente que pagina todo
+dia acabará quebrando de outro jeito. São números de uma organização com equipes
+grandes e rotação larga; num time de cinco pessoas a mesma aritmética dá outro
+resultado. Não medido aqui: esta stack não tem plantão.
+</FieldNote>
+
+<LabExercise
+  question="Você herdou um plantão com 30 alertas configurados e ninguém lembra por que existem. Por onde começar?"
+  check="postgres: a extensão existe no banco"
+>
+  <Fragment slot="hint">
+    Não comece pelos alertas. Comece pelo histórico do que eles causaram.
+  </Fragment>
+  <Fragment slot="answer">
+
+Para cada alerta dos últimos 90 dias, responda duas perguntas:
+
+1. **Quantas vezes disparou?**
+2. **Quantas vezes alguém fez alguma coisa por causa dele?**
+
+A razão entre as duas é o que importa. Um alerta com **alta taxa de disparo e
+baixa taxa de ação** não é um alerta: é ruído com prioridade de interrupção, e
+ele está ativamente treinando o time a ignorar a fila inteira.
+
+Três destinos, e nenhum deles é "manter como está":
+
+- **apagar** — ninguém agiu por causa dele em 90 dias;
+- **rebaixar para ticket** — merece atenção, não merece acordar alguém (o
+  `slo.yml` desta stack usa exatamente essa severidade);
+- **reescrever como burn rate** — o sintoma é real, mas o limiar fixo dispara
+  em variação normal.
+
+O teste que decide: **se este alerta disparar às 3h da manhã, existe uma ação
+que a pessoa de plantão pode tomar agora?** Se a resposta for "olhar e ver se
+piora", é um ticket.
+
+  </Fragment>
+</LabExercise>
+
+<Quiz set="on-call-cost-and-access" />

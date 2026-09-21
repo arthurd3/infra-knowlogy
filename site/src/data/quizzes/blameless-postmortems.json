@@ -1,0 +1,152 @@
+{
+  "note_pt": "Esta lição não tem número medido. As perguntas testam a troca de “quem errou” por algo acionável.",
+  "note_en": "This lesson has no measured number. The questions test swapping “who erred” for something actionable.",
+  "pt": [
+    {
+      "q": "Por que a busca por “a causa raiz” quase sempre termina numa pessoa?",
+      "options": [
+        {
+          "text": "Porque as pessoas realmente causam a maioria dos incidentes.",
+          "why": "Cook argumenta o contrário: as pessoas na ponta produzem segurança ativamente o tempo todo, e é justamente por serem o elemento mais visível que viram o alvo mais fácil. Elas são onde a investigação PARA, não onde ela deveria chegar."
+        },
+        {
+          "text": "Porque é onde a cadeia de “por quês” deixa de ter respostas mecânicas — e a investigação para, satisfeita.",
+          "correct": true,
+          "why": "Enquanto as respostas são técnicas, dá para continuar perguntando. Quando aparece 'porque fulano fez X', a cadeia parece ter chegado ao fim. O resultado é uma ação corretiva que não muda condição nenhuma: 'ter mais cuidado'."
+        },
+        {
+          "text": "Porque as ferramentas de observabilidade só registram ações humanas.",
+          "why": "Elas registram principalmente o sistema. O viés não está nos dados, está em onde a narrativa decide parar."
+        }
+      ]
+    },
+    {
+      "q": "Qual a pergunta que substitui “de quem foi a culpa?” numa investigação útil?",
+      "options": [
+        {
+          "text": "“Quem tinha permissão para fazer isso?”",
+          "why": "É uma pergunta de controle de acesso, e pode até render uma ação — mas continua procurando quem, não o contexto que tornou a ação razoável."
+        },
+        {
+          "text": "“Qual procedimento foi violado?”",
+          "why": "Pressupõe que o procedimento estava certo. Muitas vezes a descoberta útil é que o procedimento era impraticável e todo mundo o contornava — e isso a pergunta não deixa aparecer."
+        },
+        {
+          "text": "“Por que fazia sentido fazer isso, para quem fez, naquele momento?”",
+          "correct": true,
+          "why": "Ela força a investigação a descrever o CONTEXTO. Cada resposta possível aponta algo mudável: o painel que mostrava verde, o procedimento que dizia para fazer assim, a terceira madrugada seguida. Nenhuma é 'foi descuidado', e todas são acionáveis."
+        }
+      ]
+    },
+    {
+      "q": "“Postmortem sem culpado” significa que ninguém responde por nada?",
+      "options": [
+        {
+          "text": "Não: a just culture distingue ERRO de violação deliberada, e recusa apenas o atalho de parar quando um nome aparece.",
+          "correct": true,
+          "why": "É o mal-entendido que desacredita a prática inteira. A formulação de Allspaw é operacional e não moral: a organização ganha mais permitindo que quem errou conte em detalhe do que punindo. Punição não remove a condição — remove o relato."
+        },
+        {
+          "text": "Sim: é a definição, e é por isso que a prática é controversa.",
+          "why": "Não é a definição. Confundir 'sem culpado' com 'sem responsabilidade' é justamente o que faz a prática ser rejeitada por quem precisa prestar contas."
+        },
+        {
+          "text": "Depende: em incidentes com impacto financeiro a responsabilidade volta.",
+          "why": "A distinção não é por tamanho do impacto: é entre erro e violação deliberada. Um erro caro continua sendo erro."
+        }
+      ]
+    },
+    {
+      "q": "Qual o teste que separa uma ação corretiva útil de uma inútil?",
+      "options": [
+        {
+          "text": "Ela precisa ter responsável e prazo.",
+          "why": "Necessário para acompanhamento, e insuficiente: 'Fulano vai treinar a equipe até sexta' tem responsável e prazo e não muda condição nenhuma."
+        },
+        {
+          "text": "Ela seria eficaz se a MESMA pessoa fizesse a MESMA coisa de novo amanhã?",
+          "correct": true,
+          "why": "'Ter mais cuidado' falha: se a pessoa repetir o gesto, o resultado é o mesmo. 'O rollback leva 20 minutos e precisa levar 2' passa: o gesto repetido deixa de causar o mesmo estrago. O teste separa mudança de condição de pedido de comportamento."
+        },
+        {
+          "text": "Ela precisa impedir aquele incidente específico de acontecer de novo.",
+          "why": "Incidente idêntico raramente se repete — o valor está em remover uma das condições que se somaram, o que também reduz a chance de incidentes DIFERENTES."
+        }
+      ]
+    }
+  ],
+  "en": [
+    {
+      "q": "Why does the hunt for “the root cause” almost always end at a person?",
+      "options": [
+        {
+          "text": "Because people really do cause most incidents.",
+          "why": "Cook argues the opposite: people at the sharp end actively produce safety all the time, and it is precisely because they are the most visible element that they become the easiest target. They are where the investigation STOPS, not where it should arrive."
+        },
+        {
+          "text": "Because that is where the chain of “whys” stops having mechanical answers — and the investigation stops, satisfied.",
+          "correct": true,
+          "why": "While the answers are technical you can keep asking. Once 'because so-and-so did X' appears, the chain looks finished. The result is a corrective action that changes no condition at all: 'be more careful'."
+        },
+        {
+          "text": "Because observability tools only record human actions.",
+          "why": "They mostly record the system. The bias is not in the data, it is in where the narrative decides to stop."
+        }
+      ]
+    },
+    {
+      "q": "What question replaces “whose fault was it?” in a useful investigation?",
+      "options": [
+        {
+          "text": "“Who had permission to do that?”",
+          "why": "An access-control question, and it may even yield an action — but it keeps looking for who, not for the context that made the action reasonable."
+        },
+        {
+          "text": "“Which procedure was violated?”",
+          "why": "It assumes the procedure was right. Often the useful discovery is that the procedure was impractical and everybody worked around it — and this question does not let that surface."
+        },
+        {
+          "text": "“Why did this make sense, to the person doing it, at that moment?”",
+          "correct": true,
+          "why": "It forces the investigation to describe CONTEXT. Every possible answer points at something changeable: the dashboard that was green, the procedure that said to do it that way, the third night in a row. None is 'they were careless', and all are actionable."
+        }
+      ]
+    },
+    {
+      "q": "Does “blameless postmortem” mean nobody is accountable for anything?",
+      "options": [
+        {
+          "text": "No: a just culture distinguishes ERROR from deliberate violation, and refuses only the shortcut of stopping once a name appears.",
+          "correct": true,
+          "why": "It is the misunderstanding that discredits the whole practice. Allspaw's formulation is operational rather than moral: the organisation gains more by letting whoever erred describe it in detail than by punishing. Punishment does not remove the condition — it removes the account."
+        },
+        {
+          "text": "Yes: that is the definition, and it is why the practice is controversial.",
+          "why": "It is not the definition. Confusing 'blameless' with 'accountability-free' is exactly what makes the practice rejected by whoever has to answer to others."
+        },
+        {
+          "text": "It depends: with financial impact, accountability comes back.",
+          "why": "The distinction is not by size of impact: it is between error and deliberate violation. An expensive error is still an error."
+        }
+      ]
+    },
+    {
+      "q": "What test separates a useful corrective action from a useless one?",
+      "options": [
+        {
+          "text": "It must have an owner and a deadline.",
+          "why": "Necessary for follow-up, and insufficient: 'So-and-so will train the team by Friday' has an owner and a deadline and changes no condition whatsoever."
+        },
+        {
+          "text": "Would it be effective if the SAME person did the SAME thing again tomorrow?",
+          "correct": true,
+          "why": "'Be more careful' fails: if the person repeats the action, the result is the same. 'Rollback takes 20 minutes and needs to take 2' passes: the repeated action stops causing the same damage. The test separates changing a condition from requesting a behaviour."
+        },
+        {
+          "text": "It must prevent that specific incident from happening again.",
+          "why": "An identical incident rarely repeats — the value is in removing one of the conditions that combined, which also reduces the chance of DIFFERENT incidents."
+        }
+      ]
+    }
+  ]
+}

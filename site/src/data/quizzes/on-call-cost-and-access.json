@@ -1,0 +1,152 @@
+{
+  "note_pt": "Três custos que não aparecem no diff — e a única ponte deste repositório que é medida.",
+  "note_en": "Three costs that never show up in a diff — and this repository's one measured bridge.",
+  "pt": [
+    {
+      "q": "O SRE Book cita “no máximo 2 incidentes por turno de 12 horas”. De onde sai esse número?",
+      "options": [
+        {
+          "text": "Da aritmética: responder a um incidente com análise e acompanhamento leva ~6 horas em média.",
+          "correct": true,
+          "why": "Dois incidentes já ocupam o turno inteiro. Acima disso, ou a análise não acontece ou o turno seguinte herda a dívida — e é aí que o aprendizado do postmortem some. O livro acrescenta que a MEDIANA de páginas por turno deveria ser zero."
+        },
+        {
+          "text": "De um limite regulatório de horas de trabalho.",
+          "why": "Não há regulação envolvida. A derivação é do custo de responder bem a um incidente."
+        },
+        {
+          "text": "De pesquisa sobre privação de sono.",
+          "why": "Fadiga importa e o capítulo a menciona, mas o número dos dois incidentes vem do orçamento de TEMPO do turno, não de um estudo de sono."
+        }
+      ]
+    },
+    {
+      "q": "Por que custo de infraestrutura quase nunca recebe correção de curso, ao contrário de latência?",
+      "options": [
+        {
+          "text": "Porque engenheiros não se importam com custo.",
+          "why": "Importam-se quando veem. O problema é estrutural, não de atitude — e culpar a atitude é a versão FinOps de 'ter mais cuidado'."
+        },
+        {
+          "text": "Por atraso e distância: a fatura chega em 30–60 dias, e quem escolhe o tipo de instância não a vê.",
+          "correct": true,
+          "why": "Latência volta em minutos para quem a causou; custo volta em meses para outra pessoa. Sem esse laço de realimentação não há correção. É por isso que a primeira fase do framework da FinOps Foundation é INFORM — atribuir antes de otimizar."
+        },
+        {
+          "text": "Porque as nuvens não oferecem dados de custo por serviço.",
+          "why": "Oferecem, e o OpenCost atribui até por container no Kubernetes. O dado existe; o que falta é ele chegar a quem decide, quando decide."
+        }
+      ]
+    },
+    {
+      "q": "Por que “custo por unidade de negócio” é melhor métrica que “custo total”?",
+      "options": [
+        {
+          "text": "Porque é mais fácil de calcular.",
+          "why": "É mais DIFÍCIL — exige atribuir custo a uma unidade de negócio, que é justamente o trabalho da fase Inform. A vantagem é outra."
+        },
+        {
+          "text": "Porque um custo que dobra enquanto o tráfego triplica é boa notícia, e o número absoluto não consegue dizer isso.",
+          "correct": true,
+          "why": "O total sozinho transforma crescimento em alarme e eficiência em invisibilidade. Por pedido, por usuário ativo ou por gigabyte servido, a mesma fatura conta a história certa."
+        },
+        {
+          "text": "Porque elimina a necessidade de orçamento.",
+          "why": "Orçamento continua existindo — a métrica muda o que se compara, não se há teto."
+        }
+      ]
+    },
+    {
+      "q": "Qual a diferença medida, neste repositório, entre assinar no GitHub Actions e no Jenkins self-hosted?",
+      "options": [
+        {
+          "text": "No Actions é keyless por OIDC — nenhuma chave guardada; no Jenkins custa uma chave gerenciada.",
+          "correct": true,
+          "why": "É a única parte desta lição que NÃO é citada: o módulo 3 prova a assimetria por comando. O runner apresenta um token OIDC de vida curtíssima e recebe um certificado efêmero; o Jenkins self-hosted não tem esse emissor de confiança, então a chave existe, precisa ser rotacionada e pode vazar."
+        },
+        {
+          "text": "O Jenkins assina mais rápido por rodar no seu hardware.",
+          "why": "Velocidade não é a diferença que importa aqui, e não é o que o portão mede. O que muda é a EXISTÊNCIA de um segredo de longa duração."
+        },
+        {
+          "text": "O Actions não assina de verdade, só registra em log de transparência.",
+          "why": "Assina de verdade — e também registra no log de transparência. As duas coisas acontecem; o keyless diz respeito a de onde vem o certificado, não a se há assinatura."
+        }
+      ]
+    }
+  ],
+  "en": [
+    {
+      "q": "The SRE Book cites “at most 2 incidents per 12-hour shift”. Where does that number come from?",
+      "options": [
+        {
+          "text": "From arithmetic: responding to an incident with analysis and follow-up takes ~6 hours on average.",
+          "correct": true,
+          "why": "Two incidents already fill the whole shift. Beyond that, either the analysis does not happen or the next shift inherits the debt — and that is where the postmortem's learning disappears. The book adds that the MEDIAN pages per shift should be zero."
+        },
+        {
+          "text": "From a regulatory limit on working hours.",
+          "why": "No regulation is involved. The derivation is from the cost of responding to an incident properly."
+        },
+        {
+          "text": "From sleep-deprivation research.",
+          "why": "Fatigue matters and the chapter mentions it, but the two-incident number comes from the shift's TIME budget, not from a sleep study."
+        }
+      ]
+    },
+    {
+      "q": "Why does infrastructure cost almost never get a course correction, unlike latency?",
+      "options": [
+        {
+          "text": "Because engineers do not care about cost.",
+          "why": "They care when they can see it. The problem is structural rather than attitudinal — and blaming attitude is the FinOps version of 'be more careful'."
+        },
+        {
+          "text": "Delay and distance: the invoice arrives in 30–60 days, and whoever picks the instance type never sees it.",
+          "correct": true,
+          "why": "Latency comes back in minutes to whoever caused it; cost comes back in months to somebody else. Without that feedback loop there is no correction. Which is why the FinOps Foundation framework's first phase is INFORM — allocate before optimising."
+        },
+        {
+          "text": "Because clouds do not offer per-service cost data.",
+          "why": "They do, and OpenCost allocates down to the container on Kubernetes. The data exists; what is missing is it reaching whoever decides, when they decide."
+        }
+      ]
+    },
+    {
+      "q": "Why is “cost per unit of business” a better metric than “total cost”?",
+      "options": [
+        {
+          "text": "Because it is easier to compute.",
+          "why": "It is HARDER — it requires allocating cost to a business unit, which is exactly the Inform phase's work. The advantage is elsewhere."
+        },
+        {
+          "text": "Because a cost that doubles while traffic triples is good news, and the absolute number cannot say so.",
+          "correct": true,
+          "why": "The total alone turns growth into an alarm and efficiency into invisibility. Per order, per active user or per gigabyte served, the same invoice tells the right story."
+        },
+        {
+          "text": "Because it removes the need for a budget.",
+          "why": "The budget still exists — the metric changes what you compare, not whether there is a ceiling."
+        }
+      ]
+    },
+    {
+      "q": "What is the measured difference, in this repository, between signing on GitHub Actions and on self-hosted Jenkins?",
+      "options": [
+        {
+          "text": "On Actions it is keyless via OIDC — no key stored; on Jenkins it costs a managed key.",
+          "correct": true,
+          "why": "It is the one part of this lesson that is NOT cited: module 3 proves the asymmetry by command. The runner presents a very short-lived OIDC token and receives an ephemeral certificate; self-hosted Jenkins has no such trusted issuer, so the key exists, must be rotated and can leak."
+        },
+        {
+          "text": "Jenkins signs faster because it runs on your own hardware.",
+          "why": "Speed is not the difference that matters here, and it is not what the gate measures. What changes is the EXISTENCE of a long-lived secret."
+        },
+        {
+          "text": "Actions does not really sign, it only records in a transparency log.",
+          "why": "It really signs — and also records in the transparency log. Both happen; keyless is about where the certificate comes from, not about whether there is a signature."
+        }
+      ]
+    }
+  ]
+}
