@@ -10,6 +10,7 @@
 #   SKIP_LINT=1      pula o lint estático (kustomize + kubeconform)
 #   SKIP_HPA=1       pula a medição de reação do HPA (~2 min de carga real)
 #   SKIP_GATEWAY=1   pula a instalação e as provas da Gateway API (~4 MB + 1 min)
+#   SKIP_GITOPS=1    pula a instalação do ArgoCD e a prova de drift (~2 MB + 2 min)
 #   KEEP_CLUSTER=1   reaproveita o cluster existente e não o destrói no final
 #                    (para iterar; a medição de criação do cluster fica de fora)
 set -uo pipefail
@@ -37,7 +38,7 @@ now_ms() { date +%s%3N; }
 # As medições que viram k8s-measured.json (e depois, números nas lições).
 M_CLUSTER_CREATE_S=""; M_STACK_READY_S=""; M_SELF_HEAL_S=""
 M_NOTREADY_S=""; M_ROLLING_TOTAL=""; M_ROLLING_FAILS=""; M_SHUTDOWN_MAX_MS=""
-M_NETPOL_WINDOW_MS=""; M_HPA_CEGA=""; M_HPA_CEGA_MIN=""
+M_NETPOL_WINDOW_MS=""; M_HPA_CEGA=""; M_HPA_CEGA_MIN=""; M_GITOPS_DRIFT_S=""
 M_HPA_BOOT=""; M_HPA_DEPOIS=""; M_HPA_TEORICO=""
 
 # ─── 1. Pré-requisitos e lint estático ───────────────────────────────────────
@@ -767,6 +768,93 @@ ROTA
     bad "rota de fora não foi recusada como esperado (reason=${MOTIVO:-vazio})"
   fi
   kubectl delete namespace gw-intruso --wait=false >/dev/null 2>&1
+fi
+
+# ─── 10b. GitOps: o Git como fonte, e o drift sendo desfeito ─────────────────
+step "10b/11 GitOps (ArgoCD lendo este repositório)"
+
+if [ "${SKIP_GITOPS:-}" = "1" ]; then
+  skip "GitOps (SKIP_GITOPS=1)"
+elif ! bash tools/scripts/k8s-gitops-install.sh >/tmp/gitops.log 2>&1; then
+  bad "a instalação do ArgoCD falhou — $(tail -1 /tmp/gitops.log)"
+else
+  ok "ArgoCD instalado (manifesto conferido por sha256)"
+
+  # ── A fonte tem que ser ESTE clone. Um manifesto com a URL de outra pessoa
+  # gravada dentro faria um fork sincronizar o repositório alheio — e o portão
+  # passaria, o que é o pior jeito possível de estar errado.
+  REPO_ESPERADO=$(git config --get remote.origin.url 2>/dev/null)
+  case "$REPO_ESPERADO" in
+    git@github.com:*) REPO_ESPERADO="https://github.com/${REPO_ESPERADO#git@github.com:}" ;;
+  esac
+  case "$REPO_ESPERADO" in http*) [ "${REPO_ESPERADO%.git}" = "$REPO_ESPERADO" ] && REPO_ESPERADO="$REPO_ESPERADO.git" ;; esac
+  REPO_LIDO=$(kubectl -n argocd get application stack -o jsonpath='{.spec.source.repoURL}' 2>/dev/null)
+  if [ -n "$REPO_LIDO" ] && [ "$REPO_LIDO" = "$REPO_ESPERADO" ]; then
+    ok "a Application lê o repositório deste clone ($REPO_LIDO)"
+  else
+    bad "a Application lê '$REPO_LIDO', e este clone é '$REPO_ESPERADO'"
+  fi
+
+  # ── Sincronizado E saudável. São duas coisas: `Healthy` diz que os pods
+  # estão de pé, `Synced` diz que o cluster PARECE com o Git. Um recurso
+  # permanentemente OutOfSync convive com Healthy, e treina a equipe a ignorar
+  # o painel — foi o que o `volumeClaimTemplate` sem `apiVersion` fazia aqui.
+  ESTADO=""
+  for _ in $(seq 1 60); do
+    ESTADO=$(kubectl -n argocd get application stack \
+      -o jsonpath='{.status.sync.status}/{.status.health.status}' 2>/dev/null)
+    case "$ESTADO" in Synced/Healthy) break ;; esac
+    sleep 5
+  done
+  if [ "$ESTADO" = "Synced/Healthy" ]; then
+    REV=$(kubectl -n argocd get application stack -o jsonpath='{.status.sync.revision}' 2>/dev/null)
+    ok "Application Synced/Healthy na revisão ${REV:0:12}"
+  else
+    bad "a Application não chegou a Synced/Healthy (estado: ${ESTADO:-vazio})"
+    kubectl -n argocd get application stack -o json 2>/dev/null | python3 -c '
+import sys, json
+r = [x for x in json.load(sys.stdin)["status"].get("resources", []) if x.get("status") != "Synced"]
+print("       fora de sincronia:", [f"{x[\"kind\"]}/{x[\"name\"]}" for x in r] or "nenhum")' 2>/dev/null
+  fi
+
+  # ── A prova que dá nome a GitOps: uma mudança feita À MÃO é DESFEITA.
+  #
+  # A checagem mede SE desfaz, e não em quanto tempo. Medido aqui: a primeira
+  # correção depois de uma sincronização limpa leva 0,34 s, mas o selfHeal do
+  # ArgoCD tem recuo exponencial e chega a um platô de ~96 s sob provocação
+  # repetida. Afirmar velocidade produziria um portão que falha sozinho —
+  # é a armadilha 42 outra vez: prefira a grandeza estável, e aqui a estável
+  # é o FATO de desfazer.
+  DECLARADO=$("${KC[@]}" get deploy web -o jsonpath='{.spec.replicas}' 2>/dev/null)
+  # Espera a linha de base ficar limpa antes de provocar. Sem isso a medição
+  # herda o recuo de qualquer conflito anterior — e foi exatamente o que
+  # aconteceu ao escrever esta checagem: uma bateria de medições deixou o
+  # selfHeal recuado, e a provocação seguinte demorou mais de 180 s.
+  for _ in $(seq 1 24); do
+    [ "$(kubectl -n argocd get application stack -o jsonpath='{.status.sync.status}' 2>/dev/null)" = "Synced" ] && break
+    sleep 5
+  done
+  "${KC[@]}" scale deploy/web --replicas=3 >/dev/null 2>&1
+  T_DRIFT=$(now_ms)
+  M_GITOPS_DRIFT_S=""
+  # 300 s e não 180: num cluster novo a correção leva menos de um segundo, mas
+  # o recuo exponencial do selfHeal chega a um platô de ~96 s sob provocação
+  # repetida, e passa disso se você insistir. O portão afirma que DESFAZ, não
+  # em quanto tempo — velocidade aqui é grandeza que oscila (armadilha 42).
+  for _ in $(seq 1 300); do
+    ATUAL=$("${KC[@]}" get deploy web -o jsonpath='{.spec.replicas}' 2>/dev/null)
+    if [ "$ATUAL" = "$DECLARADO" ]; then
+      M_GITOPS_DRIFT_S=$(( ($(now_ms) - T_DRIFT) / 1000 ))
+      break
+    fi
+    sleep 1
+  done
+  if [ -n "$M_GITOPS_DRIFT_S" ]; then
+    ok "drift desfeito: 3 réplicas voltaram a ${DECLARADO} em ${M_GITOPS_DRIFT_S}s (o Git é a fonte)"
+  else
+    bad "a mudança manual sobreviveu a 300s — selfHeal desligado, ou recuado por conflito anterior"
+    "${KC[@]}" scale deploy/web --replicas="${DECLARADO:-1}" >/dev/null 2>&1
+  fi
 fi
 
 # ─── 11. Medições + teardown ─────────────────────────────────────────────────

@@ -1,0 +1,16 @@
+{
+  "_comentario": [
+    "Mesma politica do ADR 0021 para o Envoy Gateway: manifesto grande demais",
+    "para versionar (1,9 MB), baixado e CONFERIDO por sha256. O pin faz por um",
+    "manifesto o que o digest faz por uma imagem \u2014 ou o conteudo e o mesmo, ou",
+    "o portao para e diz qual hash esperava.",
+    "",
+    "Atualizar: baixe a versao nova, rode sha256sum, cole aqui, rode",
+    "make k8s-verify. Nunca edite o hash sem ter baixado o arquivo."
+  ],
+  "argocd": {
+    "version": "v3.5.3",
+    "url": "https://raw.githubusercontent.com/argoproj/argo-cd/v3.5.3/manifests/install.yaml",
+    "sha256": "7efe2d6bbc03f63623640f1e4198f16c84009d510fb810ef71e56df1b7614ba9"
+  }
+}

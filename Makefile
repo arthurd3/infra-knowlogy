@@ -136,6 +136,10 @@ k8s-diff-tools: ## Compara o chart Helm com o overlay Kustomize, campo a campo
 k8s-gateway: ## Instala a Gateway API (Envoy Gateway) e publica a stack em 8083
 	@bash tools/scripts/k8s-gateway-install.sh
 
+.PHONY: k8s-gitops
+k8s-gitops: ## Instala o ArgoCD no kind e registra a Application deste repositório
+	@bash tools/scripts/k8s-gitops-install.sh
+
 .PHONY: k8s-verify
 k8s-verify: ## O portão do módulo Kubernetes, end-to-end
 	@bash tools/scripts/k8s-verify.sh

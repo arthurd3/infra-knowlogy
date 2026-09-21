@@ -371,6 +371,26 @@ justamente por isso.
     `InvalidContentEntryDataError`, e a mensagem não diz qual campo. Para
     artigo de veículo editorial (LWN, por exemplo), use `blog` na lição.
 
+61. **`volumeClaimTemplate` sem `apiVersion`/`kind` deixa o ArgoCD
+    permanentemente OutOfSync.** O API server preenche
+    `apiVersion: v1` e `kind: PersistentVolumeClaim` dentro de cada entrada ao
+    aceitar o objeto; o manifesto não os tinha. O ArgoCD aplica, o servidor
+    completa, e a diferença reaparece no ciclo seguinte — **duas linhas** que
+    fazem um recurso nunca sincronizar, e recurso que nunca sincroniza treina
+    a equipe a ignorar o painel inteiro. A correção é declarar os campos, não
+    um `ignoreDifferences`: o manifesto passa a descrever o objeto como ele é.
+    (E quando o diff não fecha, pergunte ao ArgoCD:
+    `/api/v1/applications/<app>/managed-resources` traz `normalizedLiveState`
+    e `predictedLiveState`, que é o que ele de fato compara. Duas tentativas de
+    adivinhar aqui custaram meia hora.)
+62. **O `selfHeal` do ArgoCD tem recuo exponencial, e ele contamina medição.**
+    A primeira correção depois de uma sincronização limpa levou **0,34 s**;
+    provocando de seguida, 11 s e 48 s; sob provocação contínua, um platô de
+    **~96 s**; e uma pausa de 90 s NÃO zerou o contador (voltou em 26 s). O
+    recuo é de propósito — um controlador em laço de briga martelaria o API
+    server. Mesma família da armadilha 53: reconciliação se mede com linha de
+    base FRIA, e o portão afirma que DESFAZ, nunca em quanto tempo.
+
 ## Ao mexer na stack
 
 - Rode `make verify` antes de considerar qualquer coisa pronta. Para iterar
