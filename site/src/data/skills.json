@@ -149,32 +149,36 @@
       "id": "cicd",
       "demand": 75,
       "quadrant": "automacao",
-      "status": "parcial",
+      "status": "coberto",
       "pt": {
         "label": "CI/CD (GitHub Actions, ArgoCD, GitLab CI)",
-        "gap": "O ponto mais forte: oito lições com um Jenkins self-hosted e o GitHub Actions medidos lado a lado, build sem daemon, credenciais e assinatura. O buraco é GitOps: ArgoCD e Flux não existem aqui, e o modelo pull — o cluster puxando o estado desejado em vez de o CI empurrar — é justamente o que muda a fronteira de confiança."
+        "gap": "Nove lições: o mesmo pipeline em GitHub Actions e num Jenkins self-hosted, com lint, build, scan, assinatura e a assimetria do OIDC keyless medida. E GitOps fechando o último passo — ArgoCD e Flux rodando ao mesmo tempo no kind, com a correção de drift cronometrada nos dois. Falta GitLab CI, que ficou de fora por custo desproporcional: uma instância consome vários GB para provar o mesmo pipeline que os outros dois já provam."
       },
       "en": {
         "label": "CI/CD (GitHub Actions, ArgoCD, GitLab CI)",
-        "gap": "The strongest area: eight lessons with a self-hosted Jenkins and GitHub Actions measured side by side, daemonless builds, credentials and signing. The hole is GitOps: ArgoCD and Flux are absent, and the pull model — the cluster pulling desired state instead of CI pushing it — is precisely what redraws the trust boundary."
+        "gap": "Nine lessons: the same pipeline on GitHub Actions and on a self-hosted Jenkins, with lint, build, scan, signing and the keyless OIDC asymmetry measured. And GitOps closing the last step — ArgoCD and Flux running at once on kind, with drift correction timed on both. GitLab CI is missing, left out on disproportionate cost: an instance eats several GB to prove the same pipeline the other two already prove."
       },
       "evidence": {
         "lessons": [
-          "what-a-pipeline-proves",
-          "jenkins-without-clicking",
-          "controller-and-agent",
           "building-without-a-daemon",
+          "controller-and-agent",
+          "gitops-two-reconcilers",
+          "jenkins-vs-github-actions",
+          "jenkins-without-clicking",
           "pipeline-as-code",
           "secrets-in-ci",
           "signing-what-you-ship",
-          "jenkins-vs-github-actions"
+          "what-a-pipeline-proves"
         ],
         "checks": [
+          "Flux: GitRepository e Kustomization Ready",
+          "a Application lê o repositório deste clone",
           "estágios na ordem esperada",
           "o agente não enxerga o socket do Docker"
         ],
         "measurements": [
-          "cicd-measured.json"
+          "cicd-measured.json",
+          "gitops-measured.json"
         ]
       }
     },
@@ -328,15 +332,21 @@
         },
         {
           "name": "GitOps",
-          "status": "ausente"
+          "status": "coberto",
+          "note_pt": "dois reconciliadores no mesmo cluster, com o drift cronometrado nos dois",
+          "note_en": "two reconcilers on the same cluster, with drift timed on both"
         },
         {
           "name": "ArgoCD",
-          "status": "ausente"
+          "status": "coberto",
+          "note_pt": "v3.5.3 lendo este repositório; correção de drift em 0,34 s no melhor caso",
+          "note_en": "v3.5.3 reading this repository; drift corrected in 0.34 s at best"
         },
         {
           "name": "FluxCD",
-          "status": "ausente"
+          "status": "coberto",
+          "note_pt": "v2.9.5 ao lado; pior caso limitado pelo interval, medido em 60,0 s",
+          "note_en": "v2.9.5 alongside; worst case bounded by the interval, measured at 60.0 s"
         },
         {
           "name": "GitHub Actions",

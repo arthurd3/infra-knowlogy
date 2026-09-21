@@ -111,9 +111,30 @@ O que mais muda não é a ferramenta, é a **fronteira de confiança**: no model
 push, o CI precisa de credencial de administrador do cluster; no modelo pull, o
 cluster busca sozinho e o CI não precisa de acesso nenhum.
 
-Este repositório **não** tem GitOps — e é uma das lacunas que o mapa de mercado
-registra, com nome e percentual.
+Este repositório **tem** GitOps desde setembro de 2026: o cluster kind roda
+ArgoCD e Flux ao mesmo tempo, cada um dono de objetos próprios, e o portão mede
+quanto tempo cada um leva para desfazer uma mudança feita à mão. A
+[lição de GitOps](/pt/lessons/gitops-two-reconcilers) compara os dois — e a
+troca entre eles é de arquitetura, não de qualidade.
 </Term>
+
+## O quarto modelo, medido
+
+Até aqui a lição comparou três formas de o estado real voltar ao declarado.
+Falta a quarta, e ela é a única em que a correção acontece **sem ninguém rodar
+nada**:
+
+| modelo | quem corrige | quando | medido aqui |
+|---|---|---|---|
+| **Compose** | ninguém | só quando você roda `up` de novo | — |
+| **Kubernetes** | o controlador | continuamente, observando | auto-cura em 2 s |
+| **OpenTofu** | você | quando roda `apply` | `plan` detecta, `apply` corrige |
+| **GitOps (ArgoCD)** | o reconciliador | observando, com recuo | **0,34 s** no melhor caso, 175,9 s no pior |
+| **GitOps (Flux)** | o reconciliador | no `interval` | **60,0 s**, e nunca mais que isso |
+
+As duas últimas linhas são o mesmo princípio com arquiteturas opostas, e a
+diferença aparece no **pior** caso: o ArgoCD não tem teto porque recua
+exponencialmente; o Flux tem teto porque o pior caso é o intervalo.
 
 ## Drift não é sempre culpa de alguém
 

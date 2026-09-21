@@ -1,0 +1,75 @@
+---
+/** cicd-09 — quem tem a credencial do cluster decide o modelo inteiro. */
+import Figure from "../Figure.astro";
+import type { Lang } from "../../i18n/ui";
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+const C = {
+  pt: {
+    a: "EMPURRAR — o CI aplica", b: "PUXAR — o cluster busca",
+    a1: "git push", a2: "o CI constrói", a3: "o CI faz kubectl apply",
+    acred: "o CI guarda credencial de ADMIN do cluster",
+    arisco: "quem compromete o CI tem o cluster · o cluster aceita conexão de fora",
+    b1: "git push", b2: "o CI constrói e publica a imagem",
+    b3: "o reconciliador DENTRO do cluster lê o Git",
+    bcred: "nenhuma credencial de cluster sai do cluster",
+    brisco: "quem compromete o CI publica imagem ruim — mas não aplica nada",
+    seta: "a diferença não é de ferramenta: é de QUEM guarda a credencial",
+    extra: "e há um efeito colateral que decide sozinho: no modelo de puxar, o cluster CONVERGE — desfazer mudança manual é o mesmo laço, sem trabalho a mais",
+    caption:
+      "Os dois modelos entregam a mesma imagem no mesmo cluster. A diferença é a direção da conexão, e ela decide onde mora a credencial de administrador. No modelo de empurrar, ela fica no sistema de CI — que é o alvo mais atacado de qualquer organização de engenharia.",
+    alt: "Dois fluxos: o CI aplicando no cluster, e o cluster lendo o repositório por conta própria.",
+  },
+  en: {
+    a: "PUSH — CI applies", b: "PULL — the cluster fetches",
+    a1: "git push", a2: "CI builds", a3: "CI runs kubectl apply",
+    acred: "CI holds ADMIN credentials for the cluster",
+    arisco: "compromise CI and you own the cluster · the cluster accepts inbound connections",
+    b1: "git push", b2: "CI builds and publishes the image",
+    b3: "the reconciler INSIDE the cluster reads Git",
+    bcred: "no cluster credential ever leaves the cluster",
+    brisco: "compromise CI and you publish a bad image — but you apply nothing",
+    seta: "the difference is not the tool: it is WHO holds the credential",
+    extra: "and there is a side effect that decides it alone: in the pull model the cluster CONVERGES — undoing a manual change is the same loop, with no extra work",
+    caption:
+      "Both models deliver the same image to the same cluster. The difference is the direction of the connection, and it decides where the admin credential lives. In the push model it sits in the CI system — the most attacked target in any engineering organisation.",
+    alt: "Two flows: CI applying to the cluster, and the cluster reading the repository by itself.",
+  },
+}[lang];
+---
+<Figure caption={C.caption} alt={C.alt}>
+  <svg viewBox="0 0 720 272" xmlns="http://www.w3.org/2000/svg" font-size="11">
+    <text x="14" y="15" class="dg-muted" font-weight="640" font-size="10.5">{C.a}</text>
+    {[C.a1, C.a2, C.a3].map((t, i) => (
+      <g>
+        <rect x="14" y={24 + i * 34} width="326" height="26" rx="5"
+              class={i === 2 ? "dg-box dg-box--warn" : "dg-box"} />
+        <text x="30" y={41 + i * 34} font-size="10">{t}</text>
+        {i < 2 && <path d={`M177 ${50 + i * 34} L177 ${58 + i * 34}`} class="dg-line" marker-end="url(#pp-arrow)" />}
+      </g>
+    ))}
+    <text x="14" y="142" class="dg-fill-warn" font-size="9" font-weight="620">{C.acred}</text>
+    <text x="14" y="156" class="dg-faint" font-size="8.2">{C.arisco}</text>
+
+    <text x="380" y="15" class="dg-muted" font-weight="640" font-size="10.5">{C.b}</text>
+    {[C.b1, C.b2, C.b3].map((t, i) => (
+      <g>
+        <rect x="380" y={24 + i * 34} width="326" height="26" rx="5"
+              class={i === 2 ? "dg-box dg-box--accent" : "dg-box"} />
+        <text x="396" y={41 + i * 34} font-size="10">{t}</text>
+        {i < 2 && <path d={`M543 ${50 + i * 34} L543 ${58 + i * 34}`} class="dg-line" marker-end="url(#pp-arrow)" />}
+      </g>
+    ))}
+    <text x="380" y="142" class="dg-muted" font-size="9" font-weight="620">{C.bcred}</text>
+    <text x="380" y="156" class="dg-faint" font-size="8.2">{C.brisco}</text>
+
+    <line x1="14" y1="184" x2="706" y2="184" class="dg-line" stroke-dasharray="3 3" />
+    <text x="360" y="204" text-anchor="middle" class="dg-muted" font-size="10.5" font-weight="620">{C.seta}</text>
+    <text x="360" y="228" text-anchor="middle" class="dg-faint" font-size="8.6">{C.extra}</text>
+    <defs>
+      <marker id="pp-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+        <path d="M0 0 L10 5 L0 10 z" fill="var(--border-strong)" />
+      </marker>
+    </defs>
+  </svg>
+</Figure>

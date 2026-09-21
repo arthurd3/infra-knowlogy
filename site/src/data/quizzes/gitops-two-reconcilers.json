@@ -1,0 +1,152 @@
+{
+  "note_pt": "As perguntas saem de dois reconciliadores rodando no mesmo cluster, medidos lado a lado.",
+  "note_en": "The questions come from two reconcilers running on the same cluster, measured side by side.",
+  "pt": [
+    {
+      "q": "Qual a diferença de fundo entre o modelo de EMPURRAR e o de PUXAR?",
+      "options": [
+        {
+          "text": "Quem guarda a credencial de administrador do cluster.",
+          "correct": true,
+          "why": "No modelo de empurrar, o CI roda `kubectl apply` e precisa de um kubeconfig com poder de escrever qualquer coisa — então o CI vira o alvo mais valioso da organização, e o cluster precisa aceitar conexão de fora. No de puxar, um controlador DENTRO do cluster lê o repositório, e a credencial nunca sai."
+        },
+        {
+          "text": "A ferramenta: `kubectl` contra ArgoCD ou Flux.",
+          "why": "Dá para fazer GitOps com qualquer reconciliador, e dá para empurrar de dentro de um pipeline que usa ArgoCD CLI. A ferramenta não define o modelo; a direção da conexão define."
+        },
+        {
+          "text": "A velocidade de entrega.",
+          "why": "Medido aqui, puxar é mais LENTO para propagar uma mudança do Git (240 s no ArgoCD por padrão). A vantagem do modelo está noutro lugar."
+        }
+      ]
+    },
+    {
+      "q": "Dos quatro princípios do OpenGitOps, quais a maioria das adoções NÃO implementa?",
+      "options": [
+        {
+          "text": "Declarativo e versionado.",
+          "why": "São justamente os dois que quase todo mundo já faz — manifestos YAML num repositório Git. É por isso que tanta gente acredita já estar fazendo GitOps."
+        },
+        {
+          "text": "Puxado automaticamente e reconciliado continuamente.",
+          "correct": true,
+          "why": "São os dois que mudam o modelo, e os que separam GitOps de 'CI que faz apply'. O quarto em particular é o que transforma 'o Git é a fonte da verdade' de declaração em MECANISMO: sem reconciliação contínua, uma mudança manual sobrevive indefinidamente."
+        },
+        {
+          "text": "Imutável e auditável.",
+          "why": "Imutabilidade faz parte do segundo princípio, junto do versionamento, e vem de graça com o Git. Auditabilidade não é um dos quatro."
+        }
+      ]
+    },
+    {
+      "q": "Medido no mesmo cluster: o Flux desfez drift em 43,6 · 60,0 · 60,0 s e o ArgoCD em 0,34 · 175,9 · 113,6 s. O que explica os dois padrões?",
+      "options": [
+        {
+          "text": "O Flux é mais lento porque tem menos controladores.",
+          "why": "O Flux tem SETE controladores e o manifesto dele é cinco vezes e meia menor. Quantidade de controlador não explica o padrão — a arquitetura de reconciliação explica."
+        },
+        {
+          "text": "O ArgoCD observa o cluster (sub-segundo) mas recua exponencialmente; o Flux reconcilia no temporizador, então o pior caso É o intervalo.",
+          "correct": true,
+          "why": "Os três valores do Flux batem no teto de 60 s porque o `interval` é 1m — previsível por construção. O ArgoCD é sub-segundo no melhor caso porque o selfHeal observa, mas o recuo não tem teto: medido até 175,9 s, e uma pausa de 90 s não zerou o contador."
+        },
+        {
+          "text": "O ArgoCD estava sobrecarregado durante as medições.",
+          "why": "O cluster estava ocioso. O crescimento é monotônico e reprodutível: é o recuo exponencial do selfHeal, que existe para um controlador em laço de briga não martelar o API server."
+        }
+      ]
+    },
+    {
+      "q": "O ArgoCD reportava um StatefulSet como OutOfSync para sempre, sincronizando com sucesso a cada ciclo. Qual era a causa, e qual a melhor correção?",
+      "options": [
+        {
+          "text": "Causa: o volumeClaimTemplate não declarava apiVersion e kind, que o servidor preenche. Correção: declarar no manifesto.",
+          "correct": true,
+          "why": "O ArgoCD aplicava, o servidor completava os dois campos, e a diferença reaparecia. Um `ignoreDifferences` funcionaria, mas declarar é melhor: o manifesto passa a descrever o objeto como ele realmente é, e a ferramenta não precisa de exceção. E um recurso permanentemente vermelho treina a equipe a ignorar a cor."
+        },
+        {
+          "text": "Causa: conflito entre apply do cliente e do servidor. Correção: remover a anotação last-applied-configuration.",
+          "why": "É uma causa real dessa classe de problema, e foi a primeira hipótese testada aqui — mas o objeto não tinha a anotação, e remover não mudou nada."
+        },
+        {
+          "text": "Causa: o volumeClaimTemplates é imutável. Correção: recriar o StatefulSet.",
+          "why": "Ele é imutável, mas acrescentar apiVersion e kind foi aceito pelo apply sem recriar nada — o conteúdo semântico não mudou. Recriar teria destruído o volume por nada."
+        }
+      ]
+    }
+  ],
+  "en": [
+    {
+      "q": "What is the underlying difference between the PUSH and PULL models?",
+      "options": [
+        {
+          "text": "Who holds the cluster's admin credential.",
+          "correct": true,
+          "why": "In the push model, CI runs `kubectl apply` and needs a kubeconfig able to write anything — so CI becomes the organisation's most valuable target, and the cluster must accept inbound connections. In the pull model a controller INSIDE the cluster reads the repository, and the credential never leaves."
+        },
+        {
+          "text": "The tool: `kubectl` versus ArgoCD or Flux.",
+          "why": "You can do GitOps with any reconciler, and you can push from a pipeline that uses the ArgoCD CLI. The tool does not define the model; the direction of the connection does."
+        },
+        {
+          "text": "Delivery speed.",
+          "why": "Measured here, pull is SLOWER to propagate a change from Git (240 s on ArgoCD by default). The model's advantage lies elsewhere."
+        }
+      ]
+    },
+    {
+      "q": "Of OpenGitOps's four principles, which do most adoptions NOT implement?",
+      "options": [
+        {
+          "text": "Declarative and versioned.",
+          "why": "Those are exactly the two nearly everyone already does — YAML manifests in a Git repository. Which is why so many people believe they are already doing GitOps."
+        },
+        {
+          "text": "Pulled automatically and continuously reconciled.",
+          "correct": true,
+          "why": "Those are the two that change the model, and the ones separating GitOps from 'CI that runs apply'. The fourth in particular turns 'Git is the source of truth' from a statement into a MECHANISM: without continuous reconciliation, a manual change survives indefinitely."
+        },
+        {
+          "text": "Immutable and auditable.",
+          "why": "Immutability is part of the second principle, alongside versioning, and comes free with Git. Auditability is not one of the four."
+        }
+      ]
+    },
+    {
+      "q": "Measured on the same cluster: Flux undid drift in 43.6 · 60.0 · 60.0 s and ArgoCD in 0.34 · 175.9 · 113.6 s. What explains the two patterns?",
+      "options": [
+        {
+          "text": "Flux is slower because it has fewer controllers.",
+          "why": "Flux has SEVEN controllers and its manifest is five and a half times smaller. Controller count does not explain the pattern — reconciliation architecture does."
+        },
+        {
+          "text": "ArgoCD watches the cluster (sub-second) but backs off exponentially; Flux reconciles on a timer, so the worst case IS the interval.",
+          "correct": true,
+          "why": "Flux's three values hit the 60 s ceiling because `interval` is 1m — predictable by construction. ArgoCD is sub-second at best because selfHeal watches, but the backoff has no ceiling: measured up to 175.9 s, and a 90-second pause did not reset the counter."
+        },
+        {
+          "text": "ArgoCD was overloaded during the measurements.",
+          "why": "The cluster was idle. The growth is monotonic and reproducible: it is selfHeal's exponential backoff, which exists so a controller in a fight loop does not hammer the API server."
+        }
+      ]
+    },
+    {
+      "q": "ArgoCD reported a StatefulSet as OutOfSync forever, syncing successfully every cycle. What was the cause, and the better fix?",
+      "options": [
+        {
+          "text": "Cause: the volumeClaimTemplate did not declare apiVersion and kind, which the server fills in. Fix: declare them in the manifest.",
+          "correct": true,
+          "why": "ArgoCD applied, the server completed both fields, and the difference reappeared. An `ignoreDifferences` would work, but declaring is better: the manifest comes to describe the object as it really is, and the tool needs no exception. And a permanently red resource trains the team to ignore the colour."
+        },
+        {
+          "text": "Cause: a conflict between client-side and server-side apply. Fix: remove the last-applied-configuration annotation.",
+          "why": "That is a real cause of this class of problem, and it was the first hypothesis tested here — but the object had no such annotation, and removing it changed nothing."
+        },
+        {
+          "text": "Cause: volumeClaimTemplates is immutable. Fix: recreate the StatefulSet.",
+          "why": "It is immutable, but adding apiVersion and kind was accepted by apply without recreating anything — the semantic content did not change. Recreating would have destroyed the volume for nothing."
+        }
+      ]
+    }
+  ]
+}

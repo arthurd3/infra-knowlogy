@@ -1,0 +1,235 @@
+---
+key: gitops-two-reconcilers
+lang: en
+track: cicd
+order: 9
+title: "GitOps, with two reconcilers measured"
+summary: "The difference between push and pull is not a tool choice: it is who holds the admin credential. And between ArgoCD and Flux the trade is not quality either — one is sub-second and unbounded in the worst case, the other slower and bounded. Measured side by side on the same cluster."
+minutes: 16
+tags: [gitops, argocd, flux, reconciliation, continuous-delivery]
+sources:
+  - label: "OpenGitOps — Principles (CNCF)"
+    url: "https://opengitops.dev/"
+    kind: spec
+    accessed: "2026-09-21"
+  - label: "Argo CD — Declarative Setup and Application"
+    url: "https://argo-cd.readthedocs.io/en/stable/operator-manual/declarative-setup/"
+    kind: docs
+    accessed: "2026-09-21"
+  - label: "Flux — Kustomization and GitRepository"
+    url: "https://fluxcd.io/flux/components/kustomize/kustomizations/"
+    kind: docs
+    accessed: "2026-09-21"
+  - label: "Argo CD — Sync Options and ServerSideApply"
+    url: "https://argo-cd.readthedocs.io/en/stable/user-guide/sync-options/"
+    kind: docs
+    accessed: "2026-09-21"
+---
+
+import PushVsPull from "../../../components/diagrams/PushVsPull.astro";
+
+Module 3 built a pipeline that lints, builds, signs and publishes. It stops
+before the last step: **applying to the cluster**. This lesson is about that
+step, and about why the commonest answer to it is the wrong one.
+
+## Who holds the credential
+
+<PushVsPull />
+
+The question separating the two models is not "which tool". It is:
+
+> **Who has admin permission on the cluster?**
+
+In the **push** model, the CI system does — it runs `kubectl apply`, and for
+that it needs a kubeconfig able to write anything. Two effects, both bad: CI
+becomes the organisation's most valuable target, and the cluster must accept
+inbound connections.
+
+In the **pull** model, nobody outside does. A controller **inside** the cluster
+reads the repository and applies. The credential never leaves, and the cluster
+needs no open port for CI.
+
+<Term word="GitOps" alt="GitOps">
+Four principles, formalised by the CNCF's OpenGitOps working group:
+
+1. **Declarative** — desired state is described, not executed as steps.
+2. **Versioned and immutable** — state lives in Git, with history and rollback.
+3. **Pulled automatically** — agents fetch the desired state themselves.
+4. **Continuously reconciled** — agents correct divergence without being asked.
+
+Plenty of people already do the first two with `kubectl apply` in a pipeline. It
+is the third and fourth that change the model — and the fourth is what turns
+"Git is the source of truth" from a statement into a **mechanism**.
+</Term>
+
+## Both, on the same cluster
+
+This cluster runs **ArgoCD v3.5.3** and **Flux v2.9.5** at once, each owning its
+own objects — ArgoCD reconciles `k8s/base`, Flux reconciles
+`gitops/flux-demo`. Having them contend for the same objects would make each
+undo the other's work in a loop.
+
+The first difference shows up before installing:
+
+| | install manifest |
+|---|---|
+| **Flux** | **333 KB** |
+| **ArgoCD** | **1873 KB** |
+
+The second is in shape. ArgoCD has **one** object — the `Application` — joining
+source, destination and policy. Flux **separates**: `GitRepository` is the
+source, `Kustomization` is what to do with it, and one source can feed several.
+
+And notice a Flux detail that matters more than it looks:
+
+```yaml
+spec:
+  interval: 1m      # required, on BOTH objects
+```
+
+In ArgoCD the repository polling interval is a **global default of ~3 minutes**
+that many people have never seen. Measured here: from `git push` to the new
+revision being applied, **240 seconds**.
+
+## The measurement that became the argument
+
+The proof of GitOps is always the same: change something by hand in the cluster
+and watch it be undone. Measured on both, with `kubectl scale deploy
+--replicas=3`:
+
+| | 1st | 2nd | 3rd |
+|---|---|---|---|
+| **Flux** | 43.6 s | **60.0 s** | **60.0 s** |
+| **ArgoCD** | **0.34 s** | 175.9 s | 113.6 s |
+
+Read both rows for what they do **not** do.
+
+Flux **never exceeds 60 seconds** because the `kustomize-controller` does not
+watch the cluster: it reconciles on the `interval`. The worst case is the
+interval, by construction.
+
+ArgoCD is **sub-second** in the best case because `selfHeal` watches. But it
+**backs off exponentially** under repeated provocation, and the worst case has
+no ceiling — measured up to 175.9 s, and a 90-second pause did not reset the
+counter.
+
+<Tradeoff
+  a="ArgoCD"
+  b="Flux"
+  whenA="When correction must be fast and drift is rare — the occasional misbehaving operator, an emergency manual fix. And when the UI matters: ArgoCD has one, Flux does not."
+  whenB="When drift is frequent or predictable, and what you need is a CEILING. Also when the cluster is tight: 333 KB of manifest against 1873 KB, and fewer controllers running."
+>
+  <Fragment slot="a">
+    Sub-second at best, and a dashboard showing the diff field by field. In
+    exchange: exponential backoff makes correction progressively slower if
+    something insists on causing drift, and there is no upper bound.
+  </Fragment>
+  <Fragment slot="b">
+    Predictable by construction: the worst case is the `interval`, written in the
+    manifest. In exchange: never fast, and no UI — diagnosis is `kubectl` and
+    controller logs.
+  </Fragment>
+</Tradeoff>
+
+<Callout type="note" title="The backoff is a design decision, not a defect">
+A controller that reverts instantly and without limit enters a **fight loop**
+with whoever is on the other side — a human operator handling an emergency, or
+another controller — and hammers the API server.
+
+ArgoCD's backoff is the same idea as the
+[HPA's](/en/lessons/autoscaling-and-its-blind-window) scale-down stabilisation
+window: when two forces can oscillate, one of them has to yield slowly.
+</Callout>
+
+## The defect the installation found
+
+ArgoCD reported the database's `StatefulSet` as **OutOfSync forever** — syncing
+successfully and diverging again on the next cycle.
+
+The cause was **two lines**. The API server fills in `apiVersion: v1` and
+`kind: PersistentVolumeClaim` inside each `volumeClaimTemplate` when it accepts
+the object; the manifest did not declare them. ArgoCD applied, the server
+completed, and the difference reappeared.
+
+```yaml
+volumeClaimTemplates:
+  - apiVersion: v1                    # ← the server fills this in
+    kind: PersistentVolumeClaim       # ← the server fills this in
+    metadata:
+      name: pgdata
+```
+
+<Callout type="warn" title="One never-syncing resource ruins the whole dashboard">
+This is not cosmetic. A permanently red item trains the team to ignore the
+colour — and on the day a resource turns red **for a real reason**, nobody
+looks. It is the same dynamic as alert fatigue.
+
+The fix could have been an `ignoreDifferences` on the Application. Declaring the
+fields is better: the manifest comes to describe the object **as it really is**,
+and the tool needs no exception.
+
+And to find the diff, ask ArgoCD instead of guessing:
+`/api/v1/applications/<app>/managed-resources` returns `normalizedLiveState` and
+`predictedLiveState`, which is what it actually compares. Two rounds of guessing
+here cost half an hour.
+</Callout>
+
+## The fourth reconciliation model
+
+This repository now measures four ways for actual state to diverge from
+declared — and the
+[drift lesson in the IaC module](/en/lessons/drift-and-reconciliation) compares
+all four. GitOps is the only one where the correction happens **without anyone
+running anything**.
+
+<FieldNote
+  source="OpenGitOps — Principles (CNCF)"
+  url="https://opengitops.dev/"
+  accessed="2026-09-21"
+>
+The CNCF working group formalised the four principles in 2021 precisely because
+the term was already being used for any pipeline that read a repository. The
+distinction they insist on: *pulled automatically* and *continuously reconciled*
+are what separate GitOps from "CI that runs apply" — and they are the two most
+adoptions do not implement. Not measured here: adoption is a phenomenon of
+organisations, not of one cluster.
+</FieldNote>
+
+<LabExercise
+  question="Your Application is `Synced` and the cluster does not have the change you just made. What happened?"
+  check="a Application lê o repositório deste clone"
+>
+  <Fragment slot="hint">
+    The reconciler does not know your editor exists.
+  </Fragment>
+  <Fragment slot="answer">
+
+You did not **push**.
+
+```bash
+git status            # is the change in the working tree?
+git log origin/main -1 --oneline   # what does the remote have?
+```
+
+`Synced` means "the cluster matches what is in **Git**" — and the remote Git, not
+your disk. It is the inversion that most confuses people coming from
+`kubectl apply`: an edited, unpushed file changes nothing, and a hand-run
+`kubectl apply` is **undone**.
+
+If you did push and still nothing changed, check the revision the reconciler is
+reading:
+
+```bash
+kubectl -n argocd get application stack -o jsonpath='{.status.sync.revision}'
+kubectl -n flux-system get gitrepository stack -o jsonpath='{.status.artifact.revision}'
+```
+
+An old revision means it has not fetched yet. On ArgoCD that takes up to ~3
+minutes by default (measured: 240 s); on Flux, the `interval` written in the
+manifest. To skip the wait: `argocd app get stack --refresh`, or
+`flux reconcile source git stack`.
+
+  </Fragment>
+</LabExercise>
+
+<Quiz set="gitops-two-reconcilers" />

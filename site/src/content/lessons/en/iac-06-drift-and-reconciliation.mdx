@@ -112,9 +112,30 @@ What changes most is not the tooling, it is the **trust boundary**: in the push
 model, CI needs cluster-admin credentials; in the pull model, the cluster fetches
 on its own and CI needs no access at all.
 
-This repository has **no** GitOps — and that is one of the gaps the market map
-records, with a name and a percentage.
+This repository **has** GitOps since September 2026: the kind cluster runs
+ArgoCD and Flux at once, each owning its own objects, and the gate measures how
+long each takes to undo a hand-made change. The
+[GitOps lesson](/en/lessons/gitops-two-reconcilers) compares them — and the
+trade between them is architectural, not about quality.
 </Term>
+
+## The fourth model, measured
+
+So far this lesson compared three ways for actual state to return to declared.
+The fourth is missing, and it is the only one where the correction happens
+**without anyone running anything**:
+
+| model | who corrects | when | measured here |
+|---|---|---|---|
+| **Compose** | nobody | only when you run `up` again | — |
+| **Kubernetes** | the controller | continuously, by watching | self-healing in 2 s |
+| **OpenTofu** | you | when you run `apply` | `plan` detects, `apply` corrects |
+| **GitOps (ArgoCD)** | the reconciler | by watching, with backoff | **0.34 s** at best, 175.9 s at worst |
+| **GitOps (Flux)** | the reconciler | on the `interval` | **60.0 s**, and never more |
+
+The last two rows are the same principle with opposite architectures, and the
+difference shows in the **worst** case: ArgoCD has no ceiling because it backs
+off exponentially; Flux has one because its worst case is the interval.
 
 ## Drift is not always somebody's fault
 
