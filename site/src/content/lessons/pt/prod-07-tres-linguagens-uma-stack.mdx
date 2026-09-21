@@ -1,0 +1,222 @@
+---
+key: three-languages-one-stack
+lang: pt
+track: producao
+order: 7
+title: "Três linguagens, uma stack"
+summary: "Go na api, Python no worker, Node no site — de propósito. Rodando no mesmo host, no mesmo dia, dá para comparar o que benchmark nenhum compara: o que cada uma cobra de você."
+minutes: 16
+tags: [go, python, node, runtime, dependencias, escolha]
+sources:
+  - label: "Go — Frequently Asked Questions"
+    url: "https://go.dev/doc/faq"
+    kind: docs
+    accessed: "2026-09-21"
+  - label: "Go at Google: Language Design in the Service of Software Engineering"
+    url: "https://go.dev/talks/2012/splash.article"
+    kind: talk
+    accessed: "2026-09-21"
+  - label: "uv — documentação"
+    url: "https://docs.astral.sh/uv/"
+    kind: docs
+    accessed: "2026-09-21"
+  - label: "PEP 703 — Making the Global Interpreter Lock Optional in CPython"
+    url: "https://peps.python.org/pep-0703/"
+    kind: spec
+    accessed: "2026-09-21"
+  - label: "npm — package-lock.json"
+    url: "https://docs.npmjs.com/cli/v10/configuring-npm/package-lock-json"
+    kind: docs
+    accessed: "2026-09-21"
+---
+
+import ThreeRuntimes from "../../../components/diagrams/ThreeRuntimes.astro";
+
+Quase toda comparação de linguagem que você lê é entre implementações
+diferentes, de problemas diferentes, em máquinas diferentes. Esta é entre três
+serviços do **mesmo sistema**, no mesmo host, medidos no mesmo dia.
+
+Isso não torna a comparação universal. Torna-a honesta.
+
+## O que cada uma faz aqui
+
+| | linguagem | trabalho |
+|---|---|---|
+| **api** | Go | recebe HTTP, valida, grava no Postgres, enfileira no Redis |
+| **worker** | Python | tira da fila, busca a URL, parseia HTML, atualiza o banco |
+| **web** | Node (build) | gera o site estático; o que roda em produção é o Caddy |
+
+A terceira linha já é a primeira lição: **o Node não está em produção.** Ele
+constrói e sai. O que sobra é HTML servido por um binário em Go — e isso é uma
+escolha, não um acidente.
+
+## Medido
+
+<ThreeRuntimes />
+
+Três números que mudam decisão:
+
+- **Memória em repouso.** O worker em Python usa cerca de **4× a memória** da
+  api em Go sem estar fazendo nada. Não é desperdício: é o interpretador, os
+  módulos carregados e o heap inicial. Mas é o número que decide quantas
+  réplicas cabem num nó.
+- **O lock.** O `package-lock.json` do site tem quase **30× as linhas** do
+  `go.sum` da api. Cada linha é uma dependência transitiva que alguém vai ter
+  de auditar no dia em que sair um CVE — e a lição de cadeia de suprimentos
+  desta trilha depende de alguém conseguir ler isso.
+- **A imagem.** 6,0 MB contra 52,8 MB, medido pelo `sizes.sh`. O binário em Go
+  é estático: a imagem final é `distroless/static` porque não há nada a
+  carregar.
+
+## A diferença que benchmark nenhum mostra
+
+Peguei o mesmo erro — uma chamada a uma função que não existe — e o coloquei num
+ramo que **nunca executa**, nas duas linguagens.
+
+```go
+if len("x") > 99 {                      // nunca verdadeiro
+    fmt.Println(enriquecerr("abc"))     // typo
+}
+```
+
+```python
+if len("x") > 99:                # nunca verdadeiro
+    print(enriquecerr("abc"))    # o mesmo typo
+```
+
+O Go **recusa o build**: `./main.go:10:15: undefined: enriquecerr`, e nenhum
+binário é produzido. O Python roda até o fim, imprime tudo o que deveria e sai
+com **0** — a imagem é construída, o deploy passa, os testes de fumaça passam,
+e o defeito fica esperando o dia em que aquele ramo executar.
+
+<Callout type="trap" label="Isto não é “Go é melhor”">
+É um preço, e ele tem dois lados.
+
+O Go cobra adiantado: você não compila enquanto não resolver. Isso custa tempo
+de escrita e produz o código mais verboso das três — a api tem **928 linhas**
+contra **561** do worker, fazendo um trabalho que não é maior.
+
+O Python cobra depois, e às vezes nunca — a maior parte do código nunca tem
+typo em ramo morto. Quando cobra, cobra na hora errada.
+
+A decisão não é qual linguagem é melhor. É **onde você quer que o erro
+apareça** — e isso depende de quanto custa o erro ali. Numa api que recebe
+tráfego, cedo. Num script que você roda à mão e lê a saída, o custo do rigor
+pode ser maior que o do erro.
+</Callout>
+
+<Term word="tipagem estática" alt="static typing">
+O compilador verifica os tipos **antes** de o programa rodar, e se recusa a
+produzir binário se algo não fecha. É o que faz o typo acima parar o build.
+
+O oposto não é "sem tipos": Python tem tipos, e eles são verificados **quando a
+linha executa**. A diferença não é ter ou não ter — é *quando*.
+
+Python tem anotações de tipo e ferramentas que as verificam antes (`mypy`,
+`pyright`), e elas fecham boa parte dessa distância. O que elas não fazem é
+impedir o deploy: são um passo a mais que alguém precisa lembrar de rodar, e é
+por isso que este repositório roda `astro check` e `hadolint` dentro do portão,
+e não na intenção de quem escreve.
+</Term>
+
+## Três arquivos de lock, três filosofias
+
+<Term word="lock file" alt="lock file">
+O arquivo que registra a versão **exata** de cada dependência — inclusive as
+que você não pediu, que vieram junto com as que pediu.
+
+Sem ele, `instalar as dependências` significa "o que estiver publicado hoje", e
+duas máquinas constroem coisas diferentes a partir do mesmo código. É o mesmo
+problema que o pin por digest resolve para imagem de container, uma camada
+acima.
+</Term>
+
+- **`go.sum`** guarda um hash por módulo e **não** resolve versões: quem resolve
+  é o `go.mod`, e o `go.sum` só prova que o que baixou é o que baixou antes. São
+  108 linhas.
+- **`uv.lock`** é uma resolução completa, com marcadores de plataforma e de
+  versão do Python. 474 linhas para 8 dependências diretas — a diferença é a
+  árvore transitiva.
+- **`package-lock.json`** é a árvore inteira, com a topologia de instalação.
+  7.862 linhas, e é o motivo de o npm ser o ecossistema onde "apagar
+  `node_modules` e instalar de novo" virou procedimento.
+
+<Tradeoff
+  a="Uma linguagem para tudo"
+  b="A linguagem certa por serviço"
+  whenA="O time é pequeno e a rotatividade é real. Uma linguagem significa uma cadeia de build, um conjunto de lints, um jeito de fazer deploy — e qualquer pessoa consegue mexer em qualquer serviço numa terça-feira de plantão."
+  whenB="Os serviços têm perfis genuinamente diferentes. Aqui: a api é I/O concorrente com latência que importa, e o worker é parsing de HTML, onde a biblioteca madura está em Python. Forçar uma só faria um dos dois pior."
+  chose="b"
+  verdict="e o custo apareceu: três cadeias de build, três formatos de lock, três jeitos de pinar. O repositório absorve isso com portão único — mas num time de verdade esse custo é de pessoas, não de CPU."
+/>
+
+<FieldNote
+  source="Go at Google: Language Design in the Service of Software Engineering (Rob Pike, 2012)"
+  url="https://go.dev/talks/2012/splash.article"
+  kind="talk"
+  accessed="2026-09-21"
+>
+O argumento original do Go não era desempenho: era **tempo de build e escala de
+equipe**. O texto descreve builds que levavam tanto que viraram cultura de
+empresa, e uma linguagem desenhada para que a dependência de um arquivo fosse
+computável rápido.
+
+Vale lembrar disso quando alguém compara linguagens só por velocidade de
+execução. A conta que decidiu o Go foi outra — e é uma conta de organização, não
+de máquina.
+</FieldNote>
+
+<LabExercise check="linguagens: o mesmo typo em ramo morto" file="tools/scripts/fixtures/typo-no-ramo-morto/py/main.py">
+
+O worker em Python tem um caminho de erro que quase nunca executa: o
+reenfileiramento depois de três falhas.
+
+Pergunta: que ferramenta, rodando **antes** do deploy, pegaria um typo nesse
+caminho — e por que ela não basta sozinha?
+
+<Fragment slot="hint">
+Não é teste unitário: um typo em ramo morto passa por qualquer suíte que não
+exercite aquele ramo.
+
+</Fragment>
+
+<Fragment slot="answer">
+
+Um **verificador de tipos estático** — `mypy` ou `pyright`. Eles analisam o
+código sem executá-lo e acusam `enriquecerr` como nome desconhecido, exatamente
+como o compilador do Go faz.
+
+Por que não basta: porque é **opcional**. O compilador do Go não é um passo que
+alguém lembra de rodar — sem ele não existe binário. O `mypy` é um comando a
+mais, e um comando a mais que não está no portão é um comando que não roda.
+
+É a mesma razão pela qual este repositório põe `astro check` e `hadolint` dentro
+do `make verify` em vez de confiar em disciplina. A diferença entre Go e Python
+aqui não é "tem verificação ou não tem": é **quem obriga**.
+</Fragment>
+</LabExercise>
+
+## O que o portão prova
+
+<RunIt title="As três linguagens, medidas na sua máquina">
+
+```bash
+# Precisa da stack no ar para a memória em repouso
+make up
+python3 tools/scripts/languages-measure.py
+
+# E as checagens
+make verify
+```
+</RunIt>
+
+A demonstração do typo é uma **fixture versionada** em
+`tools/scripts/fixtures/typo-no-ramo-morto/` — os dois arquivos estão no
+repositório, um deles de propósito sem compilar. O portão constrói os dois e
+exige que o Go falhe e o Python passe.
+
+Uma checagem que exige que algo **não** compile parece estranha até você
+perguntar o que a lição afirma. Ela afirma um comportamento, e comportamento
+afirmado sem checagem envelhece em silêncio.
+
+<Quiz set="three-languages-one-stack" />

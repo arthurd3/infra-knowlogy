@@ -222,19 +222,28 @@
       "id": "scripting",
       "demand": 65,
       "quadrant": "automacao",
-      "status": "parcial",
+      "status": "coberto",
       "pt": {
         "label": "Scripting (Python, Shell, Go)",
-        "gap": "As três linguagens são código de produção aqui, de propósito (ADR 0005): a api em Go, o worker em Python, o site em Node, e cada uma produz um idioma de Dockerfile diferente. O que não existe é lição SOBRE escrever o script — e os portões deste repositório, que são mil linhas de bash com armadilhas medidas, seriam bom material."
+        "gap": "As três linguagens são código de produção aqui, de propósito (ADR 0005). Faltava lição SOBRE escrever o script: agora são duas, e as duas medem — as armadilhas de shell em 40 execuções por tamanho, e as três linguagens lado a lado no mesmo host. Falta um verificador de tipos do Python no portão: o `mypy` é justamente o exemplo que a lição usa de passo opcional que não roda."
       },
       "en": {
         "label": "Scripting (Python, Shell, Go)",
-        "gap": "All three languages are production code here on purpose (ADR 0005): the API in Go, the worker in Python, the site in Node, each producing a different Dockerfile idiom. What does not exist is a lesson ABOUT writing the script — and this repository's gates, a thousand lines of bash with measured traps, would make good material."
+        "gap": "The three languages are production code here, deliberately (ADR 0005). What was missing was a lesson ABOUT writing the script: now there are two, and both measure — the shell traps over 40 runs per size, and the three languages side by side on one host. Still missing: a Python type checker in the gate. `mypy` is exactly the lesson's example of an optional step that does not run."
       },
       "evidence": {
-        "lessons": [],
-        "checks": [],
+        "lessons": [
+          "scripts-that-dont-lie",
+          "three-languages-one-stack"
+        ],
+        "checks": [
+          "bash: a forma sem pipe",
+          "bash: `local v=$(cmd)` devolve 0 e mascara o erro",
+          "linguagens: o mesmo typo em ramo morto"
+        ],
         "measurements": [
+          "bash-measured.json",
+          "languages-measured.json",
           "measured.json"
         ]
       }
@@ -363,15 +372,24 @@
         },
         {
           "name": "Python",
-          "status": "parcial"
+          "status": "coberto",
+          "lesson": "three-languages-one-stack",
+          "note_pt": "o worker é Python de produção, e a lição three-languages-one-stack mede o que ele custa: 42 MiB em repouso contra 9,4 do Go, e o typo em ramo morto que só falha na execução",
+          "note_en": "the worker is production Python, and the three-languages-one-stack lesson measures what it costs: 42 MiB at rest against Go's 9.4, and the dead-branch typo that only fails at run time"
         },
         {
           "name": "Bash",
-          "status": "parcial"
+          "status": "coberto",
+          "lesson": "scripts-that-dont-lie",
+          "note_pt": "dois mil linhas de portão, e a lição scripts-that-dont-lie mede as armadilhas que elas pisaram — inclusive a do `pipefail` que inverte o resultado, medida em 40 execuções por tamanho",
+          "note_en": "two thousand lines of gate, and the scripts-that-dont-lie lesson measures the traps they hit — including the `pipefail` one that inverts the answer, measured over 40 runs per size"
         },
         {
           "name": "Go",
-          "status": "parcial"
+          "status": "coberto",
+          "lesson": "three-languages-one-stack",
+          "note_pt": "a api é Go de produção: binário estático de 6,0 MB em distroless, 9,4 MiB em repouso, e o compilador recusando o build por um typo em ramo morto",
+          "note_en": "the api is production Go: a 6.0 MB static binary on distroless, 9.4 MiB at rest, and the compiler refusing the build over a dead-branch typo"
         }
       ]
     },
@@ -394,7 +412,10 @@
         },
         {
           "name": "OpenTelemetry",
-          "status": "ausente"
+          "status": "coberto",
+          "lesson": "distributed-tracing",
+          "note_pt": "instrumentação ponta a ponta nas três aplicações: um trace_id atravessa edge, api, a fila do Redis e o worker, com o custo medido (+63% na imagem da api)",
+          "note_en": "end-to-end instrumentation across the three applications: one trace_id crosses edge, api, the Redis queue and the worker, with the cost measured (+63% on the api image)"
         },
         {
           "name": "Datadog",

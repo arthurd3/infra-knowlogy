@@ -1,0 +1,140 @@
+{
+  "note_pt": "Três perguntas sobre custo — e nenhuma delas tem “a linguagem X é melhor” como resposta.",
+  "note_en": "Three questions about cost — and none of them has “language X is better” as the answer.",
+  "pt": [
+    {
+      "q": "O mesmo typo, num ramo que nunca executa, está no código Go e no Python. O que acontece em cada um?",
+      "options": [
+        {
+          "text": "Os dois falham no build: toda linguagem moderna analisa o código inteiro.",
+          "why": "O Python não tem etapa de build que analise nomes. Ele compila para bytecode, e um nome desconhecido só vira erro quando a linha é EXECUTADA — o que num ramo morto significa nunca."
+        },
+        {
+          "text": "Os dois passam: ramo morto não é executado, logo não é verificado.",
+          "why": "Vale para o Python, não para o Go. O compilador do Go resolve todos os identificadores do arquivo, independentemente de serem alcançáveis — e é exatamente isso que o faz recusar o build."
+        },
+        {
+          "text": "O Go não produz binário; o Python sobe, atende e sai com 0.",
+          "correct": true,
+          "why": "Medido, com a fixture versionada do repositório: `./main.go:10:15: undefined: enriquecerr` e nenhum binário; do outro lado, “o serviço subiu / atendendo” e saída 0. A imagem é construída, o deploy passa, os testes de fumaça passam. O defeito espera o dia em que aquele ramo executar."
+        },
+        {
+          "text": "O Go avisa mas compila; o Python falha ao importar o módulo.",
+          "why": "Trocado. Nome indefinido em Go é erro, não aviso — o Go quase não tem avisos, de propósito. E o Python importa sem reclamar: o nome só é procurado na hora da chamada."
+        }
+      ]
+    },
+    {
+      "q": "O worker em Python usa cerca de 4× a memória em repouso da api em Go. O que esse número decide?",
+      "options": [
+        {
+          "text": "Quantas réplicas cabem num nó — e, por consequência, a conta de infraestrutura.",
+          "correct": true,
+          "why": "Memória em repouso é o piso: cada réplica paga antes de atender a primeira requisição. É o mesmo número que o `requests.memory` do Kubernetes precisa refletir, e errar para baixo faz o pod ser morto por OOM no primeiro pico."
+        },
+        {
+          "text": "Que o Python é lento para processar requisições.",
+          "why": "Memória em repouso não diz nada sobre velocidade. O worker desta stack passa a maior parte do tempo esperando I/O de rede, onde a diferença entre as duas linguagens é pequena."
+        },
+        {
+          "text": "Que o worker tem vazamento de memória.",
+          "why": "Não há vazamento: o número é estável e é o custo fixo do interpretador mais os módulos carregados. Vazamento apareceria como crescimento ao longo do tempo, que é outra medição."
+        },
+        {
+          "text": "Nada relevante: memória é barata.",
+          "why": "É barata até virar densidade. Num nó de 8 GiB, 4× por réplica é a diferença entre 80 e 20 réplicas — e essa é uma decisão de arquitetura, não de conforto."
+        }
+      ]
+    },
+    {
+      "q": "Por que o `mypy` não fecha sozinho a distância entre Python e Go nesse caso?",
+      "options": [
+        {
+          "text": "Porque ele não detecta nomes indefinidos.",
+          "why": "Detecta, sim — é um dos erros mais básicos que ele acusa. O problema não é capacidade."
+        },
+        {
+          "text": "Porque ele é opcional: sem ele ainda existe artefato, e um passo que alguém precisa lembrar de rodar é um passo que não roda.",
+          "correct": true,
+          "why": "A diferença não é “tem verificação ou não tem”: é QUEM OBRIGA. O compilador do Go não é um passo — sem ele não há binário. É a mesma razão pela qual este repositório põe `astro check` e `hadolint` dentro do `make verify` em vez de confiar em disciplina."
+        },
+        {
+          "text": "Porque ele só funciona com anotações de tipo em todo o código.",
+          "why": "Ele funciona sem anotação nenhuma para este caso: nome indefinido não depende de tipo declarado. Anotações melhoram o alcance dele, não a detecção desse erro."
+        },
+        {
+          "text": "Porque ele roda depois do deploy.",
+          "why": "Ele roda quando você o chamar — inclusive antes de tudo. O problema é justamente que chamar é opcional."
+        }
+      ]
+    }
+  ],
+  "en": [
+    {
+      "q": "The same typo, in a branch that never runs, sits in the Go code and in the Python code. What happens in each?",
+      "options": [
+        {
+          "text": "Both fail the build: every modern language analyses the whole file.",
+          "why": "Python has no build step that resolves names. It compiles to bytecode, and an unknown name only becomes an error when the line is EXECUTED — which in a dead branch means never."
+        },
+        {
+          "text": "Both pass: a dead branch is not executed, therefore not checked.",
+          "why": "True for Python, not for Go. Go's compiler resolves every identifier in the file regardless of reachability — which is exactly what makes it refuse the build."
+        },
+        {
+          "text": "Go produces no binary; Python starts, serves and exits 0.",
+          "correct": true,
+          "why": "Measured, with the repository's versioned fixture: `./main.go:10:15: undefined: enriquecerr` and no binary; on the other side, “the service started / serving” and exit 0. The image builds, the deploy passes, the smoke tests pass. The defect waits for the day that branch runs."
+        },
+        {
+          "text": "Go warns but compiles; Python fails on module import.",
+          "why": "Swapped. An undefined name in Go is an error, not a warning — Go has almost no warnings, deliberately. And Python imports without complaint: the name is only looked up at call time."
+        }
+      ]
+    },
+    {
+      "q": "The Python worker uses about 4× the Go api's memory at rest. What does that number decide?",
+      "options": [
+        {
+          "text": "How many replicas fit on a node — and therefore the infrastructure bill.",
+          "correct": true,
+          "why": "Memory at rest is the floor: every replica pays it before serving a single request. It is the same number Kubernetes's `requests.memory` has to reflect, and getting it too low gets the pod OOM-killed on the first spike."
+        },
+        {
+          "text": "That Python is slow at processing requests.",
+          "why": "Memory at rest says nothing about speed. This stack's worker spends most of its time waiting on network I/O, where the difference between the two languages is small."
+        },
+        {
+          "text": "That the worker has a memory leak.",
+          "why": "There is no leak: the number is stable and is the fixed cost of the interpreter plus loaded modules. A leak would show as growth over time, which is a different measurement."
+        },
+        {
+          "text": "Nothing relevant: memory is cheap.",
+          "why": "It is cheap until it becomes density. On an 8 GiB node, 4× per replica is the difference between 80 and 20 replicas — and that is an architecture decision, not a comfort one."
+        }
+      ]
+    },
+    {
+      "q": "Why does `mypy` not close the gap between Python and Go on its own here?",
+      "options": [
+        {
+          "text": "Because it does not detect undefined names.",
+          "why": "It does — it is among the most basic errors it reports. Capability is not the problem."
+        },
+        {
+          "text": "Because it is optional: without it an artifact still exists, and a step somebody has to remember to run is a step that does not run.",
+          "correct": true,
+          "why": "The difference is not “has checking or not”: it is WHO ENFORCES it. Go's compiler is not a step — without it there is no binary. Same reason this repository puts `astro check` and `hadolint` inside `make verify` rather than trusting discipline."
+        },
+        {
+          "text": "Because it only works with type annotations throughout the code.",
+          "why": "It works with no annotations at all for this case: an undefined name does not depend on a declared type. Annotations widen its reach, not its detection of this error."
+        },
+        {
+          "text": "Because it runs after the deploy.",
+          "why": "It runs whenever you call it — including before everything else. The problem is precisely that calling it is optional."
+        }
+      ]
+    }
+  ]
+}

@@ -142,9 +142,17 @@ justamente por isso.
     fica no controller. E flyweight NÃO conta para `numExecutors`: 0
     executores significa "nenhum BUILD roda aqui", não "nada roda aqui". Quem
     prova onde o trabalho aconteceu é a linha `Running on <nó>` do console.
-27. **O ERE do `grep -E` não conhece `\s` nem `\S`** — `\s` casa a letra "s".
-    Uma checagem de pin escrita assim reprova arquivos perfeitamente pinados.
-    Use `[[:space:]]`.
+27. **Prefira `[[:space:]]` a `\s` — mas pelo motivo certo.** Esta entrada dizia
+    que "o ERE do `grep -E` não conhece `\s`, que casa a letra s", e que uma
+    checagem de pin escrita assim reprovaria arquivos pinados. **Medido, não
+    reproduz.** Contra os padrões reais do `cicd-verify` e do `iac-verify`, as
+    duas formas dão resultado idêntico em GNU grep 3.12 (ERE **e** BRE), GNU
+    awk, GNU sed e busybox awk — `\s` casa espaço em todos, e `FROMsss…` não
+    casa em nenhum.
+    O motivo real de preferir `[[:space:]]` é **portabilidade**: `\s` é extensão
+    GNU/BusyBox e não está no ERE do POSIX. O conselho continua bom; a
+    justificativa é que estava errada, e uma justificativa errada ensina a
+    procurar o defeito no lugar errado.
 28. **A diretiva `# hadolint ignore=` precisa ser a ÚLTIMA linha antes da
     instrução.** Com qualquer comentário entre as duas ela é ignorada em
     silêncio, e você acha que suprimiu.
@@ -462,7 +470,7 @@ justamente por isso.
 
 - Rode `make verify` antes de considerar qualquer coisa pronta. Para iterar
   rápido: `SKIP_SCAN=1 SKIP_OBS=1 make verify`. O estado bom conhecido é
-  **57 passaram · 0 falharam · 1 pulada** com `SKIP_SCAN=1`. O passo 7 (Trivy)
+  **65 passaram · 0 falharam · 1 pulada** com `SKIP_SCAN=1`. O passo 7 (Trivy)
   continua com CVEs HIGH de `curl` no Alpine da imagem `web`, com correção
   disponível (`make pins`). O passo 9 cresceu três vezes: as regras de SLO
   (ADR 0018), o Alertmanager, e o **tracing ponta a ponta** — 6 checagens que
@@ -474,6 +482,18 @@ justamente por isso.
   prova que elas avaliam, que o SLI tem valor e que o relabel do cAdvisor ainda
   corta. `python3 tools/scripts/obs-measure.py` regrava
   `site/src/data/obs-measured.json`, que as lições e os diagramas citam.
+- As lições de **scripting** medem o próprio ferramental, e as duas medições não
+  precisam da stack: `bash-traps-measure.py` regrava `bash-measured.json` (a
+  corrida do SIGPIPE em 40 execuções por tamanho, o `local` mascarando o código
+  de saída) e `languages-measure.py` regrava `languages-measured.json` (memória
+  em repouso das três linguagens, os três locks, e a fixture do typo em ramo
+  morto). As duas entram no **passo 1** do `verify`, de propósito: uma lição
+  sobre escrever script não deveria depender da infraestrutura que o script
+  gerencia.
+- A fixture `tools/scripts/fixtures/typo-no-ramo-morto/` tem um `.go` que **não
+  compila de propósito**. Ela está fora do módulo Go (`stack/services/api-go/`)
+  e nenhum portão a varre — mas vale saber disso antes de rodar `go build ./...`
+  na raiz e achar que quebrou alguma coisa.
 - O tracing é a outra metade: `python3 tools/scripts/tracing-measure.py` regrava
   `site/src/data/tracing-measured.json`, e o diagrama `TraceAcrossQueue.astro`
   o lê **em tempo de build** — nenhum milissegundo da lição é escrito à mão. Ele

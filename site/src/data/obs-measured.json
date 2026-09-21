@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-21T17:57:35Z",
+  "generatedAt": "2026-09-21T19:33:51Z",
   "prometheusVersion": "3.7.3",
   "targets": {
     "total": 7,
@@ -15,9 +15,9 @@
     ]
   },
   "tsdb": {
-    "activeSeries": 7375,
-    "samplesPerSecond": 311.3,
-    "residentBytes": 105803776
+    "activeSeries": 5072,
+    "samplesPerSecond": 311.4,
+    "residentBytes": 106356736
   },
   "collection": {
     "perJob": [
@@ -53,8 +53,8 @@
       },
       {
         "job": "redis",
-        "scraped": 419,
-        "kept": 419,
+        "scraped": 417,
+        "kept": 417,
         "dropped": 0
       },
       {
@@ -64,8 +64,8 @@
         "dropped": 0
       }
     ],
-    "scrapedTotal": 5832,
-    "keptTotal": 4646,
+    "scrapedTotal": 5830,
+    "keptTotal": 4644,
     "droppedTotal": 1186
   },
   "apiTraffic": {
@@ -77,16 +77,16 @@
         "total": 12
       },
       {
-        "route": "/healthz",
+        "route": "/readyz",
         "method": "GET",
         "status": "200",
         "total": 11
       },
       {
-        "route": "/readyz",
+        "route": "/healthz",
         "method": "GET",
         "status": "200",
-        "total": 11
+        "total": 10
       },
       {
         "route": "unmatched",
@@ -101,18 +101,18 @@
         "total": 7
       }
     ],
-    "infrastructureTotal": 29,
+    "infrastructureTotal": 28,
     "userTotal": 22,
     "infraPerUserRequest": 1.3,
-    "infrastructurePerMinute": 13.6
+    "infrastructurePerMinute": 15.0
   },
   "rules": {
     "recording": 7,
     "alerting": 3
   },
   "latency": {
-    "p50Seconds": 0.00253,
-    "p90Seconds": 0.00455,
-    "p99Seconds": 0.00608
+    "p50Seconds": 0.00252,
+    "p90Seconds": 0.00453,
+    "p99Seconds": 0.00498
   }
 }

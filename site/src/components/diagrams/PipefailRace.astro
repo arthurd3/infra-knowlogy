@@ -1,0 +1,78 @@
+---
+/** ops-08 — a corrida do SIGPIPE, medida.
+ *
+ * Os números vêm de bash-measured.json, gravado por
+ * tools/scripts/bash-traps-measure.py. As barras mudam a cada execução DE
+ * PROPÓSITO: a instabilidade é a afirmação do desenho, não um defeito dele.
+ */
+import Figure from "../Figure.astro";
+import m from "../../data/bash-measured.json";
+import type { Lang } from "../../i18n/ui";
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+
+const linhas = m.corrida_sigpipe;
+const R = linhas[0]?.rodadas ?? 40;
+const buf = m.buffer_de_pipe_bytes;
+
+const rotulo = (b: number) => (b >= 1048576 ? `${b / 1048576} MiB` : `${b / 1024} KiB`);
+const X0 = 150;
+const LARG = 330;
+
+const C = {
+  pt: {
+    head: ["enchimento depois do padrão", `com pipe  (falhas em ${R})`],
+    certo: "sem pipe",
+    buffer: `buffer do pipe: ${(buf / 1024).toFixed(0)} KiB`,
+    sempre: "acima do buffer: SEMPRE erra",
+    loteria: "abaixo: loteria",
+    caption: `Cada barra é <b>${R} execuções do mesmo código</b>. À esquerda, <code>texto | grep -q PADRÃO</code> com <code>pipefail</code>: o <code>grep</code> sai no primeiro acerto, fecha o pipe, e quem escrevia morre de SIGPIPE — o <code>pipefail</code> propaga esse não-zero e <b>achar vira “não achei”</b>. À direita, a mesma pergunta por <code>case</code> sobre a saída já capturada: zero falhas em todos os tamanhos. Repare que abaixo do buffer do pipe não é “funciona”, é <b>metade das vezes</b> — e é por isso que o defeito sobrevive à revisão: na bancada, com entrada pequena, ele passa.`,
+    alt: "Barras comparando falhas do grep -q com pipefail contra a forma sem pipe, por tamanho de entrada.",
+  },
+  en: {
+    head: ["filler after the pattern", `with a pipe  (failures in ${R})`],
+    certo: "no pipe",
+    buffer: `pipe buffer: ${(buf / 1024).toFixed(0)} KiB`,
+    sempre: "above the buffer: ALWAYS wrong",
+    loteria: "below: a coin flip",
+    caption: `Each bar is <b>${R} runs of the same code</b>. On the left, <code>text | grep -q PATTERN</code> with <code>pipefail</code>: <code>grep</code> exits on the first match, closes the pipe, and the writer dies of SIGPIPE — <code>pipefail</code> propagates that non-zero and <b>finding becomes “not found”</b>. On the right, the same question via <code>case</code> over already-captured output: zero failures at every size. Note that below the pipe buffer it is not “works”, it is <b>half the time</b> — which is why the defect survives review: on the bench, with small input, it passes.`,
+    alt: "Bars comparing grep -q with pipefail against the pipe-free form, by input size.",
+  },
+}[lang];
+---
+<Figure caption={C.caption} alt={C.alt}>
+  <svg viewBox="0 0 700 250" xmlns="http://www.w3.org/2000/svg" font-size="11">
+    <text x="14" y="16" class="dg-faint" font-size="8.5">{C.head[0]}</text>
+    <text x={X0} y="16" class="dg-faint" font-size="8.5">{C.head[1]}</text>
+    <text x={X0 + LARG + 30} y="16" class="dg-faint" font-size="8.5">{C.certo}</text>
+
+    {linhas.map((l, i) => {
+      const y = 34 + i * 34;
+      const w = (l.falhas_com_pipe / R) * LARG;
+      const wOk = (l.falhas_sem_pipe / R) * 60;
+      const todas = l.falhas_com_pipe === R;
+      return (
+        <g>
+          <text x="14" y={y + 11} class="dg-title" font-size="9.5">{rotulo(l.bytes)}</text>
+          <rect x={X0} y={y} width={LARG} height="15" rx="3" class="dg-box" />
+          <rect x={X0} y={y} width={Math.max(w, 1)} height="15" rx="3"
+                class={todas ? "dg-fill-danger" : "dg-fill-warn"} />
+          <text x={X0 + LARG + 8} y={y + 11} class="dg-muted" font-size="9">
+            {l.falhas_com_pipe}/{R}
+          </text>
+          <rect x={X0 + LARG + 34} y={y} width="60" height="15" rx="3" class="dg-box" />
+          <rect x={X0 + LARG + 34} y={y} width={Math.max(wOk, 0)} height="15" rx="3"
+                class="dg-fill-accent" />
+          <text x={X0 + LARG + 100} y={y + 11} class="dg-muted" font-size="9">
+            {l.falhas_sem_pipe}/{R}
+          </text>
+        </g>
+      );
+    })}
+
+    <path d={`M${X0 - 8} 128 L${X0 + LARG + 8} 128`} class="dg-line dg-line--dashed" fill="none" />
+    <text x={X0 - 12} y="131" text-anchor="end" class="dg-faint" font-size="8">{C.buffer}</text>
+    <text x={X0} y="216" class="dg-muted" font-size="9" font-weight="620">{C.sempre}</text>
+    <text x={X0} y="232" class="dg-faint" font-size="9">{C.loteria}</text>
+  </svg>
+</Figure>

@@ -1,0 +1,58 @@
+{
+  "_comentario": "Gerado por tools/scripts/languages-measure.py — não edite à mão.",
+  "medido_em": "2026-09-21",
+  "repouso_medido": true,
+  "repouso": {
+    "api_go": {
+      "mib": 9.617,
+      "container": "infra-knowlogy-api-1"
+    },
+    "worker_py": {
+      "mib": 42.21,
+      "container": "infra-knowlogy-worker-1"
+    },
+    "web_node": {
+      "mib": 10.34,
+      "container": "infra-knowlogy-web-1"
+    }
+  },
+  "locks": [
+    {
+      "arquivo": "stack/services/api-go/go.sum",
+      "linhas": 108,
+      "bytes": 9783
+    },
+    {
+      "arquivo": "stack/services/worker-py/uv.lock",
+      "linhas": 474,
+      "bytes": 58636
+    },
+    {
+      "arquivo": "site/package-lock.json",
+      "linhas": 7862,
+      "bytes": 286664
+    }
+  ],
+  "codigo": {
+    "api_go": {
+      "arquivos": 7,
+      "linhas": 928
+    },
+    "worker_py": {
+      "arquivos": 5,
+      "linhas": 561
+    }
+  },
+  "quando_o_erro_aparece": {
+    "go": {
+      "saida": 1,
+      "produziu_binario": false,
+      "mensagem": "./main.go:13:15: undefined: enriquecerr"
+    },
+    "python": {
+      "saida": 0,
+      "rodou_ate_o_fim": true,
+      "mensagem": "o serviço subiu · atendendo"
+    }
+  }
+}

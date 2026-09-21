@@ -1,0 +1,272 @@
+---
+key: scripts-that-dont-lie
+lang: pt
+track: operacao
+order: 8
+title: O script que não mente
+summary: "Um portão que reprova é chato. Um portão que aprova sem ter checado é pior do que nenhum — e o bash tem quatro jeitos de fazer exatamente isso, todos medidos aqui."
+minutes: 17
+tags: [bash, shell, portao, sigpipe, pipefail, scripting]
+sources:
+  - label: "ShellCheck — SC2155: Declare and assign separately to avoid masking return values"
+    url: "https://www.shellcheck.net/wiki/SC2155"
+    kind: docs
+    accessed: "2026-09-21"
+  - label: "Google Shell Style Guide"
+    url: "https://google.github.io/styleguide/shellguide.html"
+    kind: docs
+    accessed: "2026-09-21"
+  - label: "GNU Bash Manual"
+    url: "https://www.gnu.org/software/bash/manual/bash.html"
+    kind: docs
+    accessed: "2026-09-21"
+  - label: "POSIX — Shell Command Language"
+    url: "https://pubs.opengroup.org/onlinepubs/9799919799/utilities/V3_chap02.html"
+    kind: spec
+    accessed: "2026-09-21"
+---
+
+import PipefailRace from "../../../components/diagrams/PipefailRace.astro";
+
+Este repositório tem cerca de duas mil linhas de bash em portões — `verify.sh`,
+`k8s-verify.sh`, `cicd-verify.sh`, `iac-verify.sh`, `attack-lab.sh`. Elas
+existem para que nenhuma afirmação das lições seja escrita à mão.
+
+O que se aprendeu escrevendo isso não foi sintaxe. Foi que **o modo de falhar de
+um script não é parar: é continuar e dizer que deu certo.**
+
+## A linha que invertia o resultado
+
+O `cicd-verify` procurava um padrão no console de um build do Jenkins. Escrito
+assim, que é como quase todo mundo escreve:
+
+```bash
+set -euo pipefail
+
+if curl -fsS "$URL/consoleText" | grep -q "Running on"; then
+  ok "o trabalho rodou no agente"
+else
+  bad "o trabalho não rodou no agente"
+fi
+```
+
+Uma dessas checagens passava e a outra reprovava. As duas estavam certas sobre o
+log — o padrão estava lá nas duas. A diferença era **onde**: numa, na linha 20
+de 571; na outra, perto do fim.
+
+<Term word="SIGPIPE" alt="SIGPIPE">
+O sinal que o kernel manda para um processo que escreve num pipe **cuja ponta de
+leitura já fechou**. O padrão é matar o processo — o que faz sentido: não há
+para quem escrever.
+
+O código de saída de um processo morto assim é **141**, que é 128 + 13 (o número
+de `SIGPIPE`). É o mesmo esquema do 137 que a lição do OOM killer mostra: 128
+mais o número do sinal.
+</Term>
+
+O `grep -q` sai **no primeiro acerto** — é para isso que o `-q` existe. Ao sair,
+ele fecha a ponta de leitura do pipe. O `curl`, que ainda tinha centenas de kB
+para mandar, recebe SIGPIPE e morre com 141. E o `pipefail` faz exatamente o que
+promete: propaga o não-zero de qualquer estágio do pipe.
+
+**O resultado é que achar o padrão vira "não achei".**
+
+## Não é um limiar. É uma corrida.
+
+O reflexo é achar que existe um tamanho a partir do qual isso acontece. Medi.
+
+<PipefailRace />
+
+Abaixo do buffer do pipe, **não funciona nem falha: sorteia**. O mesmo código,
+executado dezenas de vezes seguidas, dá as duas respostas — porque a pergunta
+real é se o escritor consegue despejar tudo antes de o leitor sair, e isso
+depende de escalonamento.
+
+Acima do buffer, o escritor **não tem como** terminar antes, e a falha é de
+100%.
+
+<Callout type="trap" label="É por isso que passa na revisão">
+Um exemplo pequeno funciona. A bancada funciona. O teste que você escreve para
+demonstrar funciona — porque tudo isso cabe no buffer.
+
+O defeito aparece quando o log cresce, em produção, num alvo diferente. E ele
+não aparece como erro: aparece como uma checagem verde que não checou nada, ou
+como uma vermelha que acusa um problema inexistente.
+</Callout>
+
+A correção não é `|| true`, que esconderia o sintoma. É **não usar pipe**:
+
+```bash
+# A saída inteira vira texto, e a pergunta é feita sobre o texto.
+# Sem pipe, sem sinal, sem depender de onde o padrão está.
+TEXTO=$(curl -fsS "$URL/consoleText")
+case "$TEXTO" in
+  *"Running on"*) ok  "o trabalho rodou no agente" ;;
+  *)              bad "o trabalho não rodou no agente" ;;
+esac
+```
+
+Medido: **zero falhas em 40 execuções**, em todos os tamanhos testados — de 1 KiB
+a 1 MiB.
+
+## O `local` que engole o erro
+
+Esta é mais sutil, e está em quase todo script que já escrevi:
+
+```bash
+f() {
+  local v=$(comando_que_falha)   # $? aqui é 0. SEMPRE.
+  ...
+}
+```
+
+<Term word="builtin" alt="shell builtin">
+Um comando que o próprio shell executa, sem criar processo: `cd`, `echo`,
+`export`, `local`, `declare`, `read`. Eles são parte do shell, não programas em
+`/usr/bin`.
+
+Importa aqui porque `local` **é um comando** — e todo comando tem código de
+saída. O de `local` é o dele mesmo, não o do que você usou para calcular o
+valor.
+</Term>
+
+Medido, com a função devolvendo 7:
+
+| forma | `$?` |
+|---|---|
+| `local v=$(exit 7)` | **0** |
+| `local v; v=$(exit 7)` | **7** |
+
+Com `set -e` a diferença deixa de ser cosmética: a primeira forma **sobrevive**
+ao erro e a segunda mata o script, como deveria. A forma que parece mais
+arrumada é a que desliga a proteção que você achou que tinha ligado.
+
+O ShellCheck tem um aviso só para isto, o `SC2155`, e o título dele é a regra:
+*declare and assign separately to avoid masking return values*.
+
+## O que o `set -e` não pega
+
+`set -euo pipefail` é a primeira linha de todo script sério, e ela cria uma
+falsa sensação de rede. Medido, o `set -e` **não** age:
+
+- dentro da condição de um `if`
+- à esquerda de um `&&` ou `||`
+- em qualquer comando cujo resultado esteja sendo testado
+
+Isso não é defeito: é a definição. Se `set -e` matasse o script dentro de um
+`if`, não daria para testar nada. Mas significa que uma função chamada de dentro
+de uma condição roda **sem** `set -e` até o fim, e um erro no meio dela passa
+batido.
+
+E o `set -u` pega variável **inexistente**, não variável **vazia**. Um
+`VERSAO=""` atravessa `set -u` sem um pio e termina como uma tag `imagem:` que
+o Docker interpreta como `latest`.
+
+<LabExercise check="bash: a forma sem pipe" file="tools/scripts/verify.sh">
+
+Uma checagem de portão precisa saber se um serviço registrou um erro. A forma
+abaixo é a que todo mundo escreve primeiro:
+
+```bash
+docker compose logs api | grep -q "connection refused"
+```
+
+Pergunta: cite **dois** motivos independentes pelos quais essa linha pode
+responder errado — um deles não tem nada a ver com pipe.
+
+<Fragment slot="hint">
+Um é o assunto desta lição. O outro é sobre o que `docker compose logs` escreve,
+e onde.
+</Fragment>
+
+<Fragment slot="answer">
+
+**1. O SIGPIPE.** Com `pipefail`, se o padrão aparecer cedo num log grande, o
+`grep -q` sai, o `docker compose logs` morre com 141, e achar vira não achar.
+
+**2. O log vai para stderr.** O `docker compose logs` escreve os logs dos
+serviços no stdout, mas suas próprias mensagens (e, dependendo da versão, parte
+da saída) no stderr — que o pipe não captura. Sem `2>&1`, a checagem lê menos do
+que existe.
+
+Há ainda um terceiro, de graça: `logs` sem `--no-log-prefix` prefixa cada linha
+com o nome do serviço, o que quebra qualquer padrão ancorado em `^`.
+
+A forma que este repositório usa junta as três correções:
+
+```bash
+TEXTO=$(docker compose logs --no-log-prefix api 2>&1)
+case "$TEXTO" in *"connection refused"*) ... ;; esac
+```
+</Fragment>
+</LabExercise>
+
+## Uma armadilha que não reproduziu
+
+Este repositório mantém uma lista de armadilhas medidas. Uma delas dizia que o
+ERE do `grep -E` não conhece `\s`, que `\s` casaria a letra "s", e que uma
+checagem de pin escrita assim reprovaria arquivos perfeitamente pinados.
+
+Fui medir para escrever esta lição. **Não reproduz.** Contra os padrões reais
+dos portões, `\s` e `[[:space:]]` dão resultado idêntico em GNU grep 3.12 (ERE
+e BRE), GNU awk, GNU sed e busybox awk — e `\s` não casa a letra "s" em nenhum
+deles.
+
+O conselho continua bom, por outro motivo: `\s` é extensão GNU/BusyBox e **não
+está no ERE do POSIX**, então ele é uma aposta de portabilidade. Mas a
+justificativa registrada estava errada, e justificativa errada é pior que
+nenhuma — ela manda a próxima pessoa procurar o defeito no lugar errado.
+
+A entrada foi corrigida, e esta seção existe para que a correção fique visível.
+
+<Tradeoff
+  a="Bash no portão"
+  b="Python no portão"
+  whenA="O trabalho é orquestrar processos: subir compose, chamar curl, ler código de saída. Bash é a linguagem em que “rodar um programa e olhar o resultado” cabe numa linha, e o portão é exatamente isso. Também é o que já está em toda máquina."
+  whenB="O trabalho é processar dados: parsear JSON, agrupar spans por trace, comparar campo a campo. Cada uma dessas coisas em bash vira um pipeline de jq e awk que ninguém relê. Os scripts de medição deste repositório são Python por isso — e são chamados PELO bash."
+  chose="a"
+  verdict="os portões são bash e as medições são Python, na mesma pasta. A fronteira é “isto é controle de processo ou é transformação de dados?”, e ela é mais clara do que parece na hora de escrever."
+/>
+
+<FieldNote
+  source="Google Shell Style Guide"
+  url="https://google.github.io/styleguide/shellguide.html"
+  kind="blog"
+  accessed="2026-09-21"
+>
+O guia do Google é direto quanto ao limite: script com mais de cerca de **100
+linhas** ou com controle de fluxo não trivial deve ser reescrito numa linguagem
+mais estruturada — e diz para fazer isso *agora*, não depois.
+
+Os portões deste repositório passam disso com folga, e a régua sobrevive porque
+eles são listas de checagens independentes, não lógica entrelaçada. É a
+diferença entre um script longo e um script complicado.
+</FieldNote>
+
+## O que o portão prova
+
+<RunIt title="As quatro armadilhas, medidas na sua máquina">
+
+```bash
+# Regrava site/src/data/bash-measured.json — não precisa de Docker
+python3 tools/scripts/bash-traps-measure.py
+
+# E as checagens que provam cada uma
+make verify
+```
+</RunIt>
+
+Quatro checagens, e a primeira é a que ensina:
+
+1. a forma com pipe **falha** acima do buffer, sempre — se parar de falhar, a
+   armadilha mudou e a lição precisa mudar junto
+2. a forma sem pipe **nunca** falha, em nenhum tamanho
+3. `local v=$(...)` devolve 0 e a forma separada devolve o código real
+4. `\s` e `[[:space:]]` dão o mesmo resultado nas três ferramentas — a prova
+   negativa da armadilha que foi corrigida
+
+A checagem 1 é incomum: ela exige que um defeito **continue existindo**. Um
+portão que só verifica o caminho bom não percebe quando o mundo muda debaixo
+dele.
+
+<Quiz set="scripts-that-dont-lie" />

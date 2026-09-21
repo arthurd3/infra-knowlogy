@@ -53,6 +53,134 @@ for combo in "PROD:${PROD[*]}" "DEV:${BASE[*]} -f stack/compose.dev.yaml" "OBS:$
   fi
 done
 
+# ─── As armadilhas de shell, medidas ─────────────────────────────────────────
+# Ficam aqui, no passo 1, porque não precisam de Docker nem da stack: é bash
+# medindo bash. Uma lição sobre escrever script não deveria depender da
+# infraestrutura que o script gerencia.
+if python3 tools/scripts/bash-traps-measure.py >/tmp/bashm.txt 2>&1; then
+  ok "armadilhas de shell medidas -> site/src/data/bash-measured.json"
+else
+  bad "a medição das armadilhas de shell falhou"; tail -6 /tmp/bashm.txt | sed 's/^/       /'
+fi
+
+while IFS='|' read -r VEREDITO MSG; do
+  case "$VEREDITO" in
+    OK) ok "$MSG" ;;
+    "") : ;;
+    *)  bad "$MSG" ;;
+  esac
+done < <(python3 - site/src/data/bash-measured.json <<'PYBASH'
+import json, sys
+
+try:
+    d = json.load(open(sys.argv[1]))
+except Exception as exc:
+    print(f"BAD|não consegui ler o bash-measured.json ({exc})")
+    raise SystemExit(0)
+
+corrida = d.get("corrida_sigpipe", [])
+buf = d.get("buffer_de_pipe_bytes", 0)
+saida = d.get("codigo_de_saida", {})
+classes = d.get("classes_de_caractere", {})
+
+# 1. A checagem INCOMUM: ela exige que o defeito CONTINUE existindo.
+#    Acima do buffer do pipe o escritor não tem como terminar antes do leitor
+#    sair, então a falha é determinística. Se um dia parar de falhar, a
+#    armadilha mudou de forma e a lição precisa mudar junto — calar isso seria
+#    publicar um número que deixou de ser verdade.
+acima = [c for c in corrida if c["bytes"] > buf]
+if acima and all(c["falhas_com_pipe"] == c["rodadas"] for c in acima):
+    n = acima[0]["rodadas"]
+    print(f"bash: `texto | grep -q` com pipefail erra {n}/{n} acima do buffer do pipe "
+          f"({buf // 1024} KiB) — a armadilha 29 continua de pé".replace("bash:", "OK|bash:", 1))
+else:
+    detalhe = ", ".join(f"{c['bytes']}B:{c['falhas_com_pipe']}/{c['rodadas']}" for c in acima)
+    print(f"BAD|bash: a forma com pipe deixou de falhar sempre acima do buffer ({detalhe}) — "
+          f"a armadilha mudou e a lição precisa ser remedida")
+
+# 2. A forma correta não pode falhar NUNCA, em nenhum tamanho.
+ruins = [c for c in corrida if c["falhas_sem_pipe"] != 0]
+if corrida and not ruins:
+    print(f"OK|bash: a forma sem pipe (`case` sobre a saída) acerta em "
+          f"{sum(c['rodadas'] for c in corrida)} execuções, de 1 KiB a 1 MiB")
+else:
+    print(f"BAD|bash: a forma sem pipe falhou em {len(ruins)} tamanho(s) — "
+          f"a correção da armadilha 29 não é determinística")
+
+# 3. `local v=$(cmd)` mascara o código de saída (ShellCheck SC2155).
+if saida.get("local_na_mesma_linha") == 0 and saida.get("local_separado") == 7:
+    print("OK|bash: `local v=$(cmd)` devolve 0 e mascara o erro; separado devolve 7 (SC2155)")
+else:
+    print(f"BAD|bash: o mascaramento do `local` mudou "
+          f"(junto={saida.get('local_na_mesma_linha')} separado={saida.get('local_separado')})")
+
+# 4. A prova NEGATIVA da armadilha 27, que foi corrigida por não reproduzir.
+#    Enquanto as duas formas derem o mesmo resultado, a correção está certa.
+por_ferr = classes.get("por_ferramenta", {})
+iguais = [k for k, v in por_ferr.items() if v.get("barra_s") == v.get("posix") and v.get("posix", 0) > 0]
+if len(iguais) == len(por_ferr) and por_ferr and classes.get("barra_s_casa_letra_s") == 0:
+    print(f"OK|bash: `\\s` e `[[:space:]]` dão o mesmo resultado em {len(iguais)} ferramentas, "
+          f"e `\\s` não casa a letra s (a armadilha 27 não reproduz)")
+else:
+    print(f"BAD|bash: `\\s` e `[[:space:]]` divergiram (iguais em {len(iguais)} de {len(por_ferr)}, "
+          f"casa-letra-s={classes.get('barra_s_casa_letra_s')})")
+PYBASH
+)
+
+# ─── As três linguagens, comparadas ──────────────────────────────────────────
+# Precisa de Docker (constrói a fixture nas duas linguagens) mas não da stack;
+# a memória em repouso é medida depois, quando ela estiver no ar, e o script
+# declara `repouso_medido: false` se não estiver.
+if python3 tools/scripts/languages-measure.py >/tmp/langm.txt 2>&1; then
+  ok "as três linguagens medidas -> site/src/data/languages-measured.json"
+else
+  bad "a medição das linguagens falhou"; tail -6 /tmp/langm.txt | sed 's/^/       /'
+fi
+
+while IFS='|' read -r VEREDITO MSG; do
+  case "$VEREDITO" in
+    OK) ok "$MSG" ;;
+    "") : ;;
+    *)  bad "$MSG" ;;
+  esac
+done < <(python3 - site/src/data/languages-measured.json <<'PYLANG'
+import json, sys
+
+try:
+    d = json.load(open(sys.argv[1]))
+except Exception as exc:
+    print(f"BAD|não consegui ler o languages-measured.json ({exc})")
+    raise SystemExit(0)
+
+erro = d.get("quando_o_erro_aparece", {})
+locks = {l["arquivo"].split("/")[-1]: l for l in d.get("locks", [])}
+
+# A checagem que exige que algo NÃO compile. A lição afirma um comportamento —
+# o mesmo typo, no mesmo ramo morto, parando o build em Go e passando em Python
+# — e comportamento afirmado sem checagem envelhece em silêncio.
+go, py = erro.get("go", {}), erro.get("python", {})
+if go.get("produziu_binario") is False and py.get("rodou_ate_o_fim") is True and py.get("saida") == 0:
+    print(f"OK|linguagens: o mesmo typo em ramo morto para o build em Go "
+          f"(saída {go.get('saida')}, binário nenhum) e passa em Python (saída 0)")
+elif go.get("produziu_binario") is True:
+    print("BAD|linguagens: a fixture Go COMPILOU — o typo deliberado sumiu, ou o compilador mudou")
+else:
+    print(f"BAD|linguagens: a demonstração do typo não reproduziu "
+          f"(go={go.get('saida')} python={py.get('saida')})")
+
+# Os três locks precisam existir e ser lidos; é deles que a lição tira a
+# comparação de árvore de dependências.
+faltando = [n for n in ("go.sum", "uv.lock", "package-lock.json") if n not in locks]
+if not faltando:
+    print(f"linguagens: os 3 locks lidos — go.sum {locks['go.sum']['linhas']}, "
+          f"uv.lock {locks['uv.lock']['linhas']}, "
+          f"package-lock.json {locks['package-lock.json']['linhas']} linhas".replace(
+              "linguagens:", "OK|linguagens:", 1))
+else:
+    print(f"BAD|linguagens: lock ausente ({', '.join(faltando)})")
+PYLANG
+)
+
 # ─── 2. Build + medição ──────────────────────────────────────────────────────
 step "2/10 Build de todas as imagens e medição de tamanho"
 if "${COMPOSE[@]}" build >/tmp/build.txt 2>&1; then

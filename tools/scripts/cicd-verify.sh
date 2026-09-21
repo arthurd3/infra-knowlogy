@@ -50,9 +50,11 @@ done
 # Pin por digest (ADR 0004) vale aqui como em todo lugar. A fixture negativa é
 # a exceção: ela existe para ser ruim.
 #
-# `[[:space:]]` e não `\s`: o ERE do grep NÃO conhece as classes do Perl, e
-# `\s` casa a letra "s". A primeira versão desta checagem reprovou arquivos
-# perfeitamente pinados por causa disso.
+# `[[:space:]]` e não `\s` por PORTABILIDADE: `\s` é extensão GNU/BusyBox e não
+# está no ERE do POSIX. Esta nota já afirmou que `\s` casaria a letra "s" e
+# reprovaria arquivos pinados — medido contra este mesmo padrão, NÃO reproduz:
+# GNU grep 3.12, GNU awk, GNU sed e busybox awk aceitam as duas formas
+# igualmente. O conselho fica de pé; a justificativa é que estava errada.
 naopinados=""
 while IFS= read -r f; do
   case "$f" in */fixtures/bad/*) continue ;; esac

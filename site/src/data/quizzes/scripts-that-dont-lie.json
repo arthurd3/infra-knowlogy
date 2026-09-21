@@ -1,0 +1,140 @@
+{
+  "note_pt": "As três perguntas são sobre o mesmo defeito de fundo: o script continua e diz que deu certo.",
+  "note_en": "All three questions are about the same underlying defect: the script carries on and reports success.",
+  "pt": [
+    {
+      "q": "Com `set -o pipefail`, por que `curl … | grep -q PADRÃO` pode dizer “não achei” justamente quando acha?",
+      "options": [
+        {
+          "text": "Porque o `grep -q` não lê a entrada inteira e devolve um resultado parcial.",
+          "why": "Ele de fato não lê tudo — mas o resultado DELE está certo: ele achou e sai com 0. O que quebra é o código de saída do outro lado do pipe, que o `pipefail` promove a resultado do comando inteiro."
+        },
+        {
+          "text": "Porque `grep -q` sai no primeiro acerto, o escritor morre de SIGPIPE (141) e o `pipefail` propaga esse não-zero.",
+          "correct": true,
+          "why": "E repare na inversão: quanto MAIS cedo o padrão aparece, mais cedo o `grep` sai e maior a chance de o escritor ainda ter o que escrever. Achar cedo é o pior caso. Medido aqui: acima do buffer do pipe (64 KiB), 40 falhas em 40 execuções."
+        },
+        {
+          "text": "Porque o `curl` com `-f` sai com erro quando a resposta é grande.",
+          "why": "O `-f` faz o curl falhar em status HTTP de erro, não por tamanho. Uma resposta de 1 MB com status 200 sai com 0 — a menos que alguém feche o pipe embaixo dela."
+        },
+        {
+          "text": "Porque `set -e` interrompe o pipe no meio.",
+          "why": "O `set -e` age sobre o resultado do pipe inteiro, depois que ele termina; ele não interrompe nada no meio. E dentro de um `if`, como no exemplo, o `set -e` nem age."
+        }
+      ]
+    },
+    {
+      "q": "`local v=$(comando_que_falha)` — quanto vale `$?` na linha seguinte?",
+      "options": [
+        {
+          "text": "0, porque `local` é um comando e o código que sobra é o DELE.",
+          "correct": true,
+          "why": "Medido: `local v=$(exit 7)` deixa `$?=0`; `local v; v=$(exit 7)` deixa `$?=7`. Com `set -e`, a primeira forma sobrevive ao erro e a segunda mata o script — ou seja, a forma que parece mais arrumada é a que desliga a proteção. O ShellCheck tem um aviso só para isto, o SC2155."
+        },
+        {
+          "text": "O código do comando, porque a substituição acontece antes da atribuição.",
+          "why": "A substituição acontece antes, sim — e o código dela é descartado quando `local` executa em seguida com sucesso. A ordem está certa; o que se perde é qual código sobrevive."
+        },
+        {
+          "text": "Depende de `set -o pipefail`.",
+          "why": "O `pipefail` só tem efeito sobre pipes. Aqui não há pipe nenhum: o que mascara o erro é o `local` ser um comando com código de saída próprio."
+        },
+        {
+          "text": "1, porque o shell normaliza qualquer falha para 1.",
+          "why": "O shell preserva o código original — é assim que 137 (SIGKILL) e 141 (SIGPIPE) chegam até você. A normalização para 1 não existe."
+        }
+      ]
+    },
+    {
+      "q": "O portão exige que a forma com pipe CONTINUE falhando acima do buffer. Por que uma checagem afirmaria que um defeito existe?",
+      "options": [
+        {
+          "text": "Para que o portão tenha um caso vermelho e se prove funcionando.",
+          "why": "Ele não fica vermelho: a checagem PASSA quando o defeito é reproduzido. O objetivo não é exercitar o relatório, é vigiar uma afirmação da lição."
+        },
+        {
+          "text": "Porque medir o caminho ruim é mais rápido do que medir o bom.",
+          "why": "Custa o mesmo — são as mesmas 40 execuções dos dois lados. O motivo não é custo."
+        },
+        {
+          "text": "Porque a lição afirma, com número medido, que a armadilha existe — e afirmação não verificada envelhece em silêncio.",
+          "correct": true,
+          "why": "Se uma versão futura do bash ou do coreutils mudar o comportamento, a lição passa a ensinar algo falso e ninguém descobre. A checagem transforma “isto era verdade quando escrevi” em “isto é verdade agora”. É o mesmo princípio da prova negativa do lock adulterado no módulo de IaC."
+        },
+        {
+          "text": "Para impedir que alguém corrija a armadilha sem querer.",
+          "why": "Não há o que corrigir: o comportamento é do kernel e do shell, não deste repositório. A checagem observa o mundo, não guarda uma decisão de projeto."
+        }
+      ]
+    }
+  ],
+  "en": [
+    {
+      "q": "With `set -o pipefail`, why can `curl … | grep -q PATTERN` say “not found” precisely when it finds?",
+      "options": [
+        {
+          "text": "Because `grep -q` does not read the whole input and returns a partial result.",
+          "why": "It indeed does not read everything — but ITS result is correct: it found the match and exits 0. What breaks is the exit code on the other side of the pipe, which `pipefail` promotes to the result of the whole command."
+        },
+        {
+          "text": "Because `grep -q` exits on the first match, the writer dies of SIGPIPE (141) and `pipefail` propagates that non-zero.",
+          "correct": true,
+          "why": "Note the inversion: the EARLIER the pattern appears, the sooner `grep` exits and the likelier the writer still has data to send. Finding it early is the worst case. Measured here: above the pipe buffer (64 KiB), 40 failures in 40 runs."
+        },
+        {
+          "text": "Because `curl -f` exits with an error when the response is large.",
+          "why": "`-f` makes curl fail on HTTP error status, not on size. A 1 MB response with status 200 exits 0 — unless somebody closes the pipe underneath it."
+        },
+        {
+          "text": "Because `set -e` interrupts the pipe midway.",
+          "why": "`set -e` acts on the whole pipe's result after it finishes; it interrupts nothing midway. And inside an `if`, as in the example, `set -e` does not act at all."
+        }
+      ]
+    },
+    {
+      "q": "`local v=$(command_that_fails)` — what is `$?` on the next line?",
+      "options": [
+        {
+          "text": "0, because `local` is a command and the surviving status is ITS own.",
+          "correct": true,
+          "why": "Measured: `local v=$(exit 7)` leaves `$?=0`; `local v; v=$(exit 7)` leaves `$?=7`. With `set -e`, the first form survives the error and the second kills the script — that is, the tidier-looking form is the one that switches off the protection. ShellCheck has a warning just for this, SC2155."
+        },
+        {
+          "text": "The command's status, because substitution happens before assignment.",
+          "why": "Substitution does happen first — and its status is discarded when `local` then runs successfully. The ordering is right; what is lost is which status survives."
+        },
+        {
+          "text": "It depends on `set -o pipefail`.",
+          "why": "`pipefail` only affects pipes. There is no pipe here: what masks the error is `local` being a command with an exit status of its own."
+        },
+        {
+          "text": "1, because the shell normalises any failure to 1.",
+          "why": "The shell preserves the original code — that is how 137 (SIGKILL) and 141 (SIGPIPE) reach you. Normalisation to 1 does not exist."
+        }
+      ]
+    },
+    {
+      "q": "The gate requires the piped form to KEEP failing above the buffer. Why would a check assert that a defect exists?",
+      "options": [
+        {
+          "text": "So the gate has a red case and proves itself working.",
+          "why": "It does not go red: the check PASSES when the defect reproduces. The point is not to exercise the report, it is to watch over a claim the lesson makes."
+        },
+        {
+          "text": "Because measuring the bad path is faster than measuring the good one.",
+          "why": "It costs the same — the same 40 runs on both sides. Cost is not the reason."
+        },
+        {
+          "text": "Because the lesson claims, with a measured number, that the trap exists — and an unverified claim ages silently.",
+          "correct": true,
+          "why": "If a future bash or coreutils changes the behaviour, the lesson starts teaching something false and nobody finds out. The check turns “this was true when I wrote it” into “this is true now”. Same principle as the tampered-lock negative proof in the IaC module."
+        },
+        {
+          "text": "To stop somebody from accidentally fixing the trap.",
+          "why": "There is nothing to fix: the behaviour belongs to the kernel and the shell, not to this repository. The check observes the world; it does not guard a design decision."
+        }
+      ]
+    }
+  ]
+}

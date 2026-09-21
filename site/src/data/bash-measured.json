@@ -1,0 +1,67 @@
+{
+  "_comentario": "Gerado por tools/scripts/bash-traps-measure.py — não edite à mão.",
+  "medido_em": "2026-09-21",
+  "bash": "5.3.9(1)-release",
+  "grep": "grep (GNU grep) 3.12",
+  "buffer_de_pipe_bytes": 65536,
+  "corrida_sigpipe": [
+    {
+      "bytes": 1024,
+      "falhas_com_pipe": 14,
+      "falhas_sem_pipe": 0,
+      "rodadas": 40
+    },
+    {
+      "bytes": 16384,
+      "falhas_com_pipe": 13,
+      "falhas_sem_pipe": 0,
+      "rodadas": 40
+    },
+    {
+      "bytes": 65536,
+      "falhas_com_pipe": 25,
+      "falhas_sem_pipe": 0,
+      "rodadas": 40
+    },
+    {
+      "bytes": 131072,
+      "falhas_com_pipe": 40,
+      "falhas_sem_pipe": 0,
+      "rodadas": 40
+    },
+    {
+      "bytes": 1048576,
+      "falhas_com_pipe": 40,
+      "falhas_sem_pipe": 0,
+      "rodadas": 40
+    }
+  ],
+  "codigo_de_saida": {
+    "local_na_mesma_linha": 0,
+    "local_separado": 7,
+    "set_e_sobrevive_com_local_junto": true,
+    "set_e_morre_com_local_separado": true
+  },
+  "aspas": {
+    "sem_aspas_argumentos": 3,
+    "com_aspas_argumentos": 1
+  },
+  "classes_de_caractere": {
+    "alvo": "stack/services/api-go/Dockerfile",
+    "por_ferramenta": {
+      "grep_ere": {
+        "barra_s": 4,
+        "posix": 4
+      },
+      "awk": {
+        "barra_s": 4,
+        "posix": 4
+      },
+      "sed": {
+        "barra_s": 4,
+        "posix": 4
+      }
+    },
+    "barra_s_casa_letra_s": 0
+  }
+}

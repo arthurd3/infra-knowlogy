@@ -81,7 +81,9 @@ step "2/9  O provider está pinado por versão e por hash"
 
 LOCK="$ROOT/iac/.terraform.lock.hcl"
 if [ -f "$LOCK" ]; then
-  # `[[:space:]]` e não `\s`: o ERE do grep -E não conhece `\s` (armadilha 27).
+  # `[[:space:]]` e não `\s` por PORTABILIDADE: `\s` é extensão GNU/BusyBox e
+  # não está no ERE do POSIX. (Medido aqui, as duas formas dão o mesmo
+  # resultado — a armadilha 27 registrava um motivo que não reproduz.)
   if grep -qE '^[[:space:]]+version[[:space:]]+=[[:space:]]+"4\.6\.0"' "$LOCK"; then
     ok "versão do provider pinada no lock (4.6.0)"
   else

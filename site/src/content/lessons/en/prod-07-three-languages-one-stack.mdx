@@ -1,0 +1,222 @@
+---
+key: three-languages-one-stack
+lang: en
+track: producao
+order: 7
+title: "Three languages, one stack"
+summary: "Go in the api, Python in the worker, Node in the site — deliberately. Running on the same host on the same day, you can compare what no benchmark compares: what each one charges you."
+minutes: 16
+tags: [go, python, node, runtime, dependencies, choice]
+sources:
+  - label: "Go — Frequently Asked Questions"
+    url: "https://go.dev/doc/faq"
+    kind: docs
+    accessed: "2026-09-21"
+  - label: "Go at Google: Language Design in the Service of Software Engineering"
+    url: "https://go.dev/talks/2012/splash.article"
+    kind: talk
+    accessed: "2026-09-21"
+  - label: "uv — documentation"
+    url: "https://docs.astral.sh/uv/"
+    kind: docs
+    accessed: "2026-09-21"
+  - label: "PEP 703 — Making the Global Interpreter Lock Optional in CPython"
+    url: "https://peps.python.org/pep-0703/"
+    kind: spec
+    accessed: "2026-09-21"
+  - label: "npm — package-lock.json"
+    url: "https://docs.npmjs.com/cli/v10/configuring-npm/package-lock-json"
+    kind: docs
+    accessed: "2026-09-21"
+---
+
+import ThreeRuntimes from "../../../components/diagrams/ThreeRuntimes.astro";
+
+Almost every language comparison you read is between different implementations,
+of different problems, on different machines. This one is between three services
+of the **same system**, on the same host, measured on the same day.
+
+That does not make the comparison universal. It makes it honest.
+
+## What each one does here
+
+| | language | work |
+|---|---|---|
+| **api** | Go | takes HTTP, validates, writes to Postgres, enqueues in Redis |
+| **worker** | Python | pulls from the queue, fetches the URL, parses HTML, updates the database |
+| **web** | Node (build) | generates the static site; what runs in production is Caddy |
+
+That third row is already the first lesson: **Node is not in production.** It
+builds and leaves. What remains is HTML served by a Go binary — and that is a
+choice, not an accident.
+
+## Measured
+
+<ThreeRuntimes />
+
+Three numbers that change decisions:
+
+- **Memory at rest.** The Python worker uses roughly **4× the memory** of the Go
+  api while doing nothing at all. That is not waste: it is the interpreter, the
+  loaded modules and the initial heap. But it is the number that decides how
+  many replicas fit on a node.
+- **The lock.** The site's `package-lock.json` has almost **30× the lines** of
+  the api's `go.sum`. Every line is a transitive dependency somebody will have
+  to audit the day a CVE lands — and this track's supply-chain lesson depends on
+  a human being able to read that.
+- **The image.** 6.0 MB against 52.8 MB, measured by `sizes.sh`. The Go binary
+  is static: the final image is `distroless/static` because there is nothing to
+  load.
+
+## The difference no benchmark shows
+
+I took the same error — a call to a function that does not exist — and put it in
+a branch that **never runs**, in both languages.
+
+```go
+if len("x") > 99 {                      // never true
+    fmt.Println(enriquecerr("abc"))     // typo
+}
+```
+
+```python
+if len("x") > 99:                # never true
+    print(enriquecerr("abc"))    # the same typo
+```
+
+Go **refuses the build**: `./main.go:10:15: undefined: enriquecerr`, and no
+binary is produced. Python runs to the end, prints everything it should and
+exits **0** — the image builds, the deploy passes, the smoke tests pass, and the
+defect waits for the day that branch executes.
+
+<Callout type="trap" label="This is not “Go is better”">
+It is a price, and it has two sides.
+
+Go charges up front: you do not compile until you resolve it. That costs writing
+time and produces the most verbose code of the three — the api is **928 lines**
+against the worker's **561**, doing work that is not larger.
+
+Python charges later, and sometimes never — most code never has a typo in a dead
+branch. When it does charge, it charges at the wrong moment.
+
+The decision is not which language is better. It is **where you want the error
+to show up** — and that depends on what the error costs there. In an api taking
+traffic, early. In a script you run by hand and read the output of, the cost of
+rigour can exceed the cost of the error.
+</Callout>
+
+<Term word="static typing" alt="static typing">
+The compiler checks types **before** the program runs, and refuses to produce a
+binary if something does not add up. That is what makes the typo above stop the
+build.
+
+The opposite is not "no types": Python has types, and they are checked **when
+the line executes**. The difference is not having them — it is *when*.
+
+Python has type annotations and tools that check them ahead of time (`mypy`,
+`pyright`), and they close much of that distance. What they do not do is block
+the deploy: they are one more step somebody has to remember to run, which is why
+this repository runs `astro check` and `hadolint` inside the gate rather than
+relying on the intentions of whoever is writing.
+</Term>
+
+## Three lock files, three philosophies
+
+<Term word="lock file" alt="lock file">
+The file recording the **exact** version of every dependency — including the
+ones you did not ask for, which came along with the ones you did.
+
+Without it, "install the dependencies" means "whatever is published today", and
+two machines build different things from the same source. It is the same problem
+digest pinning solves for container images, one layer up.
+</Term>
+
+- **`go.sum`** holds a hash per module and does **not** resolve versions: `go.mod`
+  resolves, and `go.sum` only proves that what came down is what came down
+  before. 108 lines.
+- **`uv.lock`** is a complete resolution, with platform and Python-version
+  markers. 474 lines for 8 direct dependencies — the difference is the
+  transitive tree.
+- **`package-lock.json`** is the whole tree, with installation topology. 7,862
+  lines, and it is why npm is the ecosystem where "delete `node_modules` and
+  install again" became a procedure.
+
+<Tradeoff
+  a="One language for everything"
+  b="The right language per service"
+  whenA="The team is small and turnover is real. One language means one build chain, one set of linters, one way to deploy — and anybody can touch any service on an on-call Tuesday."
+  whenB="The services have genuinely different profiles. Here: the api is concurrent I/O where latency matters, and the worker is HTML parsing, where the mature library is in Python. Forcing one would make one of them worse."
+  chose="b"
+  verdict="and the cost showed up: three build chains, three lock formats, three ways to pin. The repository absorbs that with a single gate — but on a real team that cost is paid in people, not CPU."
+/>
+
+<FieldNote
+  source="Go at Google: Language Design in the Service of Software Engineering (Rob Pike, 2012)"
+  url="https://go.dev/talks/2012/splash.article"
+  kind="talk"
+  accessed="2026-09-21"
+>
+Go's original argument was not performance: it was **build time and team
+scale**. The text describes builds so long they became company culture, and a
+language designed so that a file's dependencies were cheap to compute.
+
+Worth remembering when somebody compares languages by execution speed alone. The
+calculation that decided Go was a different one — and it is an organisational
+calculation, not a machine one.
+</FieldNote>
+
+<LabExercise check="linguagens: o mesmo typo em ramo morto" file="tools/scripts/fixtures/typo-no-ramo-morto/py/main.py">
+
+The Python worker has an error path that almost never runs: the re-enqueue after
+three failures.
+
+Question: which tool, running **before** the deploy, would catch a typo on that
+path — and why is it not enough on its own?
+
+<Fragment slot="hint">
+It is not unit tests: a typo in a dead branch sails past any suite that does not
+exercise that branch.
+
+</Fragment>
+
+<Fragment slot="answer">
+
+A **static type checker** — `mypy` or `pyright`. They analyse the code without
+running it and flag `enriquecerr` as an unknown name, exactly as Go's compiler
+does.
+
+Why it is not enough: because it is **optional**. Go's compiler is not a step
+somebody remembers to run — without it there is no binary. `mypy` is one more
+command, and one more command that is not in the gate is a command that does not
+run.
+
+Same reason this repository puts `astro check` and `hadolint` inside
+`make verify` rather than trusting discipline. The difference between Go and
+Python here is not "has checking or not": it is **who enforces it**.
+</Fragment>
+</LabExercise>
+
+## What the gate proves
+
+<RunIt title="The three languages, measured on your machine">
+
+```bash
+# Needs the stack up for memory at rest
+make up
+python3 tools/scripts/languages-measure.py
+
+# And the checks
+make verify
+```
+</RunIt>
+
+The typo demonstration is a **versioned fixture** in
+`tools/scripts/fixtures/typo-no-ramo-morto/` — both files are in the repository,
+one of them deliberately not compiling. The gate builds both and requires Go to
+fail and Python to pass.
+
+A check that requires something **not** to compile looks strange until you ask
+what the lesson claims. It claims a behaviour, and a claimed behaviour without a
+check ages silently.
+
+<Quiz set="three-languages-one-stack" />

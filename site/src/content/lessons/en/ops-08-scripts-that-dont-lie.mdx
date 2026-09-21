@@ -1,0 +1,274 @@
+---
+key: scripts-that-dont-lie
+lang: en
+track: operacao
+order: 8
+title: The script that does not lie
+summary: "A gate that fails is annoying. A gate that passes without having checked is worse than none — and shell has four ways to do exactly that, all measured here."
+minutes: 17
+tags: [bash, shell, gate, sigpipe, pipefail, scripting]
+sources:
+  - label: "ShellCheck — SC2155: Declare and assign separately to avoid masking return values"
+    url: "https://www.shellcheck.net/wiki/SC2155"
+    kind: docs
+    accessed: "2026-09-21"
+  - label: "Google Shell Style Guide"
+    url: "https://google.github.io/styleguide/shellguide.html"
+    kind: docs
+    accessed: "2026-09-21"
+  - label: "GNU Bash Manual"
+    url: "https://www.gnu.org/software/bash/manual/bash.html"
+    kind: docs
+    accessed: "2026-09-21"
+  - label: "POSIX — Shell Command Language"
+    url: "https://pubs.opengroup.org/onlinepubs/9799919799/utilities/V3_chap02.html"
+    kind: spec
+    accessed: "2026-09-21"
+---
+
+import PipefailRace from "../../../components/diagrams/PipefailRace.astro";
+
+This repository holds about two thousand lines of shell in gates — `verify.sh`,
+`k8s-verify.sh`, `cicd-verify.sh`, `iac-verify.sh`, `attack-lab.sh`. They exist
+so that no claim in any lesson is written by hand.
+
+What writing them taught was not syntax. It was that **a script's failure mode
+is not stopping: it is carrying on and reporting success.**
+
+## The line that inverted its own answer
+
+`cicd-verify` looked for a pattern in a Jenkins build console. Written like
+this, which is how almost everyone writes it:
+
+```bash
+set -euo pipefail
+
+if curl -fsS "$URL/consoleText" | grep -q "Running on"; then
+  ok "the job ran on the agent"
+else
+  bad "the job did not run on the agent"
+fi
+```
+
+One of those checks passed and another failed. Both were right about the log —
+the pattern was there in both. The difference was **where**: in one, on line 20
+of 571; in the other, near the end.
+
+<Term word="SIGPIPE" alt="SIGPIPE">
+The signal the kernel sends to a process that writes to a pipe **whose read end
+has already closed**. The default is to kill the process — which makes sense:
+there is nobody left to write to.
+
+The exit code of a process killed that way is **141**, which is 128 + 13 (the
+number of `SIGPIPE`). Same scheme as the 137 in the OOM killer lesson: 128 plus
+the signal number.
+</Term>
+
+`grep -q` exits **on the first match** — that is what `-q` is for. On exiting it
+closes the read end of the pipe. `curl`, still holding hundreds of kB to send,
+takes SIGPIPE and dies with 141. And `pipefail` does exactly what it promises:
+it propagates a non-zero from any stage of the pipe.
+
+**The result is that finding the pattern becomes "did not find it".**
+
+## Not a threshold. A race.
+
+The reflex is to assume there is a size above which this starts happening. I
+measured.
+
+<PipefailRace />
+
+Below the pipe buffer it **neither works nor fails: it draws lots**. The same
+code, run dozens of times in a row, gives both answers — because the real
+question is whether the writer can dump everything before the reader exits, and
+that depends on scheduling.
+
+Above the buffer the writer **cannot** finish first, and failure is 100%.
+
+<Callout type="trap" label="This is why it survives review">
+A small example works. The bench works. The test you write to demonstrate it
+works — because all of that fits in the buffer.
+
+The defect shows up when the log grows, in production, against a different
+target. And it does not show up as an error: it shows up as a green check that
+checked nothing, or a red one accusing a problem that does not exist.
+</Callout>
+
+The fix is not `|| true`, which would hide the symptom. It is **not using a
+pipe**:
+
+```bash
+# The whole output becomes text, and the question is asked of the text.
+# No pipe, no signal, no dependence on where the pattern is.
+TEXT=$(curl -fsS "$URL/consoleText")
+case "$TEXT" in
+  *"Running on"*) ok  "the job ran on the agent" ;;
+  *)              bad "the job did not run on the agent" ;;
+esac
+```
+
+Measured: **zero failures in 40 runs**, at every size tested — from 1 KiB to
+1 MiB.
+
+## The `local` that swallows the error
+
+This one is subtler, and it is in nearly every script I have ever written:
+
+```bash
+f() {
+  local v=$(command_that_fails)   # $? here is 0. ALWAYS.
+  ...
+}
+```
+
+<Term word="builtin" alt="shell builtin">
+A command the shell runs itself, without spawning a process: `cd`, `echo`,
+`export`, `local`, `declare`, `read`. They are part of the shell, not programs
+in `/usr/bin`.
+
+It matters here because `local` **is a command** — and every command has an exit
+status. `local`'s status is its own, not that of whatever you used to compute
+the value.
+</Term>
+
+Measured, with the inner command returning 7:
+
+| form | `$?` |
+|---|---|
+| `local v=$(exit 7)` | **0** |
+| `local v; v=$(exit 7)` | **7** |
+
+With `set -e` the difference stops being cosmetic: the first form **survives**
+the error and the second kills the script, as it should. The form that looks
+tidier is the one that disables the protection you thought you had turned on.
+
+ShellCheck has a warning just for this, `SC2155`, and its title is the rule:
+*declare and assign separately to avoid masking return values*.
+
+## What `set -e` does not catch
+
+`set -euo pipefail` is the first line of every serious script, and it creates a
+false sense of a safety net. Measured, `set -e` does **not** act:
+
+- inside an `if` condition
+- on the left of `&&` or `||`
+- in any command whose result is being tested
+
+That is not a bug: it is the definition. If `set -e` killed the script inside an
+`if`, nothing could be tested. But it means a function called from inside a
+condition runs **without** `set -e` all the way through, and an error midway
+goes unnoticed.
+
+And `set -u` catches an **unset** variable, not an **empty** one. A
+`VERSION=""` sails through `set -u` without a peep and ends up as an
+`image:` tag Docker reads as `latest`.
+
+<LabExercise check="bash: a forma sem pipe" file="tools/scripts/verify.sh">
+
+A gate check needs to know whether a service logged an error. The form below is
+what everyone writes first:
+
+```bash
+docker compose logs api | grep -q "connection refused"
+```
+
+Question: give **two** independent reasons that line can answer wrongly — one of
+them has nothing to do with pipes.
+
+<Fragment slot="hint">
+One is this lesson's subject. The other is about what `docker compose logs`
+writes, and where.
+</Fragment>
+
+<Fragment slot="answer">
+
+**1. SIGPIPE.** With `pipefail`, if the pattern shows up early in a large log,
+`grep -q` exits, `docker compose logs` dies with 141, and finding becomes not
+finding.
+
+**2. The log goes to stderr.** `docker compose logs` writes service logs to
+stdout, but its own messages (and, depending on the version, part of the output)
+to stderr — which the pipe does not capture. Without `2>&1`, the check reads
+less than exists.
+
+There is a third one for free: `logs` without `--no-log-prefix` prefixes every
+line with the service name, which breaks any pattern anchored at `^`.
+
+The form this repository uses folds in all three fixes:
+
+```bash
+TEXT=$(docker compose logs --no-log-prefix api 2>&1)
+case "$TEXT" in *"connection refused"*) ... ;; esac
+```
+</Fragment>
+</LabExercise>
+
+## A trap that did not reproduce
+
+This repository keeps a list of measured traps. One of them said the ERE of
+`grep -E` does not know `\s`, that `\s` would match the letter "s", and that a
+pin check written that way would reject perfectly pinned files.
+
+I went to measure it in order to write this lesson. **It does not reproduce.**
+Against the gates' real patterns, `\s` and `[[:space:]]` give identical results
+in GNU grep 3.12 (ERE **and** BRE), GNU awk, GNU sed and busybox awk — and `\s`
+matches the letter "s" in none of them.
+
+The advice still stands, for a different reason: `\s` is a GNU/BusyBox extension
+and is **not in POSIX ERE**, so it is a portability bet. But the recorded
+justification was wrong, and a wrong justification is worse than none — it sends
+the next person looking for the defect in the wrong place.
+
+The entry was corrected, and this section exists so the correction stays
+visible.
+
+<Tradeoff
+  a="Shell in the gate"
+  b="Python in the gate"
+  whenA="The work is orchestrating processes: bring up compose, call curl, read an exit code. Shell is the language where “run a program and look at the result” fits on one line, and a gate is exactly that. It is also what is already on every machine."
+  whenB="The work is processing data: parsing JSON, grouping spans by trace, comparing field by field. Each of those in shell becomes a jq-and-awk pipeline nobody re-reads. This repository's measurement scripts are Python for that reason — and they are called BY the shell."
+  chose="a"
+  verdict="the gates are shell and the measurements are Python, in the same folder. The boundary is “is this process control or data transformation?”, and it is clearer than it sounds when you are writing."
+/>
+
+<FieldNote
+  source="Google Shell Style Guide"
+  url="https://google.github.io/styleguide/shellguide.html"
+  kind="blog"
+  accessed="2026-09-21"
+>
+Google's guide is blunt about the limit: a script longer than about **100
+lines**, or with non-trivial control flow, should be rewritten in a more
+structured language — and it says to do that *now*, not later.
+
+This repository's gates blow past that comfortably, and the rule of thumb
+survives because they are lists of independent checks, not interwoven logic. It
+is the difference between a long script and a complicated one.
+</FieldNote>
+
+## What the gate proves
+
+<RunIt title="The four traps, measured on your machine">
+
+```bash
+# Rewrites site/src/data/bash-measured.json — no Docker needed
+python3 tools/scripts/bash-traps-measure.py
+
+# And the checks that prove each one
+make verify
+```
+</RunIt>
+
+Four checks, and the first is the one that teaches:
+
+1. the piped form **fails** above the buffer, always — if it stops failing, the
+   trap has changed and the lesson has to change with it
+2. the pipe-free form **never** fails, at any size
+3. `local v=$(...)` returns 0 and the separated form returns the real code
+4. `\s` and `[[:space:]]` agree across all three tools — the negative proof of
+   the trap that was corrected
+
+Check 1 is unusual: it demands that a defect **keep existing**. A gate that only
+verifies the happy path does not notice when the world shifts underneath it.
+
+<Quiz set="scripts-that-dont-lie" />

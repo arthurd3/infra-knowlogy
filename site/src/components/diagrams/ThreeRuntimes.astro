@@ -1,0 +1,102 @@
+---
+/** prod-07 — as três linguagens da mesma stack, medidas lado a lado.
+ *
+ * Números de languages-measured.json (tools/scripts/languages-measure.py) e de
+ * measured.json (sizes.sh). Nenhum é escrito à mão.
+ */
+import Figure from "../Figure.astro";
+import L from "../../data/languages-measured.json";
+import M from "../../data/measured.json";
+import type { Lang } from "../../i18n/ui";
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+
+const imagem = (svc: string, target: string) =>
+  M.images.find((i: any) => i.service === svc && i.target === target)?.bytes ?? 0;
+
+const lock = (nome: string) => L.locks.find((l: any) => l.arquivo.endsWith(nome));
+
+const linhas = [
+  {
+    nome: "Go", svc: "api-go",
+    rss: L.repouso?.api_go?.mib ?? 0,
+    img: imagem("api-go", "dist"),
+    lock: lock("go.sum"),
+    cls: "dg-fill-accent",
+  },
+  {
+    nome: "Python", svc: "worker-py",
+    rss: L.repouso?.worker_py?.mib ?? 0,
+    img: imagem("worker-py", "dist"),
+    lock: lock("uv.lock"),
+    cls: "dg-fill-warn",
+  },
+  {
+    nome: "Node", svc: "web",
+    rss: L.repouso?.web_node?.mib ?? 0,
+    img: 0,
+    lock: lock("package-lock.json"),
+    cls: "dg-box--raised",
+  },
+];
+
+const maxRss = Math.max(...linhas.map((l) => l.rss), 1);
+const maxLock = Math.max(...linhas.map((l) => l.lock?.linhas ?? 0), 1);
+const erro = L.quando_o_erro_aparece ?? {};
+
+const C = {
+  pt: {
+    cols: ["", "memória em repouso", "linhas no lock"],
+    erroTitulo: "o mesmo typo, no mesmo ramo morto:",
+    erroGo: `Go: build FALHA, binário nenhum sai`,
+    erroPy: `Python: sobe, atende, sai com ${erro?.python?.saida ?? 0}`,
+    caption: `As três linguagens rodando no <b>mesmo sistema, no mesmo host, no mesmo dia</b> — que é o que torna a comparação possível. A memória em repouso separa runtime compilado de interpretado; as linhas de lock são decisões que alguém vai auditar quando sair um CVE. E a última faixa é a diferença que não aparece em benchmark nenhum: <b>quando o erro aparece</b>. O mesmo typo, num ramo que nunca executa, impede o build em Go e é publicado em Python.`,
+    alt: "Comparação das três linguagens da stack: memória em repouso, tamanho do lock e quando o erro aparece.",
+  },
+  en: {
+    cols: ["", "memory at rest", "lines in the lock"],
+    erroTitulo: "the same typo, in the same dead branch:",
+    erroGo: `Go: build FAILS, no binary is produced`,
+    erroPy: `Python: starts, serves, exits ${erro?.python?.saida ?? 0}`,
+    caption: `The three languages running in the <b>same system, on the same host, on the same day</b> — which is what makes the comparison possible at all. Memory at rest separates a compiled runtime from an interpreted one; lock lines are decisions somebody will audit when a CVE lands. And the last band is the difference no benchmark shows: <b>when the error appears</b>. The same typo, in a branch that never runs, blocks the build in Go and ships in Python.`,
+    alt: "Comparison of the stack's three languages: memory at rest, lock size and when errors appear.",
+  },
+}[lang];
+---
+<Figure caption={C.caption} alt={C.alt}>
+  <svg viewBox="0 0 700 250" xmlns="http://www.w3.org/2000/svg" font-size="11">
+    <text x="110" y="16" class="dg-faint" font-size="8.5">{C.cols[1]}</text>
+    <text x="400" y="16" class="dg-faint" font-size="8.5">{C.cols[2]}</text>
+
+    {linhas.map((l, i) => {
+      const y = 32 + i * 40;
+      const wR = (l.rss / maxRss) * 200;
+      const wL = ((l.lock?.linhas ?? 0) / maxLock) * 200;
+      return (
+        <g>
+          <text x="14" y={y + 15} class="dg-title" font-size="11">{l.nome}</text>
+          <text x="14" y={y + 27} class="dg-faint" font-size="8">{l.svc}</text>
+
+          <rect x="110" y={y + 3} width={Math.max(wR, 2)} height="16" rx="3"
+                class={`dg-box ${l.cls}`} />
+          <text x={110 + Math.max(wR, 2) + 7} y={y + 15} class="dg-muted" font-size="9">
+            {l.rss.toFixed(1)} MiB
+          </text>
+
+          <rect x="400" y={y + 3} width={Math.max(wL, 2)} height="16" rx="3"
+                class={`dg-box ${l.cls}`} />
+          <text x={400 + Math.max(wL, 2) + 7} y={y + 15} class="dg-muted" font-size="9">
+            {l.lock?.linhas ?? "?"}
+          </text>
+        </g>
+      );
+    })}
+
+    <path d="M14 168 L686 168" class="dg-line dg-line--dashed" fill="none" />
+    <text x="14" y="188" class="dg-title" font-size="10">{C.erroTitulo}</text>
+    <rect x="14" y="198" width="320" height="26" rx="5" class="dg-box dg-box--accent" />
+    <text x="26" y="215" class="dg-muted" font-size="9.5" font-weight="620">{C.erroGo}</text>
+    <rect x="348" y="198" width="320" height="26" rx="5" class="dg-box dg-box--warn" />
+    <text x="360" y="215" class="dg-muted" font-size="9.5" font-weight="620">{C.erroPy}</text>
+  </svg>
+</Figure>
