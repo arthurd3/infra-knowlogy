@@ -47,27 +47,30 @@
       },
       "en": {
         "label": "Kubernetes / EKS / GKE",
-        "gap": "The track has 10 lessons and the gate 65 checks: Gateway API with routing proven, RBAC with a negative proof via a real token, HPA measured over three runs, StatefulSet, PDB through the eviction API, and Helm compared to Kustomize field by field. What is missing is what a single node cannot give: topologySpreadConstraints, Cluster Autoscaler, VPA, service mesh and a real control-plane failure. Managed clusters are cited with verified pricing, never measured."
+        "gap": "The track has 10 lessons and the gate 65 checks: Gateway API with routing proven, RBAC with a negative proof via a real token, HPA measured over three runs, StatefulSet, PDB through the eviction API, and Helm compared to Kustomize field by field. Service mesh is in: Linkerd with mTLS proven by identity and cost measured against a control pair. What is missing is what a single node cannot give: topologySpreadConstraints, Cluster Autoscaler, VPA and a real control-plane failure. Managed clusters are cited with verified pricing, never measured."
       },
       "evidence": {
         "lessons": [
-          "gateway-api",
-          "rbac-and-the-negative-proof",
           "autoscaling-and-its-blind-window",
+          "gateway-api",
           "helm-vs-kustomize",
-          "statefulsets-in-depth",
-          "rollouts-and-disruption"
+          "rbac-and-the-negative-proof",
+          "rollouts-and-disruption",
+          "service-mesh-identity",
+          "statefulsets-in-depth"
         ],
         "checks": [
-          "RBAC: a SA reader NÃO pode listar secrets (a prova negativa)",
           "Gateway Programmed=True com",
           "HPA escalou sob carga real em 3 rodadas",
           "PDB: o segundo despejo é RECUSADO (429)",
+          "RBAC: a SA reader NÃO pode listar secrets (a prova negativa)",
+          "a identidade do outro lado é a ServiceAccount, não o IP",
           "helm template ≡ kubectl kustomize"
         ],
         "measurements": [
+          "k8s-hpa.json",
           "k8s-measured.json",
-          "k8s-hpa.json"
+          "mesh-measured.json"
         ]
       }
     },
@@ -305,7 +308,9 @@
         },
         {
           "name": "Service Mesh",
-          "status": "ausente"
+          "status": "coberto",
+          "note_pt": "Linkerd com mTLS provado por identidade de ServiceAccount, e o custo medido contra um par sem malha",
+          "note_en": "Linkerd with mTLS proven by ServiceAccount identity, and the cost measured against an unmeshed pair"
         },
         {
           "name": "HPA / VPA",

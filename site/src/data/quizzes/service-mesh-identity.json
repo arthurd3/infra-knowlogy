@@ -1,0 +1,152 @@
+{
+  "note_pt": "As perguntas separam o que a NetworkPolicy decide do que o certificado prova — e medem o custo contra um par de controle.",
+  "note_en": "The questions separate what NetworkPolicy decides from what the certificate proves — and measure the cost against a control pair.",
+  "pt": [
+    {
+      "q": "Você já tem NetworkPolicy fechando os caminhos. O que uma malha acrescenta?",
+      "options": [
+        {
+          "text": "Nada de novo — as duas impedem tráfego não autorizado.",
+          "why": "É a confusão mais cara sobre malhas. A NetworkPolicy decide se o PACOTE atravessa, por rótulo e endereço; o mTLS não decide caminho nenhum. São perguntas diferentes."
+        },
+        {
+          "text": "IDENTIDADE: o certificado prova quem está do outro lado, e a policy decide por rótulo — quem assumir aquele IP passa.",
+          "correct": true,
+          "why": "Cifra sem identidade protege contra quem escuta; identidade protege contra quem se FAZ PASSAR. No Linkerd o `server_id` nomeia a ServiceAccount do outro lado, que é exatamente o que a NetworkPolicy não consegue expressar. As duas juntas são defesa em profundidade, e nenhuma substitui a outra."
+        },
+        {
+          "text": "Desempenho, por reuso de conexão no proxy.",
+          "why": "Medido aqui, o p95 realmente ficou MAIS RÁPIDO com malha (1,08 contra 1,63 ms) por reuso de conexão — mas isso é efeito colateral, não a razão de instalar uma malha."
+        }
+      ]
+    },
+    {
+      "q": "O manifesto do Deployment não menciona sidecar nenhum, e o pod subiu com dois containers a mais. Como?",
+      "options": [
+        {
+          "text": "A imagem base do Linkerd foi usada como `FROM`.",
+          "why": "A imagem da aplicação não é tocada. A malha é indiferente ao que você construiu — o proxy é um container SEPARADO no mesmo pod."
+        },
+        {
+          "text": "O kubelet injeta sidecars automaticamente em todo namespace.",
+          "why": "O kubelet não injeta nada. Quem injeta é um webhook de admissão do plano de controle do Linkerd, e só nos namespaces anotados."
+        },
+        {
+          "text": "Uma anotação no NAMESPACE (`linkerd.io/inject: enabled`) faz um webhook de admissão reescrever o pod.",
+          "correct": true,
+          "why": "A aplicação não é alterada, não é recompilada e continua falando HTTP simples. O que muda é o iptables dentro do netns do pod, escrito por um init container que redireciona o tráfego para o proxy. É por isso que adotar malha não exige mudar código."
+        }
+      ]
+    },
+    {
+      "q": "O `linkerd-proxy` aparece na coluna de INIT containers, não na de containers. Por que isso importa?",
+      "options": [
+        {
+          "text": "É um sidecar NATIVO — init container com `restartPolicy: Always`, disponível desde o Kubernetes 1.29.",
+          "correct": true,
+          "why": "Resolve dois problemas antigos: começa ANTES dos containers da aplicação, então o proxy já está pronto quando o primeiro pedido sai; e termina DEPOIS deles, o que impede o caso clássico de um Job nunca completar porque o sidecar continua rodando."
+        },
+        {
+          "text": "É um erro de exibição do `kubectl`.",
+          "why": "Não é: o campo é `spec.initContainers` de verdade. A novidade é o `restartPolicy: Always` num init container, que muda a semântica dele."
+        },
+        {
+          "text": "O proxy roda uma vez e termina, como qualquer init container.",
+          "why": "Init container comum roda e termina. Com `restartPolicy: Always` ele continua rodando ao lado da aplicação — é exatamente essa a diferença que cria o sidecar nativo."
+        }
+      ]
+    },
+    {
+      "q": "Medido: mediana de 0,64 ms com malha contra 0,46 ms sem, e p95 de 1,08 contra 1,63 ms. O que se pode afirmar?",
+      "options": [
+        {
+          "text": "Que service mesh não custa latência.",
+          "why": "Forte demais para o que foi medido. São dois pods no MESMO nó, carga útil trivial e um pedido por vez — payload grande, tráfego entre nós e concorrência alta mudam o número."
+        },
+        {
+          "text": "Que neste regime a malha custa 0,18 ms na mediana, e que no p95 o reuso de conexão compensa o salto extra.",
+          "correct": true,
+          "why": "É o que a medição autoriza dizer, com a ressalva do regime. O p95 mais BAIXO com malha é o achado contraintuitivo: o proxy mantém conexões quentes, e isso mais que paga o salto adicional."
+        },
+        {
+          "text": "Que a medição está errada, porque malha sempre acrescenta latência.",
+          "why": "A medição foi feita com par de controle idêntico — mesmo par de serviços, mesma máquina, mesmo instante, com a anotação sendo a única diferença. Recusar o resultado porque contraria a expectativa é o oposto do método."
+        }
+      ]
+    }
+  ],
+  "en": [
+    {
+      "q": "You already have NetworkPolicies closing paths. What does a mesh add?",
+      "options": [
+        {
+          "text": "Nothing new — both block unauthorised traffic.",
+          "why": "It is the most expensive confusion about meshes. NetworkPolicy decides whether the PACKET crosses, by label and address; mTLS decides no path at all. Different questions."
+        },
+        {
+          "text": "IDENTITY: the certificate proves who is on the other end, while the policy decides by label — whoever takes that IP gets through.",
+          "correct": true,
+          "why": "Encryption without identity protects against whoever listens; identity protects against whoever IMPERSONATES. In Linkerd the `server_id` names the other side's ServiceAccount, which is exactly what NetworkPolicy cannot express. Together they are defence in depth, and neither replaces the other."
+        },
+        {
+          "text": "Performance, through connection reuse in the proxy.",
+          "why": "Measured here, p95 really was FASTER with the mesh (1.08 against 1.63 ms) thanks to connection reuse — but that is a side effect, not a reason to install a mesh."
+        }
+      ]
+    },
+    {
+      "q": "The Deployment's manifest mentions no sidecar, and the pod came up with two extra containers. How?",
+      "options": [
+        {
+          "text": "Linkerd's base image was used as `FROM`.",
+          "why": "The application image is untouched. The mesh is indifferent to what you built — the proxy is a SEPARATE container in the same pod."
+        },
+        {
+          "text": "The kubelet injects sidecars automatically into every namespace.",
+          "why": "The kubelet injects nothing. The injector is an admission webhook from Linkerd's control plane, and only in annotated namespaces."
+        },
+        {
+          "text": "A NAMESPACE annotation (`linkerd.io/inject: enabled`) makes an admission webhook rewrite the pod.",
+          "correct": true,
+          "why": "The application is not modified, not recompiled and still speaks plain HTTP. What changes is the iptables inside the pod's netns, written by an init container that redirects traffic to the proxy. Which is why adopting a mesh requires no code changes."
+        }
+      ]
+    },
+    {
+      "q": "`linkerd-proxy` shows up in the INIT containers column, not in containers. Why does that matter?",
+      "options": [
+        {
+          "text": "It is a NATIVE sidecar — an init container with `restartPolicy: Always`, available since Kubernetes 1.29.",
+          "correct": true,
+          "why": "It solves two old problems: it starts BEFORE the application containers, so the proxy is ready when the first request leaves; and it terminates AFTER them, which prevents the classic case of a Job never completing because the sidecar keeps running."
+        },
+        {
+          "text": "It is a `kubectl` display bug.",
+          "why": "It is not: the field really is `spec.initContainers`. The novelty is `restartPolicy: Always` on an init container, which changes its semantics."
+        },
+        {
+          "text": "The proxy runs once and exits, like any init container.",
+          "why": "An ordinary init container runs and exits. With `restartPolicy: Always` it keeps running alongside the application — that is exactly the difference that creates the native sidecar."
+        }
+      ]
+    },
+    {
+      "q": "Measured: a median of 0.64 ms with the mesh against 0.46 ms without, and p95 of 1.08 against 1.63 ms. What can you claim?",
+      "options": [
+        {
+          "text": "That a service mesh costs no latency.",
+          "why": "Too strong for what was measured. These are two pods on the SAME node, trivial payload and one request at a time — large payloads, cross-node traffic and high concurrency all change the number."
+        },
+        {
+          "text": "That in this regime the mesh costs 0.18 ms at the median, and that at p95 connection reuse offsets the extra hop.",
+          "correct": true,
+          "why": "That is what the measurement licenses, with the caveat about the regime. The LOWER p95 with the mesh is the counterintuitive finding: the proxy keeps connections warm, and that more than pays for the additional hop."
+        },
+        {
+          "text": "That the measurement is wrong, because meshes always add latency.",
+          "why": "The measurement used an identical control pair — same services, same machine, same moment, with the annotation as the only difference. Rejecting a result because it contradicts expectation is the opposite of the method."
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,65 @@
+---
+/** k8s-11 — NetworkPolicy diz quem pode falar; mTLS diz quem é quem. */
+import Figure from "../Figure.astro";
+import type { Lang } from "../../i18n/ui";
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+const C = {
+  pt: {
+    np: "NETWORKPOLICY", npq: "QUEM PODE FALAR",
+    np1: "regra no dataplane do nó", np2: "seleciona por RÓTULO e endereço",
+    np3: "decisão: passa ou não passa", np4: "não sabe quem é o remetente",
+    np5: "quem roubar o IP passa",
+    ml: "mTLS DA MALHA", mlq: "QUEM É QUEM",
+    ml1: "certificado por ServiceAccount", ml2: "emitido pelo linkerd-identity",
+    ml3: "decisão: identidade verificada", ml4: "não decide se pode falar",
+    ml5: "quem roubar o IP não tem a chave",
+    id: "server_id = default.linkerd-demo.serviceaccount.identity.linkerd.cluster.local",
+    juntas: "as duas juntas: a policy corta o caminho, o certificado prova a origem — nenhuma substitui a outra",
+    custo: "medido: +0,18 ms na mediana · +3 MiB por pod · e no p95 a malha ficou MAIS RÁPIDA",
+    caption:
+      "A confusão mais comum é achar que uma torna a outra desnecessária. Uma <b>NetworkPolicy</b> decide se o pacote atravessa, e decide por rótulo — quem assumir aquele IP passa. Um <b>certificado</b> não decide nada sobre caminho: ele prova quem está do outro lado. Defesa em profundidade é ter as duas.",
+    alt: "Duas colunas comparando NetworkPolicy e mTLS pelo que cada uma decide e pelo que não decide.",
+  },
+  en: {
+    np: "NETWORKPOLICY", npq: "WHO MAY TALK",
+    np1: "a rule in the node's dataplane", np2: "selects by LABEL and address",
+    np3: "decision: pass or drop", np4: "knows nothing about the sender's identity",
+    np5: "whoever takes that IP gets through",
+    ml: "MESH mTLS", mlq: "WHO IS WHO",
+    ml1: "a certificate per ServiceAccount", ml2: "issued by linkerd-identity",
+    ml3: "decision: identity verified", ml4: "decides nothing about permission",
+    ml5: "whoever takes that IP lacks the key",
+    id: "server_id = default.linkerd-demo.serviceaccount.identity.linkerd.cluster.local",
+    juntas: "together: the policy cuts the path, the certificate proves the origin — neither replaces the other",
+    custo: "measured: +0.18 ms at the median · +3 MiB per pod · and at p95 the mesh was FASTER",
+    caption:
+      "The commonest confusion is thinking one makes the other unnecessary. A <b>NetworkPolicy</b> decides whether the packet crosses, and decides by label — whoever takes that IP gets through. A <b>certificate</b> decides nothing about paths: it proves who is on the other end. Defence in depth is having both.",
+    alt: "Two columns comparing NetworkPolicy and mTLS by what each decides and what it does not.",
+  },
+}[lang];
+---
+<Figure caption={C.caption} alt={C.alt}>
+  <svg viewBox="0 0 720 262" xmlns="http://www.w3.org/2000/svg" font-size="11">
+    {[[C.np, C.npq, [C.np1, C.np2, C.np3], C.np4, C.np5, 14],
+      [C.ml, C.mlq, [C.ml1, C.ml2, C.ml3], C.ml4, C.ml5, 372]].map(
+      ([t, q, linhas, nao, rouba, x]) => (
+        <g>
+          <text x={Number(x)} y="16" class="dg-muted" font-weight="640" font-size="10.5">{t}</text>
+          <rect x={Number(x)} y="24" width="334" height="26" rx="5" class="dg-box dg-box--accent" />
+          <text x={Number(x) + 167} y="42" text-anchor="middle" font-weight="640" font-size="11">{q}</text>
+          {(linhas as string[]).map((l, i) => (
+            <text x={Number(x) + 14} y={70 + i * 17} class="dg-faint" font-size="9">{l}</text>
+          ))}
+          <line x1={Number(x)} y1="126" x2={Number(x) + 334} y2="126" class="dg-line" stroke-dasharray="2 3" />
+          <text x={Number(x) + 14} y="143" class="dg-fill-warn" font-size="8.6">{nao}</text>
+          <text x={Number(x) + 14} y="158" class="dg-faint" font-size="8.6">{rouba}</text>
+        </g>
+      ),
+    )}
+    <rect x="14" y="174" width="692" height="22" rx="4" class="dg-box dg-box--dashed" />
+    <text x="360" y="189" text-anchor="middle" class="dg-mono dg-faint" font-size="8">{C.id}</text>
+    <text x="360" y="216" text-anchor="middle" class="dg-muted" font-size="10" font-weight="620">{C.juntas}</text>
+    <text x="360" y="238" text-anchor="middle" class="dg-faint" font-size="8.8">{C.custo}</text>
+  </svg>
+</Figure>

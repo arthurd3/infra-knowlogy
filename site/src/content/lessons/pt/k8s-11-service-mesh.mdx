@@ -1,0 +1,199 @@
+---
+key: service-mesh-identity
+lang: pt
+track: kubernetes
+order: 11
+title: "Service mesh: quem é quem, e quanto custa"
+summary: "A NetworkPolicy diz quem pode falar; o mTLS diz quem é quem — e confundir as duas é o erro mais caro sobre malhas. O custo foi medido contra um par de controle idêntico: 0,18 ms na mediana, e no p95 a malha ficou mais rápida."
+minutes: 15
+tags: [kubernetes, service-mesh, linkerd, mtls, identidade]
+sources:
+  - label: "Linkerd — Automatic mTLS"
+    url: "https://linkerd.io/2/features/automatic-mtls/"
+    kind: docs
+    accessed: "2026-09-21"
+  - label: "Linkerd — Architecture"
+    url: "https://linkerd.io/2/reference/architecture/"
+    kind: docs
+    accessed: "2026-09-21"
+  - label: "Kubernetes Docs — Sidecar Containers (init nativo)"
+    url: "https://kubernetes.io/docs/concepts/workloads/pods/sidecar-containers/"
+    kind: docs
+    accessed: "2026-09-21"
+  - label: "Linkerd — Rotating your identity certificates"
+    url: "https://linkerd.io/2/tasks/manually-rotating-control-plane-tls-credentials/"
+    kind: docs
+    accessed: "2026-09-21"
+---
+
+import MeshIdentity from "../../../components/diagrams/MeshIdentity.astro";
+
+A [lição de NetworkPolicy](/pt/lessons/from-compose-to-deployment) provou que o
+`edge` não alcança o banco. Uma malha de serviço resolve um problema que parece
+o mesmo e não é.
+
+## Quem pode falar × quem é quem
+
+<MeshIdentity />
+
+Uma `NetworkPolicy` decide se o pacote **atravessa**, e decide por **rótulo**.
+Ela não sabe nada sobre quem enviou: se outro pod assumir aquele endereço e
+aqueles rótulos, ele passa.
+
+Um certificado mTLS não decide nada sobre caminho. Ele **prova quem está do
+outro lado** — e no Linkerd essa prova é a ServiceAccount:
+
+```console
+server_id="default.linkerd-demo.serviceaccount.identity.linkerd.cluster.local"
+```
+
+<Term word="mTLS" alt="mutual TLS">
+TLS **mútuo**: os dois lados apresentam certificado, não só o servidor.
+
+No TLS da web, o navegador verifica o servidor e o servidor não sabe quem é o
+navegador — a autenticação do usuário acontece depois, na aplicação, com
+senha ou token. No mTLS os dois se autenticam **antes** de qualquer byte de
+aplicação.
+
+Numa malha, quem emite os certificados é um componente do plano de controle
+(o `linkerd-identity`), e a identidade emitida é a da **ServiceAccount** do
+pod. É por isso que a autorização numa malha pode ser escrita em termos de
+identidade — `o serviço A pode chamar o serviço B` — em vez de endereço.
+</Term>
+
+**As duas juntas são defesa em profundidade**, e nenhuma substitui a outra: a
+policy corta o caminho, o certificado prova a origem.
+
+## A aplicação não sabe
+
+```yaml
+metadata:
+  name: linkerd-demo
+  annotations:
+    linkerd.io/inject: enabled
+```
+
+Essa anotação vale para o **namespace**. Todo pod criado ali ganha um sidecar,
+e o manifesto do Deployment não menciona nada:
+
+```console
+$ kubectl -n linkerd-demo get pods -o custom-columns=POD:.metadata.name,APP:.spec.containers[*].name,INIT:.spec.initContainers[*].name
+POD                         APP        INIT
+cliente-78749cffcc-p4vm4    cliente    linkerd-init,linkerd-proxy
+servidor-7585bf577f-bf748   servidor   linkerd-init,linkerd-proxy
+```
+
+A aplicação não foi alterada, não foi recompilada e continua falando HTTP
+simples. O que muda é o **iptables dentro do netns do pod**, escrito por um
+init container que redireciona todo o tráfego para o proxy.
+
+<Callout type="note" title="O proxy aparece como init container, e isso é novo">
+Repare que `linkerd-proxy` está na coluna `INIT`, não em `CONTAINERS`. Desde o
+Kubernetes 1.29 existe o **sidecar nativo**: um init container com
+`restartPolicy: Always`.
+
+Ele resolve dois problemas antigos de sidecar. Começa **antes** dos containers
+da aplicação — então o proxy já está pronto quando o primeiro pedido sai — e
+termina **depois** deles, o que impede o caso clássico de um Job nunca
+completar porque o sidecar continua rodando.
+</Callout>
+
+## O custo, medido contra um par de controle
+
+A afirmação mais repetida sobre malhas é que elas acrescentam latência. Medir
+isso exige o **mesmo par de serviços**, na mesma máquina, no mesmo instante —
+um dentro da malha e outro fora, com a anotação sendo a única diferença.
+
+| | mediana | p95 | p99 |
+|---|---|---|---|
+| **com malha** | 0,64 ms | **1,08 ms** | 76,2 ms |
+| **sem malha** | 0,46 ms | 1,63 ms | 79,7 ms |
+
+**+0,18 ms na mediana.** E no p95 a malha ficou **mais rápida** — o proxy reusa
+conexão, e isso compensa o salto extra.
+
+Memória: **+3 MiB por pod** (o container da aplicação usa 10–12 MiB).
+
+<Callout type="warn" title="A ressalva, porque o número é bom demais para ser geral">
+São dois pods no **mesmo nó**, com carga útil trivial e um pedido por vez.
+
+Payload grande, tráfego entre nós, muitas conexões concorrentes e TLS sobre
+rede real mudam o número. O que esta medição autoriza dizer é que a malha
+**não custa milissegundos** neste regime — não que ela seja grátis em todos.
+</Callout>
+
+<Tradeoff
+  a="NetworkPolicy sozinha"
+  b="NetworkPolicy + malha"
+  whenA="Quando a topologia é pequena e conhecida, e o que você precisa é impedir caminhos. É o que esta stack faz desde o módulo 2, e resolve a maior parte do problema por muito menos."
+  whenB="Quando você precisa de IDENTIDADE — autorizar por serviço e não por endereço, ou provar em auditoria que o tráfego interno é cifrado. E quando quer as métricas por chamada que o proxy dá de graça."
+>
+  <Fragment slot="a">
+    Zero componentes a mais, zero latência, zero PKI para operar. Em troca:
+    tráfego interno em claro, e autorização amarrada a rótulo e endereço.
+  </Fragment>
+  <Fragment slot="b">
+    mTLS automático, identidade por ServiceAccount, e métricas douradas por
+    chamada sem instrumentar a aplicação. Em troca: um plano de controle, um
+    sidecar por pod, e uma **PKI com validade** que alguém precisa rotacionar.
+  </Fragment>
+</Tradeoff>
+
+## A parte que ninguém conta: a PKI vence
+
+O `linkerd install` gera a âncora de confiança e o certificado emissor na hora.
+Eles têm **validade**. Uma âncora expirada faz a malha parar de aceitar conexão
+nova — **em silêncio, pod a pod**, conforme eles reiniciam.
+
+Isso apareceu aqui de outro jeito: reexecutar `linkerd install` num cluster que
+já tem o plano de controle **gera uma PKI nova**, e todo proxy já injetado passa
+a apresentar certificado que o novo emissor não reconhece. O instalador deste
+repositório checa se o `linkerd-identity` existe antes de instalar, por isso.
+
+<FieldNote
+  source="Linkerd — Rotating your identity certificates"
+  url="https://linkerd.io/2/tasks/manually-rotating-control-plane-tls-credentials/"
+  accessed="2026-09-21"
+>
+A documentação dedica uma tarefa inteira à rotação manual das credenciais TLS
+do plano de controle, e recomenda automatizá-la com cert-manager justamente
+porque o modo de falha é silencioso: nada quebra no dia da expiração, quebra à
+medida que os pods reiniciam. Não medido aqui — a âncora deste cluster vale um
+ano, e o cluster não dura um dia.
+</FieldNote>
+
+<LabExercise
+  question="Como provar que o tráfego entre dois serviços está cifrado, sem instalar um sniffer e sem confiar no painel?"
+  check="mTLS:"
+>
+  <Fragment slot="hint">
+    Quem sabe se a conexão foi cifrada é quem a cifrou.
+  </Fragment>
+  <Fragment slot="answer">
+
+```bash
+POD=$(kubectl -n linkerd-demo get pod -l app=cliente -o jsonpath='{.items[0].metadata.name}')
+linkerd diagnostics proxy-metrics -n linkerd-demo "po/$POD" | grep -oE 'tls="[a-z_]+"' | sort | uniq -c
+```
+
+O rótulo `tls` em `request_total` vale `"true"` quando a conexão foi mTLS, e
+`"no_identity"` quando não. Medido nesta stack: **122 séries com `tls="true"`**.
+
+As séries com `no_identity` também ensinam: são a porta 4191, de onde o
+Prometheus raspa as métricas do proxy. Ela é deliberadamente não-meshed —
+scrape de métricas não passa pela malha.
+
+E a prova que vale mais que a cifra:
+
+```bash
+linkerd diagnostics proxy-metrics -n linkerd-demo "po/$POD" | grep -oE 'server_id="[^"]+"' | sort -u
+```
+
+O `server_id` nomeia a **ServiceAccount** do outro lado. Cifra sem identidade
+protege contra quem escuta; identidade protege contra quem se **faz passar** —
+e é a segunda que a NetworkPolicy não consegue dar.
+
+  </Fragment>
+</LabExercise>
+
+<Quiz set="service-mesh-identity" />
