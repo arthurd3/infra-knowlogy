@@ -252,9 +252,11 @@ thing a study cluster cannot prove.
 </FieldNote>
 
 <LabExercise
-  question="How would you show, without reading the application's code, that the Gateway picked the right upstream and the problem is in the network?"
   check="sem a policy: Gateway ainda Programmed=True e a requisição NÃO completa"
 >
+
+How would you show, without reading the application's code, that the Gateway picked the right upstream and the problem is in the network?
+
   <Fragment slot="hint">
     The Gateway's status will not help — it stays green. The component that logs
     every request along with the upstream it chose is the proxy.

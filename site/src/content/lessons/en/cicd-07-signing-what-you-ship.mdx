@@ -136,6 +136,7 @@ The `sign` stage signs three digests. `verify` checks all three.
 Question: if somebody pushed a **different** image to the registry under the
 `:ci` tag after the pipeline finished, would the next run's `cosign verify` fail?
 
+
 <Fragment slot="hint">
 Look at exactly what `verify` receives as its reference.
 </Fragment>

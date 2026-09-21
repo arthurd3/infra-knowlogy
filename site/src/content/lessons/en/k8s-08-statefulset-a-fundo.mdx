@@ -182,9 +182,11 @@ would require at least two with replication configured.
 </FieldNote>
 
 <LabExercise
-  question="You deleted a StatefulSet by mistake. What must you check BEFORE recreating it, and what happens if you just recreate it?"
   check="o PVC pgdata-db-0 é o MESMO objeto (não foi recriado)"
 >
+
+You deleted a StatefulSet by mistake. What must you check BEFORE recreating it, and what happens if you just recreate it?
+
   <Fragment slot="hint">
     The retention default protects you — but only if the name matches.
   </Fragment>

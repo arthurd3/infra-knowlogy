@@ -199,9 +199,11 @@ bilhões de transações.
 </FieldNote>
 
 <LabExercise
-  question="Uma tabela cresce sem parar e o número de linhas está estável. Como confirmar que é inchaço e decidir o que fazer?"
   check="postgres: pg_stat_statements carregado"
 >
+
+Uma tabela cresce sem parar e o número de linhas está estável. Como confirmar que é inchaço e decidir o que fazer?
+
   <Fragment slot="hint">
     Compare o que a tabela ocupa com o que ela deveria ocupar — e veja quando
     o autovacuum passou por ali pela última vez.

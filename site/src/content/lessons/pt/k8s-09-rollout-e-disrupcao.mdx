@@ -191,9 +191,11 @@ percorre.
 </FieldNote>
 
 <LabExercise
-  question="Um `kubectl drain` está parado há vinte minutos sem mensagem de erro. Como descobrir se é um PDB, e qual?"
   check="PDB: o segundo despejo é RECUSADO (429)"
 >
+
+Um `kubectl drain` está parado há vinte minutos sem mensagem de erro. Como descobrir se é um PDB, e qual?
+
   <Fragment slot="hint">
     O PDB publica, no próprio status, quantos despejos ele ainda autoriza.
   </Fragment>

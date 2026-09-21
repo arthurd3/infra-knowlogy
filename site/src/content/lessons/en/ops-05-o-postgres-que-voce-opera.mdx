@@ -199,9 +199,11 @@ transactions.
 </FieldNote>
 
 <LabExercise
-  question="A table keeps growing while its row count is stable. How do you confirm it is bloat and decide what to do?"
   check="postgres: pg_stat_statements carregado"
 >
+
+A table keeps growing while its row count is stable. How do you confirm it is bloat and decide what to do?
+
   <Fragment slot="hint">
     Compare what the table occupies with what it ought to — and look at when
     autovacuum last came by.

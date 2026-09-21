@@ -192,9 +192,11 @@ walks.
 </FieldNote>
 
 <LabExercise
-  question="A `kubectl drain` has been stuck for twenty minutes with no error message. How do you find out whether it is a PDB, and which one?"
   check="PDB: o segundo despejo é RECUSADO (429)"
 >
+
+A `kubectl drain` has been stuck for twenty minutes with no error message. How do you find out whether it is a PDB, and which one?
+
   <Fragment slot="hint">
     The PDB publishes, in its own status, how many evictions it still allows.
   </Fragment>

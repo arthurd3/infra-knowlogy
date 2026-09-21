@@ -197,9 +197,11 @@ de um nó, e a escala de ataque a que o documento se refere é outra.
 </FieldNote>
 
 <LabExercise
-  question="Você desconfia que uma ServiceAccount tem mais permissão do que deveria. Como listar TUDO o que ela pode fazer, sem ler os manifests um a um?"
   check="RBAC: a SA reader NÃO pode listar secrets (a prova negativa)"
 >
+
+Você desconfia que uma ServiceAccount tem mais permissão do que deveria. Como listar TUDO o que ela pode fazer, sem ler os manifests um a um?
+
   <Fragment slot="hint">
     O `auth can-i` aceita uma forma que não pergunta por um verbo específico.
   </Fragment>

@@ -250,9 +250,11 @@ exatamente a coisa que um cluster de estudo não consegue provar.
 </FieldNote>
 
 <LabExercise
-  question="Como você mostraria, sem olhar o código da aplicação, que o Gateway escolheu o upstream certo e o problema está na rede?"
   check="sem a policy: Gateway ainda Programmed=True e a requisição NÃO completa"
 >
+
+Como você mostraria, sem olhar o código da aplicação, que o Gateway escolheu o upstream certo e o problema está na rede?
+
   <Fragment slot="hint">
     O status do Gateway não vai ajudar — ele fica verde. Quem registra cada
     requisição com o upstream escolhido é o proxy.

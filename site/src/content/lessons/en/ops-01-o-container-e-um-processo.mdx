@@ -177,9 +177,11 @@ here: it is kernel history, not the state of this machine.
 </FieldNote>
 
 <LabExercise
-  question="A named volume ended up with files a new container cannot read. How do you find the cause in two commands?"
   check="o UID do container é o do host"
 >
+
+A named volume ended up with files a new container cannot read. How do you find the cause in two commands?
+
   <Fragment slot="hint">
     The error says `permission denied` and names no UID. Both sides of the
     comparison are numbers, not names.

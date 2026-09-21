@@ -227,6 +227,29 @@ console.log(`\n\x1b[1m── HTML gerado (${pages.length} páginas em ${relative
   else bad(`${vazios.length} <Term> renderizado sem palavra`, [...new Set(vazios)]);
 }
 
+// ─── 10b. Exercício sai com a PERGUNTA, e não só com a moldura ───────────────
+{
+  // A prima direta da checagem acima, e ela nasceu de um estrago medido: o
+  // `LabExercise` recebe a pergunta pelo CORPO, e 34 lições a passavam por uma
+  // prop `question=` que o componente não declara. O Astro aceitou, o
+  // `astro check` não tipa prop de MDX, o teste de conteúdo contava o
+  // componente, e a checagem 9 aqui do lado via o elemento existir.
+  //
+  // Resultado: 34 exercícios publicados com a moldura, o gabarito, o nome da
+  // checagem do portão — e NENHUMA pergunta. Contar elemento não é ler
+  // conteúdo; por isso esta olha o texto que sobrou depois de renderizar.
+  const curtos = [];
+  for (const p of pages) {
+    const html = read(p);
+    for (const m of html.matchAll(/<div class="lab__question">([\s\S]*?)<\/div>\s*<details/g)) {
+      const texto = m[1].replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+      if (texto.length < 20) curtos.push(`${page(p)}: ${texto.length} caracteres`);
+    }
+  }
+  if (curtos.length === 0) ok("todo exercício sai com a pergunta, não só com a moldura");
+  else bad(`${curtos.length} <LabExercise> publicado sem pergunta`, [...new Set(curtos)]);
+}
+
 // ─── 11. Imagem de terceiro sai com procedência ──────────────────────────────
 {
   // Um SVG daqui pinta por classe e segue o tema; uma imagem de fora não faz

@@ -200,9 +200,11 @@ different one.
 </FieldNote>
 
 <LabExercise
-  question="You suspect a ServiceAccount has more permission than it should. How do you list EVERYTHING it can do, without reading the manifests one by one?"
   check="RBAC: a SA reader NÃO pode listar secrets (a prova negativa)"
 >
+
+You suspect a ServiceAccount has more permission than it should. How do you list EVERYTHING it can do, without reading the manifests one by one?
+
   <Fragment slot="hint">
     `auth can-i` accepts a form that does not ask about one specific verb.
   </Fragment>

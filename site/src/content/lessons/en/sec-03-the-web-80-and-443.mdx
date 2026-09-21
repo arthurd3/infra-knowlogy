@@ -230,6 +230,7 @@ The API's `handleList` accepts `?limit=`. Send `?limit=1;DROP TABLE links--` and
 watch what happens. Then explain why the table survived — and why it would have
 survived **even** if `limit` had been concatenated into the query.
 
+
 <Fragment slot="hint">
 Look at what `handleList` does with the value before it goes anywhere near the
 database. There are two defenses, not one.
