@@ -156,6 +156,31 @@ services:
       # dentro do container entra no banco sem senha.
       POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256 --auth-local=scram-sha-256"
     secrets: [postgres_password]
+    # ─── Ajuste, e cada linha aqui tem um motivo medido ──────────────────────
+    # A imagem oficial não monta um postgresql.conf; a forma suportada de
+    # ajustar é passar `-c` ao próprio postgres, que é o que o entrypoint
+    # executa depois de inicializar.
+    command:
+      - postgres
+      # pg_stat_statements precisa ser carregado ANTES de o servidor subir — é
+      # uma biblioteca compartilhada, não uma extensão qualquer. Sem esta linha
+      # o `CREATE EXTENSION` falha dizendo exatamente isso. É o único jeito de
+      # saber QUAL consulta está lenta em vez de saber que o banco está lento.
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+      - -c
+      - pg_stat_statements.track=all
+      # O padrão do Postgres é 4GB, e este container tem 512MiB de cgroup —
+      # oito vezes menos. Não é um parâmetro de alocação: é o que o planejador
+      # ACREDITA que o sistema operacional tem em cache, e é com isso que ele
+      # decide entre varredura sequencial e índice.
+      #
+      # Honestidade sobre o efeito: medido nesta stack, com uma tabela de 200
+      # mil linhas, o plano NÃO mudou entre 4GB e 256MB. A correção está aqui
+      # porque o valor antigo é falso, não porque comprou desempenho — e a
+      # lição de operação diz isso com todas as letras.
+      - -c
+      - effective_cache_size=256MB
     volumes:
       # Volume NOMEADO, não bind mount. O Docker é dono do ciclo de vida, o
       # desempenho de I/O é nativo e o volume sobrevive a `docker compose down`.

@@ -8,6 +8,7 @@
 #
 #   SKIP_SCAN=1     pula o Trivy (rápido, para iteração local)
 #   SKIP_OBS=1      pula a checagem do profile de observabilidade
+#   SKIP_OPS=1      pula as checagens de operação (cgroup, OOM, DNS, Postgres)
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -27,7 +28,7 @@ bad()   { printf '   \033[31m✗\033[0m %s\n' "$1"; FAIL=$((FAIL+1)); RESULTS+=(
 skip()  { printf '   \033[33m⊘\033[0m %s\n' "$1"; SKIP=$((SKIP+1)); RESULTS+=("SKIP  $1"); }
 
 # ─── 1. Lint estático ────────────────────────────────────────────────────────
-step "1/9  Lint de Dockerfile e validação dos compose files"
+step "1/10 Lint de Dockerfile e validação dos compose files"
 
 for f in $(find stack site -name Dockerfile -not -path '*/node_modules/*'); do
   if docker run --rm -i hadolint/hadolint:latest hadolint --no-color - < "$f" >/tmp/hl.txt 2>&1; then
@@ -48,7 +49,7 @@ for combo in "PROD:${PROD[*]}" "DEV:${BASE[*]} -f stack/compose.dev.yaml" "OBS:$
 done
 
 # ─── 2. Build + medição ──────────────────────────────────────────────────────
-step "2/9  Build de todas as imagens e medição de tamanho"
+step "2/10 Build de todas as imagens e medição de tamanho"
 if "${COMPOSE[@]}" build >/tmp/build.txt 2>&1; then
   ok "docker compose build"
 else
@@ -62,7 +63,7 @@ else
 fi
 
 # ─── 3. Subir e esperar saúde ────────────────────────────────────────────────
-step "3/9  Subir a stack e esperar todos os healthchecks"
+step "3/10 Subir a stack e esperar todos os healthchecks"
 bash tools/scripts/init-secrets.sh >/dev/null 2>&1
 if "${COMPOSE[@]}" up -d --wait --wait-timeout 180 >/tmp/up.txt 2>&1; then
   ok "up --wait: todos os serviços saudáveis"
@@ -72,7 +73,7 @@ else
 fi
 
 # ─── 4. Smoke test do fluxo completo ─────────────────────────────────────────
-step "4/9  Smoke test: criar link -> redirecionar -> enriquecer"
+step "4/10 Smoke test: criar link -> redirecionar -> enriquecer"
 PORT="$(grep -E '^EDGE_PORT=' stack/.env 2>/dev/null | cut -d= -f2)"; PORT="${PORT:-8080}"
 BASEURL="http://127.0.0.1:${PORT}"
 
@@ -88,7 +89,7 @@ else
 fi
 
 # ─── 5. Endurecimento ────────────────────────────────────────────────────────
-step "5/9  Provas de endurecimento (OWASP)"
+step "5/10 Provas de endurecimento (OWASP)"
 
 # Rootfs imutável: escrever na raiz tem que falhar.
 if "${COMPOSE[@]}" exec -T worker sh -c 'echo x > /provaescrita' >/dev/null 2>&1; then
@@ -139,7 +140,7 @@ else
 fi
 
 # ─── 6. Desligamento gracioso ────────────────────────────────────────────────
-step "6/9  Desligamento gracioso (limite 3s por serviço)"
+step "6/10 Desligamento gracioso (limite 3s por serviço)"
 if bash tools/scripts/shutdown-test.sh >/tmp/sd.txt 2>&1; then
   ok "todos os serviços param em menos de 3s"
   grep -E '✓|✗' /tmp/sd.txt | sed 's/^/    /'
@@ -149,7 +150,7 @@ else
 fi
 
 # ─── 7. Scanner ──────────────────────────────────────────────────────────────
-step "7/9  Vulnerabilidades (Trivy, HIGH+CRITICAL)"
+step "7/10 Vulnerabilidades (Trivy, HIGH+CRITICAL)"
 if [ "${SKIP_SCAN:-0}" = "1" ]; then
   skip "scan pulado (SKIP_SCAN=1)"
 else
@@ -171,7 +172,7 @@ fi
 # ci.yml), virou teste de verdade em site/tests/content.test.ts — junto das
 # checagens que ela sozinha não fazia: os dois idiomas usam os MESMOS widgets
 # e diagramas, e nenhuma lição nasce só com texto.
-step "8/9  Site: tipos, testes, build e HTML gerado"
+step "8/10 Site: tipos, testes, build e HTML gerado"
 
 if (cd site && npm run check >/tmp/site-check.txt 2>&1); then
   ok "astro check (tipos do site)"
@@ -200,7 +201,7 @@ else
 fi
 
 # ─── 9. Observabilidade ──────────────────────────────────────────────────────
-step "9/9  Profile de observabilidade"
+step "9/10 Profile de observabilidade"
 if [ "${SKIP_OBS:-0}" = "1" ]; then
   skip "observabilidade pulada (SKIP_OBS=1)"
 elif docker compose "${OBS[@]}" --profile obs up -d --wait --wait-timeout 240 >/tmp/obs.txt 2>&1; then
@@ -285,6 +286,118 @@ elif docker compose "${OBS[@]}" --profile obs up -d --wait --wait-timeout 240 >/
   fi
 else
   bad "stack de observabilidade não subiu"; tail -20 /tmp/obs.txt | sed 's/^/       /'
+fi
+
+# ─── 10. Operação: Linux, rede e Postgres, medidos contra a stack ────────────
+step "10/10 Operação (cgroup, OOM, DNS e Postgres)"
+
+if [ "${SKIP_OPS:-0}" = "1" ]; then
+  skip "trilha de operação pulada (SKIP_OPS=1)"
+else
+  docker compose "${PROD[@]}" up -d --wait --wait-timeout 180 >/dev/null 2>&1
+
+  # ── O UID do container É o UID do host. Enquanto o user namespace estiver
+  # desligado (padrão do Docker), não há tradução nenhuma — e o `ps` do host
+  # resolve o número pelo /etc/passwd DELE. É por isso que o Postgres desta
+  # stack, que roda como UID 70, aparece no host com o nome que este Fedora
+  # dá ao 70. Se isso deixar de valer, ou o userns foi ligado ou a imagem
+  # mudou de usuário, e as duas coisas mudam a lição.
+  PID_DB=$(docker inspect --format '{{.State.Pid}}' "$(docker compose "${PROD[@]}" ps -q db)" 2>/dev/null)
+  UID_DB=$(ps -o uid= -p "$PID_DB" 2>/dev/null | tr -d ' ')
+  UID_INTERNO=$(docker compose "${PROD[@]}" exec -T db id -u postgres 2>/dev/null | tr -d '\r ')
+  if [ -n "$UID_DB" ] && [ "$UID_DB" = "${UID_INTERNO:-x}" ]; then
+    NOME_HOST=$(ps -o user= -p "$PID_DB" 2>/dev/null | tr -d ' ')
+    ok "o UID do container é o do host (uid=$UID_DB; o host chama de '$NOME_HOST')"
+  else
+    bad "o UID visto do host ($UID_DB) difere do de dentro ($UID_INTERNO) — userns ligado?"
+  fi
+
+  # ── O limite do cgroup é LEGÍVEL de dentro, e é o que a aplicação deveria
+  # consultar em vez de /proc/meminfo, que mostra a memória do HOST.
+  MEM_MAX=$(docker compose "${PROD[@]}" exec -T worker cat /sys/fs/cgroup/memory.max 2>/dev/null | tr -d '\r ')
+  MEM_HOST=$(awk '/MemTotal/{print $2*1024}' /proc/meminfo)
+  if [ -n "$MEM_MAX" ] && [ "$MEM_MAX" != "max" ] && [ "$MEM_MAX" -lt "$MEM_HOST" ]; then
+    ok "cgroup v2: o worker lê seu próprio limite ($((MEM_MAX/1048576)) MiB; o host tem $((MEM_HOST/1073741824)) GiB)"
+  else
+    bad "não consegui ler memory.max do worker (valor: '${MEM_MAX:-vazio}')"
+  fi
+
+  # ── O OOM killer, provocado. O que importa não é morrer: é SIGKILL não ser
+  # capturável, então nenhum `defer`, `finally` ou handler roda.
+  docker rm -f ops-oom-gate >/dev/null 2>&1
+  docker run --name ops-oom-gate --memory=64m --memory-swap=64m python:3.13-alpine \
+    python -c 'b=[]
+while True: b.append(bytearray(8*1024*1024))' >/dev/null 2>&1
+  OOM_ESTADO=$(docker inspect ops-oom-gate --format '{{.State.OOMKilled}}|{{.State.ExitCode}}' 2>/dev/null)
+  docker rm -f ops-oom-gate >/dev/null 2>&1
+  if [ "$OOM_ESTADO" = "true|137" ]; then
+    ok "OOM killer: OOMKilled=true e exit 137 (128 + 9, SIGKILL)"
+  else
+    bad "o OOM não aconteceu como esperado (estado: ${OOM_ESTADO:-vazio})"
+  fi
+
+  # ── DNS: um rótulo desconhecido custa segundos; dois rótulos inexistentes
+  # custam milissegundos. É a diferença entre errar o nome de um serviço e
+  # errar um domínio — e a primeira é a que parece "a rede está lenta".
+  DNS_JSON=$(docker compose "${PROD[@]}" exec -T worker python3 -c '
+import socket,time,json
+def ms(n):
+    t=time.monotonic()
+    try:
+        socket.gethostbyname(n); ok=True
+    except Exception:
+        ok=False
+    return round((time.monotonic()-t)*1000,1), ok
+lento,_ = ms("naoexisteninguem")
+rapido,_ = ms("zq7x4k2m9p1v3n8w.com")
+bom,okb = ms("db")
+print(json.dumps({"rotuloUnico":lento,"doisRotulos":rapido,"db":bom,"dbOk":okb}))' 2>/dev/null | tail -1)
+  M_DNS_LENTO=$(printf '%s' "$DNS_JSON" | python3 -c "import sys,json;v=json.load(sys.stdin).get('rotuloUnico');print('' if v is None else v)" 2>/dev/null)
+  M_DNS_RAPIDO=$(printf '%s' "$DNS_JSON" | python3 -c "import sys,json;v=json.load(sys.stdin).get('doisRotulos');print('' if v is None else v)" 2>/dev/null)
+  case "$DNS_JSON" in
+    *'"dbOk": true'*) ok "DNS: o nome de um companheiro de rede resolve" ;;
+    *) bad "DNS: o worker não resolve 'db' — a rede data quebrou" ;;
+  esac
+  if [ -n "$M_DNS_LENTO" ] && [ -n "$M_DNS_RAPIDO" ] &&
+     python3 -c "import sys;sys.exit(0 if float(sys.argv[1]) > 100*float(sys.argv[2]) else 1)" \
+       "$M_DNS_LENTO" "$M_DNS_RAPIDO"; then
+    ok "DNS: rótulo único desconhecido custa ${M_DNS_LENTO}ms contra ${M_DNS_RAPIDO}ms de dois rótulos"
+  else
+    bad "a assimetria do DNS não apareceu (${M_DNS_LENTO:-?}ms x ${M_DNS_RAPIDO:-?}ms)"
+  fi
+
+  # ── Postgres: a biblioteca carregada, a extensão criada, e o cache que o
+  # planejador acredita ter. `-T` no exec pela armadilha 31.
+  PSQL_C='PGPASSWORD=$(cat /run/secrets/postgres_password) psql -U links -d links -tAc'
+  SPL=$(docker compose "${PROD[@]}" exec -T db sh -c "$PSQL_C \"SHOW shared_preload_libraries;\"" 2>/dev/null | tr -d '\r ')
+  if [ "$SPL" = "pg_stat_statements" ]; then
+    ok "postgres: pg_stat_statements carregado em shared_preload_libraries"
+  else
+    bad "postgres: shared_preload_libraries='${SPL:-vazio}' (esperado pg_stat_statements)"
+  fi
+  docker compose "${PROD[@]}" exec -T db sh -c \
+    "$PSQL_C \"CREATE EXTENSION IF NOT EXISTS pg_stat_statements;\"" >/dev/null 2>&1
+  EXT=$(docker compose "${PROD[@]}" exec -T db sh -c \
+    "$PSQL_C \"SELECT count(*) FROM pg_extension WHERE extname='pg_stat_statements';\"" 2>/dev/null | tr -d '\r ')
+  if [ "$EXT" = "1" ]; then
+    ok "postgres: a extensão existe no banco (a biblioteca é a outra metade)"
+  else
+    bad "postgres: a extensão pg_stat_statements não está criada"
+  fi
+
+  ECS=$(docker compose "${PROD[@]}" exec -T db sh -c "$PSQL_C \"SHOW effective_cache_size;\"" 2>/dev/null | tr -d '\r ')
+  MEM_DB=$(docker compose "${PROD[@]}" exec -T db cat /sys/fs/cgroup/memory.max 2>/dev/null | tr -d '\r ')
+  if python3 -c "
+import re, sys
+v, lim = sys.argv[1].strip(), sys.argv[2].strip()
+mult = {'kB': 1024, 'MB': 1048576, 'GB': 1073741824}
+m = re.match(r'(\d+)(kB|MB|GB)', v)
+sys.exit(0 if m and lim.isdigit() and int(m.group(1)) * mult[m.group(2)] <= int(lim) else 1)" \
+     "$ECS" "$MEM_DB"; then
+    ok "postgres: effective_cache_size ($ECS) cabe no cgroup ($((MEM_DB/1048576)) MiB)"
+  else
+    bad "postgres: effective_cache_size=$ECS é maior que o limite do container ($MEM_DB bytes)"
+  fi
 fi
 
 # ─── Resumo ──────────────────────────────────────────────────────────────────

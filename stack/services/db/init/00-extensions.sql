@@ -1,0 +1,12 @@
+-- Executado UMA VEZ, antes do schema (a ordem é alfabética, daí o `00-`).
+--
+-- `shared_preload_libraries=pg_stat_statements` no compose.yaml carrega a
+-- BIBLIOTECA no servidor; esta linha cria a VISÃO dentro do banco. São duas
+-- etapas separadas de propósito, e pular a primeira faz esta falhar com:
+--
+--   ERROR:  pg_stat_statements must be loaded via "shared_preload_libraries"
+--
+-- Num volume que já existe, este arquivo não roda (a armadilha nº 1 do
+-- Postgres em Docker, explicada no 01-schema.sql). O portão do módulo 1
+-- executa um `CREATE EXTENSION IF NOT EXISTS` por isso.
+CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
