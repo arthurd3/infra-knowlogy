@@ -1,0 +1,239 @@
+---
+key: the-postgres-you-operate
+lang: en
+track: operacao
+order: 5
+title: "The Postgres you operate"
+summary: "Deleting half the rows returns not one byte of disk. Running VACUUM does not either. And the sort that spills 7 MB to disk is only 17% slower — the real cost sits in a counter nobody looks at. All measured on this stack's `db`."
+minutes: 16
+tags: [postgres, vacuum, work_mem, tuning, mvcc]
+sources:
+  - label: "PostgreSQL Docs — Routine Vacuuming"
+    url: "https://www.postgresql.org/docs/17/routine-vacuuming.html"
+    kind: docs
+  - label: "PostgreSQL Docs — Resource Consumption (work_mem, shared_buffers)"
+    url: "https://www.postgresql.org/docs/17/runtime-config-resource.html"
+    kind: docs
+  - label: "PostgreSQL Docs — pg_stat_statements"
+    url: "https://www.postgresql.org/docs/17/pgstatstatements.html"
+    kind: docs
+  - label: "PostgreSQL Docs — Concurrency Control (MVCC)"
+    url: "https://www.postgresql.org/docs/17/mvcc-intro.html"
+    kind: docs
+---
+
+import VacuumAndSpace from "../../../components/diagrams/VacuumAndSpace.astro";
+
+Module 1 started a Postgres and never talked about operating it. This lesson
+measures three things that decide whether it stays up: where the space goes,
+where the memory goes, and how to know which query is hurting.
+
+## 1. The space does not come back
+
+<VacuumAndSpace />
+
+```console
+table with 200k rows          14 MB
+DELETE half of them           14 MB
+VACUUM                        14 MB
+VACUUM FULL                 6672 kB
+```
+
+<Term word="MVCC" alt="Multi-Version Concurrency Control">
+*Multi-Version Concurrency Control* — the reason Postgres never updates a row in
+place.
+
+An `UPDATE` writes a **new version** of the row and marks the old one dead from
+a given transaction onwards. A `DELETE` only marks. Both versions coexist while
+any running transaction could still see the old one.
+
+The gain is enormous: reads never block writes and writes never block reads. The
+price is that **every `UPDATE` and every `DELETE` produces garbage**, and
+somebody has to collect it.
+</Term>
+
+- **`VACUUM`** marks dead tuples' space reusable **by the table itself**. It
+  returns nothing to the filesystem. It is cheap, runs concurrently, and is what
+  autovacuum does on its own.
+- **`VACUUM FULL`** rewrites the whole table into a new file. It returns the
+  space — at the price of an `ACCESS EXCLUSIVE` lock (not even reads get through)
+  and **twice the disk** during the operation.
+
+<Callout type="warn" title="`VACUUM FULL` in production is a scheduled incident">
+It blocks reads **and** writes for as long as copying the table takes. On a
+500 GB table that is measured in hours, with the application stopped.
+
+The alternatives that stop nothing — `pg_repack`, `pg_squeeze` — exist for
+exactly this reason, and are worth installing before you need them.
+</Callout>
+
+## Autovacuum is a formula, not a number
+
+```console
+autovacuum_vacuum_threshold     = 50
+autovacuum_vacuum_scale_factor  = 0.2
+autovacuum_naptime              = 60 s
+autovacuum_max_workers          = 3
+```
+
+The trigger is `50 + 0.2 × row count`. On a thousand-row table, 250 dead rows are
+enough. On a **hundred-million-row** one, autovacuum waits for **twenty million**
+dead rows before acting — and by then the table has bloated badly.
+
+It is why large tables need a smaller `scale_factor` **per table**:
+
+```sql
+ALTER TABLE events SET (autovacuum_vacuum_scale_factor = 0.01);
+```
+
+The default was chosen for small databases, and it ages with your table.
+
+## 2. The memory that disappears without showing
+
+`work_mem` is the memory **each sort or hash operation** may use. It is not per
+connection: it is per **plan node**. A query with three sorts can use three times
+the value, and a hundred connections doing that at once multiply it again.
+
+Measured on this stack, sorting 200k rows:
+
+| `work_mem` | method | time (3 runs) |
+|---|---|---|
+| **4 MB** (the default) | `external merge  Disk: 7248kB` | 206.9 · 182.4 · 171.4 ms |
+| **64 MB** | `quicksort  Memory: 6145kB` | 153.7 · 153.1 · 158.4 ms |
+
+**17% faster.** Not ten times.
+
+<Callout type="note" title="The small gain is the honest finding">
+The field's material tends to promise orders of magnitude. On this NVMe, with the
+temporary file going straight into page cache, spilling costs 17%.
+
+The cost that matters is somewhere else:
+
+```console
+$ SELECT temp_files, pg_size_pretty(temp_bytes) FROM pg_stat_database
+    WHERE datname='links';
+ 7 | 35 MB
+```
+
+**35 MB written** that query duration hides. On a server with dozens of
+concurrent sorts, that writing competes with the WAL and the checkpoint, and page
+cache stops saving you. The signal to watch is `temp_files`, not the duration.
+</Callout>
+
+## The parameter that was lying
+
+```console
+effective_cache_size = 4GB          ← Postgres's default
+memory.max           = 512 MiB      ← this container's cgroup
+```
+
+`effective_cache_size` allocates nothing. It is what the **planner believes** the
+operating system holds in cache, and it is what decides between a sequential scan
+and an index. The value was eight times above the real limit.
+
+This stack now declares `effective_cache_size=256MB`. And the honest measurement:
+
+> **With a 200k-row table, the plan did not change between 4GB and 256MB.**
+
+The correction is there because the old value was **false**, not because it bought
+performance. On large tables, in a tight cost calculation, it changes the choice —
+but claiming that here would be repeating what one reads elsewhere rather than
+what this machine showed.
+
+## 3. Knowing WHICH query
+
+```console
+$ SHOW shared_preload_libraries;
+pg_stat_statements
+```
+
+There are two steps, and skipping the first makes the second fail with a message
+that says exactly so:
+
+1. `shared_preload_libraries=pg_stat_statements` on the server — loads the
+   **library**, and requires a restart;
+2. `CREATE EXTENSION pg_stat_statements;` in the database — creates the **view**.
+
+What it delivers:
+
+```console
+ calls | ms_total | ms_mean | query
+-------+----------+---------+--------------------------------------
+     2 |      7.7 |    3.86 | SELECT v FROM ops_demo ORDER BY v LIMIT $1
+     1 |      2.4 |    2.44 | SELECT count(*) FROM ops_demo
+```
+
+Notice the **`$1`**. The extension **normalises** literals, so a thousand
+executions of the same query with a thousand different values become one row with
+`calls = 1000`. That is what makes it useful — without normalisation it would be
+a thousand rows and no pattern.
+
+<Tradeoff
+  a="pg_stat_statements"
+  b="log_min_duration_statement"
+  whenA="To find what CONSUMES most in aggregate — including the fast query that runs a million times, which no slow-query log ever catches."
+  whenB="To investigate one specific query with the REAL parameters that made it slow. The aggregate loses exactly that."
+>
+  <Fragment slot="a">
+    Costs ~1% of CPU and a fixed amount of shared memory. In exchange: it never
+    shows real values, and the counters reset on restart (or on `reset()`).
+  </Fragment>
+  <Fragment slot="b">
+    Gives you the query as it ran, with values. In exchange: it only sees what
+    crossed the threshold, and a low threshold fills the disk with log.
+  </Fragment>
+</Tradeoff>
+
+<FieldNote
+  source="PostgreSQL Documentation — Routine Vacuuming"
+  url="https://www.postgresql.org/docs/17/routine-vacuuming.html"
+  accessed="2026-09-21"
+>
+The documentation devotes a whole section to *transaction ID wraparound*:
+transaction IDs are 32-bit and wrap around, and VACUUM is also what marks rows
+permanently visible before that happens. A database left too long without a
+vacuum enters read-only mode to protect itself — and the recovery is offline. It
+is the one case where skipping maintenance does not degrade performance: it
+**stops the database**. Not measured here: reaching wraparound takes billions of
+transactions.
+</FieldNote>
+
+<LabExercise
+  question="A table keeps growing while its row count is stable. How do you confirm it is bloat and decide what to do?"
+  check="postgres: pg_stat_statements carregado"
+>
+  <Fragment slot="hint">
+    Compare what the table occupies with what it ought to — and look at when
+    autovacuum last came by.
+  </Fragment>
+  <Fragment slot="answer">
+
+```sql
+SELECT relname,
+       n_live_tup, n_dead_tup,
+       round(100.0 * n_dead_tup / NULLIF(n_live_tup + n_dead_tup, 0), 1) AS pct_dead,
+       last_autovacuum, last_autoanalyze,
+       pg_size_pretty(pg_relation_size(relid)) AS size
+FROM pg_stat_user_tables
+ORDER BY n_dead_tup DESC
+LIMIT 10;
+```
+
+A high `pct_dead` with an old (or null) `last_autovacuum` closes the diagnosis.
+The commonest causes, in order:
+
+1. **The formula.** `50 + 0.2 × rows` on a huge table is a huge trigger. Fix it
+   per table with `ALTER TABLE ... SET (autovacuum_vacuum_scale_factor = 0.01)`.
+2. **A transaction open for hours.** VACUUM cannot remove tuples a live
+   transaction could still see. Check
+   `SELECT pid, state, xact_start FROM pg_stat_activity ORDER BY xact_start;` —
+   an old `idle in transaction` blocks vacuuming across the whole database.
+3. **An abandoned replication slot**, which holds the WAL for the same reason.
+
+Only after that is the question `VACUUM FULL` or `pg_repack` — and the answer
+depends on whether you can stop the table.
+
+  </Fragment>
+</LabExercise>
+
+<Quiz set="the-postgres-you-operate" />

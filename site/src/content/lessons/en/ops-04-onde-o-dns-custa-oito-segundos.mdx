@@ -1,0 +1,203 @@
+---
+key: where-dns-costs-eight-seconds
+lang: en
+track: operacao
+order: 4
+title: "Where DNS costs eight seconds"
+summary: "A name that exists nowhere fails in 1 millisecond. A mistyped service name fails in 8 seconds. The difference is the number of labels, it is 8000×, and it explains half the incidents filed as “the network is slow”."
+minutes: 14
+tags: [dns, networking, resolution, latency, docker]
+sources:
+  - label: "Docker Docs — Container networking: DNS services"
+    url: "https://docs.docker.com/engine/network/#dns-services"
+    kind: docs
+    accessed: "2026-09-21"
+  - label: "Linux man-pages — resolv.conf(5)"
+    url: "https://man7.org/linux/man-pages/man5/resolv.conf.5.html"
+    kind: docs
+  - label: "RFC 6762 — Multicast DNS (the reserved use of `.local`)"
+    url: "https://www.rfc-editor.org/rfc/rfc6762#section-3"
+    kind: spec
+  - label: "Kubernetes Docs — DNS for Services and Pods (ndots)"
+    url: "https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/#dns-options"
+    kind: docs
+    accessed: "2026-09-21"
+---
+
+import DnsResolutionCost from "../../../components/diagrams/DnsResolutionCost.astro";
+
+Measured inside this stack's `worker`:
+
+| name | labels | time | resolved? |
+|---|---|---|---|
+| `db` | 1 | **15.0 ms** | yes |
+| `edge` | 1 | **7826 ms** | no |
+| `naoexisteninguem` | 1 | **8000 ms** | no |
+| `zq7x4k2m9p1v3n8w.com` | 2 | **1.0 ms** | no |
+| `naoexiste.local` | 2 | 1.2 ms | no |
+| `example.com` | 2 | 0.5 ms | yes |
+
+Read the two bold lines together. **The name that exists nowhere in the universe
+fails in one millisecond. The name of a service in this very stack — spelled
+correctly, existing, just on another network — fails in eight seconds.**
+
+## Why
+
+<DnsResolutionCost />
+
+The `/etc/resolv.conf` Docker injects into the container:
+
+```
+nameserver 127.0.0.11
+search .
+options edns0 trust-ad ndots:0
+```
+
+`127.0.0.11` is Docker's embedded resolver. It knows the names of containers on
+the **same networks** as the requester — and nothing else.
+
+When it does not know, it **forwards** the query to the host's resolver. And
+here is the detail:
+
+- a name with **two or more labels** (`x.com`) is an ordinary DNS query. The
+  upstream resolver answers `NXDOMAIN` immediately. Fails in 1 ms.
+- a name with **a single label** (`edge`) is not a valid internet domain name.
+  The upstream resolver **does not answer** — and with no answer, the client
+  waits, retransmits and only gives up at the timeout. ~8 seconds.
+
+<Term word="ndots" alt="ndots">
+The `resolv.conf` option deciding when a name is treated as **absolute** and
+when the `search` domains get appended to it.
+
+`ndots:5` (the Kubernetes default) means: "if the name has fewer than 5 dots, try
+each suffix from the `search` list first". An `api` becomes four or five queries
+before being tried on its own.
+
+`ndots:0` (what Docker uses here) means: "treat everything as absolute". One
+query per name, no suffixes.
+
+It is the difference between one resolution and five per call — and, on
+Kubernetes, the reason so many teams append a trailing dot to names
+(`api.svc.cluster.local.`), which forces absolute treatment.
+</Term>
+
+## Why `.local` is fast
+
+`naoexiste.local` failed in 1.2 ms, forwarding nothing. The `.local` suffix is
+**reserved by RFC 6762** for mDNS — local-network multicast discovery — and
+resolvers refuse it outright rather than consulting global DNS.
+
+It is a happy coincidence that teaches the mechanism: the short path is not "the
+name does not exist", it is "I am not even going to ask".
+
+## What this causes in practice
+
+A typo in an environment variable:
+
+```yaml
+environment:
+  REDIS_HOST: cahce      # it was `cache`
+```
+
+The service starts. The connection fails. And each attempt costs **eight
+seconds** before failing — so the application looks hung, the healthcheck times
+out, and the diagnosis that reaches the channel is "the network is slow".
+
+<Callout type="warn" title="The cost shows up in the wrong place">
+Eight seconds of DNS waiting appears as **application** latency, not network
+latency. The p99 graph rises, the network-error graph stays at zero, and the time
+is spent inside a library call nobody instrumented.
+
+Which is why `getent hosts <name>` inside the container is one of the first
+commands to run in a latency incident — it separates "slow" from "waiting on a
+name".
+</Callout>
+
+## The second cause: segmentation
+
+`edge` **exists**. The container is up, it has that alias, and Docker's resolver
+knows it. But `worker` is on the `data` and `egress` networks while `edge` is on
+the `edge` network — so, from the resolver's point of view, it may as well not
+exist.
+
+```console
+$ docker inspect <worker> --format '{{range $k,$v := .NetworkSettings.Networks}}{{$k}} {{end}}'
+infra-knowlogy_data infra-knowlogy_egress
+```
+
+The network segmentation this stack does for security has exactly that side
+effect, and it is a good one: if the worker must not talk to the edge, it
+**should not even resolve its name**. The price is that the failure is slow
+rather than immediate.
+
+<Tradeoff
+  a="High ndots (Kubernetes: 5)"
+  b="Low ndots (Docker: 0)"
+  whenA="When short names must work: `api` resolving to `api.my-ns.svc.cluster.local` without anyone writing the suffix. It is convenience for whoever writes manifests."
+  whenB="When resolution latency matters more than convenience. One query per name, without the suffix cascade that multiplies every failure."
+>
+  <Fragment slot="a">
+    Short names work in any namespace. In exchange: every external name becomes
+    4–5 failed queries before the one that works — and at volume that saturates
+    cluster DNS.
+  </Fragment>
+  <Fragment slot="b">
+    One query, one result. In exchange: a short name only resolves if the
+    resolver knows it directly, and every external name must be complete.
+  </Fragment>
+</Tradeoff>
+
+<FieldNote
+  source="Kubernetes Docs — DNS for Services and Pods"
+  url="https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/#dns-options"
+  accessed="2026-09-21"
+>
+The Kubernetes documentation records `ndots: 5` as the default and offers
+`dnsConfig` to override it, explicitly citing the cost of unnecessary queries. In
+large clusters that cascade is a known cause of internal DNS saturation — CoreDNS
+ends up spending most of its work answering NXDOMAIN for suffixes nobody wanted.
+Not measured here: this is a single-node cluster, and saturation is a phenomenon
+of scale.
+</FieldNote>
+
+<LabExercise
+  question="A request is taking 8 seconds and the network graphs are clean. How do you confirm it is DNS in one command?"
+  check="DNS: rótulo único desconhecido custa"
+>
+  <Fragment slot="hint">
+    You need to time the resolution ON ITS OWN, separate from the connection.
+  </Fragment>
+  <Fragment slot="answer">
+
+```bash
+docker exec <container> python3 -c "
+import socket, time
+t = time.monotonic()
+try:    print(socket.gethostbyname('the-suspect-name'))
+except Exception as e: print(type(e).__name__)
+print(f'{(time.monotonic()-t)*1000:.1f} ms')"
+```
+
+If the time is on the order of seconds, it is DNS — and the name's label count
+tells you which of the two cases: one label is forwarding with no answer, two or
+more is something else (slow server, network to the resolver).
+
+Where `getent` exists, it resolves in one step:
+
+```bash
+docker exec <container> sh -c 'time getent hosts the-suspect-name'
+```
+
+And the check that closes the diagnosis is about networks, not names:
+
+```bash
+docker inspect <container> --format '{{range $k,$v := .NetworkSettings.Networks}}{{$k}} {{end}}'
+```
+
+A name that exists in the stack and does not resolve from here is almost always
+segmentation working as designed.
+
+  </Fragment>
+</LabExercise>
+
+<Quiz set="where-dns-costs-eight-seconds" />

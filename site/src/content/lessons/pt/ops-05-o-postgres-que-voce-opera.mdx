@@ -1,0 +1,239 @@
+---
+key: the-postgres-you-operate
+lang: pt
+track: operacao
+order: 5
+title: "O Postgres que você opera"
+summary: "Apagar metade das linhas não devolve um byte de disco. Rodar VACUUM também não. E o sort que derrama 7 MB para disco é só 17% mais lento — o custo real está num contador que ninguém olha. Tudo medido no `db` desta stack."
+minutes: 16
+tags: [postgres, vacuum, work_mem, tuning, mvcc]
+sources:
+  - label: "PostgreSQL Docs — Routine Vacuuming"
+    url: "https://www.postgresql.org/docs/17/routine-vacuuming.html"
+    kind: docs
+  - label: "PostgreSQL Docs — Resource Consumption (work_mem, shared_buffers)"
+    url: "https://www.postgresql.org/docs/17/runtime-config-resource.html"
+    kind: docs
+  - label: "PostgreSQL Docs — pg_stat_statements"
+    url: "https://www.postgresql.org/docs/17/pgstatstatements.html"
+    kind: docs
+  - label: "PostgreSQL Docs — Concurrency Control (MVCC)"
+    url: "https://www.postgresql.org/docs/17/mvcc-intro.html"
+    kind: docs
+---
+
+import VacuumAndSpace from "../../../components/diagrams/VacuumAndSpace.astro";
+
+O módulo 1 subiu um Postgres e nunca falou sobre operá-lo. Esta lição mede três
+coisas que decidem se ele fica de pé: onde o espaço vai, onde a memória vai, e
+como saber qual consulta está doendo.
+
+## 1. O espaço não volta
+
+<VacuumAndSpace />
+
+```console
+tabela com 200 mil linhas     14 MB
+DELETE de metade delas        14 MB
+VACUUM                        14 MB
+VACUUM FULL                 6672 kB
+```
+
+<Term word="MVCC" alt="Multi-Version Concurrency Control">
+*Multi-Version Concurrency Control* — a razão de o Postgres nunca alterar uma
+linha no lugar.
+
+Um `UPDATE` escreve uma **versão nova** da linha e marca a antiga como morta a
+partir de certa transação. Um `DELETE` só marca. As duas versões coexistem
+enquanto alguma transação em curso ainda puder enxergar a antiga.
+
+O ganho é enorme: leitura nunca bloqueia escrita e escrita nunca bloqueia
+leitura. O preço é que **todo `UPDATE` e todo `DELETE` produzem lixo**, e alguém
+precisa recolher.
+</Term>
+
+- **`VACUUM`** marca o espaço dos tuplos mortos como reutilizável **pela própria
+  tabela**. Não devolve nada ao sistema de arquivos. É barato, roda concorrente
+  e é o que o autovacuum faz sozinho.
+- **`VACUUM FULL`** reescreve a tabela inteira num arquivo novo. Devolve o
+  espaço — ao preço de um lock `ACCESS EXCLUSIVE` (nem leitura passa) e do
+  **dobro de disco** durante a operação.
+
+<Callout type="warn" title="`VACUUM FULL` em produção é um incidente agendado">
+Ele bloqueia leitura **e** escrita pelo tempo que levar para copiar a tabela.
+Numa tabela de 500 GB isso é medido em horas, com a aplicação parada.
+
+As alternativas que não param nada — `pg_repack`, `pg_squeeze` — existem
+exatamente por isso, e valem a instalação antes de você precisar delas.
+</Callout>
+
+## O autovacuum é uma fórmula, não um número
+
+```console
+autovacuum_vacuum_threshold     = 50
+autovacuum_vacuum_scale_factor  = 0.2
+autovacuum_naptime              = 60 s
+autovacuum_max_workers          = 3
+```
+
+O gatilho é `50 + 0,2 × número de linhas`. Numa tabela de mil linhas, 250
+mortas bastam. Numa de **cem milhões**, o autovacuum espera **vinte milhões** de
+linhas mortas antes de agir — e a essa altura a tabela já inchou muito.
+
+É a razão de tabelas grandes precisarem de `scale_factor` menor **por tabela**:
+
+```sql
+ALTER TABLE eventos SET (autovacuum_vacuum_scale_factor = 0.01);
+```
+
+O padrão foi escolhido para bancos pequenos, e ele envelhece com a sua tabela.
+
+## 2. A memória que some sem aparecer
+
+`work_mem` é a memória que **cada operação de ordenação ou hash** pode usar.
+Não é por conexão: é por **nó do plano**. Uma consulta com três sorts pode usar
+três vezes o valor, e cem conexões fazendo isso ao mesmo tempo multiplicam de
+novo.
+
+Medido nesta stack, ordenando 200 mil linhas:
+
+| `work_mem` | método | tempo (3 execuções) |
+|---|---|---|
+| **4 MB** (o padrão) | `external merge  Disk: 7248kB` | 206,9 · 182,4 · 171,4 ms |
+| **64 MB** | `quicksort  Memory: 6145kB` | 153,7 · 153,1 · 158,4 ms |
+
+**17% mais rápido.** Não dez vezes.
+
+<Callout type="note" title="O ganho pequeno é o achado honesto">
+O material da área costuma prometer ordens de grandeza. Neste NVMe, com o
+arquivo temporário indo direto para o page cache, derramar custa 17%.
+
+O custo que importa está em outro lugar:
+
+```console
+$ SELECT temp_files, pg_size_pretty(temp_bytes) FROM pg_stat_database
+    WHERE datname='links';
+ 7 | 35 MB
+```
+
+**35 MB escritos** que o tempo de consulta esconde. Num servidor com dezenas de
+sorts concorrentes, essa escrita compete com o WAL e com o checkpoint, e o page
+cache deixa de salvar. O sinal para vigiar é `temp_files`, não a duração.
+</Callout>
+
+## O parâmetro que estava mentindo
+
+```console
+effective_cache_size = 4GB          ← o padrão do Postgres
+memory.max           = 512 MiB      ← o cgroup deste container
+```
+
+`effective_cache_size` não aloca nada. É o que o **planejador acredita** que o
+sistema operacional tem em cache, e é com isso que ele decide entre varredura
+sequencial e índice. O valor estava oito vezes acima do limite real.
+
+Esta stack passou a declarar `effective_cache_size=256MB`. E a medição honesta:
+
+> **Com uma tabela de 200 mil linhas, o plano não mudou entre 4GB e 256MB.**
+
+A correção está lá porque o valor antigo era **falso**, não porque comprou
+desempenho. Em tabelas grandes, num cálculo de custo apertado, ela muda a
+escolha — mas afirmar isso aqui seria repetir o que se lê por aí, e não o que
+esta máquina mostrou.
+
+## 3. Saber QUAL consulta
+
+```console
+$ SHOW shared_preload_libraries;
+pg_stat_statements
+```
+
+São duas etapas, e pular a primeira faz a segunda falhar com uma mensagem que
+diz exatamente isso:
+
+1. `shared_preload_libraries=pg_stat_statements` no servidor — carrega a
+   **biblioteca**, e exige reinício;
+2. `CREATE EXTENSION pg_stat_statements;` no banco — cria a **visão**.
+
+O que ele entrega:
+
+```console
+ calls | ms_total | ms_media | consulta
+-------+----------+----------+--------------------------------------
+     2 |      7.7 |     3.86 | SELECT v FROM ops_demo ORDER BY v LIMIT $1
+     1 |      2.4 |     2.44 | SELECT count(*) FROM ops_demo
+```
+
+Repare no **`$1`**. A extensão **normaliza** os literais, então mil execuções da
+mesma consulta com mil valores diferentes viram uma linha com `calls = 1000`.
+É isso que a torna útil — sem normalização seriam mil linhas e nenhum padrão.
+
+<Tradeoff
+  a="pg_stat_statements"
+  b="log_min_duration_statement"
+  whenA="Para achar o que CONSOME mais no agregado — inclusive a consulta rápida que roda um milhão de vezes, que nenhum log de consulta lenta pega."
+  whenB="Para investigar uma consulta específica com os parâmetros REAIS que a tornaram lenta. O agregado perde exatamente isso."
+>
+  <Fragment slot="a">
+    Custa ~1% de CPU e memória compartilhada fixa. Em troca: nunca mostra os
+    valores reais, e os contadores zeram no restart (ou no `reset()`).
+  </Fragment>
+  <Fragment slot="b">
+    Traz a consulta como ela foi executada, com valores. Em troca: só vê o que
+    passou do limite, e um limite baixo enche o disco de log.
+  </Fragment>
+</Tradeoff>
+
+<FieldNote
+  source="PostgreSQL Documentation — Routine Vacuuming"
+  url="https://www.postgresql.org/docs/17/routine-vacuuming.html"
+  accessed="2026-09-21"
+>
+A documentação dedica uma seção inteira ao *transaction ID wraparound*: os IDs
+de transação são de 32 bits e dão a volta, e o VACUUM é também o que marca
+linhas como permanentemente visíveis antes disso acontecer. Um banco que fica
+tempo demais sem vacuum entra em modo somente-leitura para se proteger — e a
+recuperação é offline. É o único caso em que não fazer manutenção não degrada o
+desempenho: **para o banco**. Não medido aqui: alcançar o wraparound exige
+bilhões de transações.
+</FieldNote>
+
+<LabExercise
+  question="Uma tabela cresce sem parar e o número de linhas está estável. Como confirmar que é inchaço e decidir o que fazer?"
+  check="postgres: pg_stat_statements carregado"
+>
+  <Fragment slot="hint">
+    Compare o que a tabela ocupa com o que ela deveria ocupar — e veja quando
+    o autovacuum passou por ali pela última vez.
+  </Fragment>
+  <Fragment slot="answer">
+
+```sql
+SELECT relname,
+       n_live_tup, n_dead_tup,
+       round(100.0 * n_dead_tup / NULLIF(n_live_tup + n_dead_tup, 0), 1) AS pct_morto,
+       last_autovacuum, last_autoanalyze,
+       pg_size_pretty(pg_relation_size(relid)) AS tamanho
+FROM pg_stat_user_tables
+ORDER BY n_dead_tup DESC
+LIMIT 10;
+```
+
+`pct_morto` alto com `last_autovacuum` antigo (ou nulo) fecha o diagnóstico. As
+causas mais comuns, em ordem:
+
+1. **A fórmula.** `50 + 0,2 × linhas` numa tabela enorme é um gatilho enorme.
+   Corrija por tabela com `ALTER TABLE ... SET (autovacuum_vacuum_scale_factor = 0.01)`.
+2. **Uma transação aberta há horas.** O VACUUM não consegue remover tuplos que
+   uma transação viva ainda pode enxergar. Cheque
+   `SELECT pid, state, xact_start FROM pg_stat_activity ORDER BY xact_start;` —
+   um `idle in transaction` antigo trava o vacuum do banco inteiro.
+3. **Slot de replicação abandonado**, que segura o WAL pelo mesmo motivo.
+
+Só depois disso a pergunta é `VACUUM FULL` ou `pg_repack` — e a resposta
+depende de você poder parar a tabela.
+
+  </Fragment>
+</LabExercise>
+
+<Quiz set="the-postgres-you-operate" />

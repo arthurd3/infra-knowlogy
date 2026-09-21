@@ -1,0 +1,152 @@
+{
+  "note_pt": "As perguntas saem de uma tabela de tempos: o mesmo “não existe” custando 1 ms ou 8 s.",
+  "note_en": "The questions come from a timing table: the same “does not exist” costing 1 ms or 8 s.",
+  "pt": [
+    {
+      "q": "`zq7x4k2m9p1v3n8w.com` não existe e falha em 1 ms. `edge` existe na stack e falha em 7826 ms. Por quê?",
+      "options": [
+        {
+          "text": "Porque `edge` está numa rede que o solicitante não tem, então a consulta viaja mais longe.",
+          "why": "A segmentação é a razão de `edge` não resolver, mas não é a razão de DEMORAR. O tempo vem do que acontece depois de o resolvedor embutido dizer 'não conheço'."
+        },
+        {
+          "text": "Porque um nome de UM rótulo é encaminhado adiante e o resolvedor de cima não responde consultas de rótulo único.",
+          "correct": true,
+          "why": "Sem resposta, o cliente espera, retransmite e só desiste no timeout — ~8 s. Um nome de dois rótulos é uma consulta DNS normal e volta com NXDOMAIN na hora. A diferença é o número de rótulos, não a existência do nome."
+        },
+        {
+          "text": "Porque o Docker faz cache negativo de nomes inexistentes e `edge` não está no cache.",
+          "why": "Se houvesse cache negativo, a segunda tentativa de `naoexisteninguem` seria rápida — e ela continua custando ~8 s. Não é cache."
+        }
+      ]
+    },
+    {
+      "q": "O que `ndots:5` (padrão do Kubernetes) faz com a chamada `gethostbyname(\"api\")`?",
+      "options": [
+        {
+          "text": "Tenta `api` com cada sufixo da lista `search` ANTES de tentá-lo sozinho.",
+          "correct": true,
+          "why": "Nome com menos de 5 pontos é tratado como relativo, então `api` vira `api.meu-ns.svc.cluster.local`, `api.svc.cluster.local`, `api.cluster.local`… Quatro ou cinco consultas por chamada. É conveniência para quem escreve manifesto, e é a causa conhecida de saturação de CoreDNS em cluster grande."
+        },
+        {
+          "text": "Recusa o nome por ter menos de 5 pontos.",
+          "why": "Nada é recusado — `ndots` decide a ORDEM das tentativas, não a validade do nome."
+        },
+        {
+          "text": "Limita a resolução a 5 tentativas.",
+          "why": "O número de tentativas é governado por `options attempts`. `ndots` conta PONTOS no nome."
+        }
+      ]
+    },
+    {
+      "q": "Uma requisição leva 8 segundos e o gráfico de erro de rede está em zero. Onde o tempo aparece?",
+      "options": [
+        {
+          "text": "Como latência da APLICAÇÃO, dentro de uma chamada de biblioteca que ninguém instrumentou.",
+          "correct": true,
+          "why": "A espera acontece dentro de `gethostbyname()`, antes de qualquer socket existir. Não há conexão para falhar, então nenhuma métrica de rede se move — o p99 da aplicação sobe e a causa fica invisível. Por isso `getent hosts` dentro do container é dos primeiros comandos num incidente de latência."
+        },
+        {
+          "text": "Como erro de conexão recusada no proxy.",
+          "why": "Recusa produz erro imediato e visível. O caso aqui é o oposto: silêncio até o timeout."
+        },
+        {
+          "text": "Como saturação do resolvedor, no gráfico de DNS.",
+          "why": "O resolvedor embutido não está saturado — ele respondeu 'não conheço' na hora. Quem não responde é o resolvedor de cima, e essa espera não é contabilizada em lugar nenhum por padrão."
+        }
+      ]
+    },
+    {
+      "q": "Por que `naoexiste.local` falhou em 1,2 ms, sem encaminhar nada?",
+      "options": [
+        {
+          "text": "Porque `.local` é reservado pela RFC 6762 para mDNS, e resolvedores o recusam de imediato.",
+          "correct": true,
+          "why": "O caminho curto não é 'o nome não existe' — é 'eu nem vou perguntar'. É uma coincidência feliz que expõe o mecanismo: o custo dos 8 s está no ENCAMINHAMENTO, e o que não encaminha é rápido mesmo falhando."
+        },
+        {
+          "text": "Porque tem dois rótulos, e dois rótulos sempre voltam com NXDOMAIN rápido.",
+          "why": "Dois rótulos é condição necessária, não a explicação deste caso: `zq7x…com` também é rápido, mas porque o resolvedor de cima respondeu. O `.local` nem chegou a sair."
+        },
+        {
+          "text": "Porque o Docker mantém uma lista de sufixos bloqueados.",
+          "why": "O bloqueio de `.local` é do resolvedor do sistema seguindo a RFC, não uma lista do Docker."
+        }
+      ]
+    }
+  ],
+  "en": [
+    {
+      "q": "`zq7x4k2m9p1v3n8w.com` does not exist and fails in 1 ms. `edge` exists in the stack and fails in 7826 ms. Why?",
+      "options": [
+        {
+          "text": "Because `edge` is on a network the requester lacks, so the query travels further.",
+          "why": "Segmentation is why `edge` does not resolve, but it is not why it is SLOW. The time comes from what happens after the embedded resolver says 'I do not know it'."
+        },
+        {
+          "text": "Because a single-label name is forwarded upstream and the upstream resolver does not answer single-label queries.",
+          "correct": true,
+          "why": "With no answer, the client waits, retransmits and only gives up at the timeout — ~8 s. A two-label name is an ordinary DNS query and comes back with NXDOMAIN at once. The difference is the label count, not whether the name exists."
+        },
+        {
+          "text": "Because Docker negative-caches non-existent names and `edge` is not in the cache.",
+          "why": "If there were negative caching, the second attempt at `naoexisteninguem` would be fast — and it still costs ~8 s. It is not caching."
+        }
+      ]
+    },
+    {
+      "q": "What does `ndots:5` (the Kubernetes default) do to the call `gethostbyname(\"api\")`?",
+      "options": [
+        {
+          "text": "Tries `api` with each suffix from the `search` list BEFORE trying it alone.",
+          "correct": true,
+          "why": "A name with fewer than 5 dots is treated as relative, so `api` becomes `api.my-ns.svc.cluster.local`, `api.svc.cluster.local`, `api.cluster.local`… Four or five queries per call. Convenience for whoever writes manifests, and a known cause of CoreDNS saturation in large clusters."
+        },
+        {
+          "text": "Refuses the name for having fewer than 5 dots.",
+          "why": "Nothing is refused — `ndots` decides the ORDER of attempts, not the name's validity."
+        },
+        {
+          "text": "Limits resolution to 5 attempts.",
+          "why": "The attempt count is governed by `options attempts`. `ndots` counts DOTS in the name."
+        }
+      ]
+    },
+    {
+      "q": "A request takes 8 seconds and the network-error graph is at zero. Where does the time show up?",
+      "options": [
+        {
+          "text": "As APPLICATION latency, inside a library call nobody instrumented.",
+          "correct": true,
+          "why": "The wait happens inside `gethostbyname()`, before any socket exists. There is no connection to fail, so no network metric moves — the application's p99 rises and the cause stays invisible. Which is why `getent hosts` inside the container is one of the first commands in a latency incident."
+        },
+        {
+          "text": "As a connection-refused error at the proxy.",
+          "why": "A refusal produces an immediate, visible error. This case is the opposite: silence until the timeout."
+        },
+        {
+          "text": "As resolver saturation, on the DNS graph.",
+          "why": "The embedded resolver is not saturated — it answered 'I do not know it' at once. What does not answer is the upstream resolver, and that wait is accounted for nowhere by default."
+        }
+      ]
+    },
+    {
+      "q": "Why did `naoexiste.local` fail in 1.2 ms, forwarding nothing?",
+      "options": [
+        {
+          "text": "Because `.local` is reserved by RFC 6762 for mDNS, and resolvers refuse it outright.",
+          "correct": true,
+          "why": "The short path is not 'the name does not exist' — it is 'I am not even going to ask'. A happy coincidence that exposes the mechanism: the 8 s cost lives in the FORWARDING, and what does not forward is fast even when it fails."
+        },
+        {
+          "text": "Because it has two labels, and two labels always return NXDOMAIN quickly.",
+          "why": "Two labels is a necessary condition, not the explanation here: `zq7x…com` is also fast, but because the upstream resolver answered. The `.local` query never left."
+        },
+        {
+          "text": "Because Docker keeps a list of blocked suffixes.",
+          "why": "Blocking `.local` is the system resolver following the RFC, not a Docker list."
+        }
+      ]
+    }
+  ]
+}

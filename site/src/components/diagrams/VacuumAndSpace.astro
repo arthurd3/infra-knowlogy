@@ -1,0 +1,56 @@
+---
+/** ops-05 — DELETE não devolve espaço, VACUUM também não, só o VACUUM FULL. */
+import Figure from "../Figure.astro";
+import type { Lang } from "../../i18n/ui";
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+const C = {
+  pt: {
+    e1: "tabela com 200 mil linhas", t1: "14 MB",
+    e2: "DELETE de metade delas", t2: "14 MB", n2: "as linhas viram TUPLOS MORTOS; nada é apagado",
+    e3: "VACUUM", t3: "14 MB", n3: "marca o espaço como REUTILIZÁVEL — não devolve ao disco",
+    e4: "VACUUM FULL", t4: "6672 kB", n4: "reescreve a tabela inteira · ACCESS EXCLUSIVE · precisa do dobro de disco",
+    porque: "por que não apagar logo? porque outra transação pode estar LENDO a versão antiga (MVCC)",
+    licao: "o disco só volta com um lock que bloqueia leitura e escrita — é por isso que tabela inchada é um problema de manutenção, não de comando",
+    caption:
+      "As três primeiras caixas têm o mesmo tamanho, e é isso que surpreende. O Postgres nunca altera uma linha no lugar: ele escreve uma versão nova e marca a antiga. O <b>VACUUM</b> comum recicla esse espaço para escritas futuras da própria tabela; devolver ao sistema de arquivos exige reescrever tudo, com a tabela travada.",
+    alt: "Quatro estados de uma tabela, com os três primeiros no mesmo tamanho e só o último menor.",
+  },
+  en: {
+    e1: "table with 200k rows", t1: "14 MB",
+    e2: "DELETE half of them", t2: "14 MB", n2: "the rows become DEAD TUPLES; nothing is erased",
+    e3: "VACUUM", t3: "14 MB", n3: "marks the space REUSABLE — does not return it to disk",
+    e4: "VACUUM FULL", t4: "6672 kB", n4: "rewrites the whole table · ACCESS EXCLUSIVE · needs twice the disk",
+    porque: "why not just erase? because another transaction may be READING the old version (MVCC)",
+    licao: "disk only comes back with a lock that blocks reads and writes — which is why a bloated table is a maintenance problem, not a command",
+    caption:
+      "The first three boxes are the same size, and that is the surprise. Postgres never updates a row in place: it writes a new version and marks the old one. Ordinary <b>VACUUM</b> recycles that space for the table's own future writes; returning it to the filesystem means rewriting everything, with the table locked.",
+    alt: "Four states of a table, the first three at the same size and only the last smaller.",
+  },
+}[lang];
+---
+<Figure caption={C.caption} alt={C.alt}>
+  <svg viewBox="0 0 720 250" xmlns="http://www.w3.org/2000/svg" font-size="11">
+    {[[C.e1, C.t1, "", 170], [C.e2, C.t2, C.n2, 170], [C.e3, C.t3, C.n3, 170], [C.e4, C.t4, C.n4, 81]].map(
+      ([rot, val, nota, larg], i) => (
+        <g>
+          <text x={14 + i * 178} y="22" class="dg-muted" font-size="9.5">{rot}</text>
+          <rect x={14 + i * 178} y="30" width={larg} height="52" rx="6"
+                class={i === 3 ? "dg-box dg-box--accent" : "dg-box dg-box--warn"} />
+          <text x={14 + i * 178 + Number(larg) / 2} y="62" text-anchor="middle"
+                class="dg-mono" font-size="14">{val}</text>
+          {nota && <text x={14 + i * 178} y="98" class="dg-faint" font-size="7.6">{nota}</text>}
+          {i < 3 && <path d={`M${170 + i * 178 + 4} 56 L${186 + i * 178} 56`} class="dg-line" marker-end="url(#vc-arrow)" />}
+        </g>
+      ),
+    )}
+    <line x1="14" y1="142" x2="706" y2="142" class="dg-line" stroke-dasharray="3 3" />
+    <text x="360" y="162" text-anchor="middle" class="dg-muted" font-size="10">{C.porque}</text>
+    <text x="360" y="192" text-anchor="middle" class="dg-fill-warn" font-size="10" font-weight="620">{C.licao}</text>
+    <defs>
+      <marker id="vc-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+        <path d="M0 0 L10 5 L0 10 z" fill="var(--border-strong)" />
+      </marker>
+    </defs>
+  </svg>
+</Figure>

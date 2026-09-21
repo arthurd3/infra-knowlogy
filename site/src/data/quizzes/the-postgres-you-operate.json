@@ -1,0 +1,152 @@
+{
+  "note_pt": "As perguntas saem de três medições no `db` desta stack: o espaço, a memória e qual consulta dói.",
+  "note_en": "The questions come from three measurements on this stack's `db`: the space, the memory and which query hurts.",
+  "pt": [
+    {
+      "q": "Você apagou metade das linhas e rodou `VACUUM`. A tabela continua com 14 MB. Isso está certo?",
+      "options": [
+        {
+          "text": "Sim: o `VACUUM` marca o espaço como reutilizável PELA TABELA, não devolve ao sistema de arquivos.",
+          "correct": true,
+          "why": "Medido: 14 MB antes, 14 MB depois do DELETE, 14 MB depois do VACUUM, e 6672 kB só depois do VACUUM FULL. O espaço recuperado é reciclado para escritas futuras da própria tabela — e é assim que deve ser, porque devolver exigiria reescrever tudo."
+        },
+        {
+          "text": "Não: falta rodar `ANALYZE` junto para atualizar as estatísticas de tamanho.",
+          "why": "O `ANALYZE` atualiza estatísticas do PLANEJADOR, não o tamanho em disco. `pg_relation_size` lê o arquivo, não a estatística."
+        },
+        {
+          "text": "Não: o `VACUUM` falhou silenciosamente porque havia transação aberta.",
+          "why": "Transação aberta REALMENTE impede remover tuplos que ela ainda enxerga — é uma causa comum de inchaço. Mas mesmo um VACUUM perfeitamente bem-sucedido não encolhe o arquivo."
+        }
+      ]
+    },
+    {
+      "q": "Uma tabela de 100 milhões de linhas nunca parece ser vacuumada. Qual a causa mais provável?",
+      "options": [
+        {
+          "text": "O autovacuum está desligado para o banco inteiro.",
+          "why": "É possível, e vale conferir (`SHOW autovacuum`), mas raro — o padrão é ligado. Há uma causa muito mais comum e mais silenciosa."
+        },
+        {
+          "text": "O gatilho é `50 + 0,2 × linhas`, então ele espera 20 MILHÕES de linhas mortas.",
+          "correct": true,
+          "why": "O `scale_factor` de 0,2 é proporcional, e o padrão foi escolhido para bancos pequenos. Numa tabela enorme ele vira um gatilho enorme. A correção é por tabela: `ALTER TABLE ... SET (autovacuum_vacuum_scale_factor = 0.01)`."
+        },
+        {
+          "text": "Os 3 workers de autovacuum não dão conta e a tabela nunca entra na fila.",
+          "why": "Contenção de worker atrasa, mas não impede indefinidamente. O motivo de a tabela nem ser CANDIDATA é a fórmula do gatilho."
+        }
+      ]
+    },
+    {
+      "q": "Com `work_mem` de 4MB o sort derrama 7248 kB em disco e leva ~187 ms; com 64MB fica em memória e leva ~155 ms. Qual a conclusão honesta?",
+      "options": [
+        {
+          "text": "O ganho é de 17%, e o custo que importa está nos 35 MB de arquivos temporários que o tempo esconde.",
+          "correct": true,
+          "why": "Neste NVMe, com o temporário indo para o page cache, derramar custa pouco em latência. Mas `pg_stat_database.temp_files` acumulou 7 arquivos e 35 MB de escrita — que num servidor com dezenas de sorts concorrentes compete com WAL e checkpoint. O sinal para vigiar é o contador, não a duração."
+        },
+        {
+          "text": "work_mem não importa em hardware moderno.",
+          "why": "Importa, e a medição mostra por onde: não pela latência de uma consulta isolada, mas pelo I/O agregado. Concluir 'não importa' de um teste de uma consulta é o erro oposto ao de prometer 10x."
+        },
+        {
+          "text": "Subir work_mem globalmente para 64MB é a correção.",
+          "why": "É o caminho mais fácil de causar OOM: `work_mem` é por NÓ DE PLANO, não por conexão. Uma consulta com três sorts usa três vezes o valor, e cem conexões multiplicam de novo."
+        }
+      ]
+    },
+    {
+      "q": "`CREATE EXTENSION pg_stat_statements` falha dizendo que ela precisa ser carregada via `shared_preload_libraries`. O que isso revela?",
+      "options": [
+        {
+          "text": "São duas etapas: a biblioteca é carregada no SERVIDOR (com reinício) e a visão é criada no BANCO.",
+          "correct": true,
+          "why": "A extensão coleta dados de dentro do executor de consultas, o que exige estar carregada antes de o servidor atender a primeira. Por isso `shared_preload_libraries` exige reinício, e por isso um init script de Docker sozinho não basta num volume que já existe."
+        },
+        {
+          "text": "A extensão não está instalada no sistema de arquivos da imagem.",
+          "why": "Está — `pg_available_extensions` a lista em 1.11 nesta imagem. O problema é de carregamento, não de disponibilidade."
+        },
+        {
+          "text": "Falta permissão de superusuário.",
+          "why": "A mensagem seria outra (`permission denied to create extension`). Esta mensagem nomeia exatamente o que falta, e é das mais úteis do Postgres."
+        }
+      ]
+    }
+  ],
+  "en": [
+    {
+      "q": "You deleted half the rows and ran `VACUUM`. The table is still 14 MB. Is that correct?",
+      "options": [
+        {
+          "text": "Yes: `VACUUM` marks the space reusable BY THE TABLE, it does not return it to the filesystem.",
+          "correct": true,
+          "why": "Measured: 14 MB before, 14 MB after the DELETE, 14 MB after the VACUUM, and 6672 kB only after VACUUM FULL. Reclaimed space is recycled for the table's own future writes — and that is how it should be, because returning it would mean rewriting everything."
+        },
+        {
+          "text": "No: you also need `ANALYZE` to refresh the size statistics.",
+          "why": "`ANALYZE` refreshes PLANNER statistics, not on-disk size. `pg_relation_size` reads the file, not the statistic."
+        },
+        {
+          "text": "No: the `VACUUM` failed silently because a transaction was open.",
+          "why": "An open transaction genuinely does prevent removing tuples it can still see — a common bloat cause. But even a perfectly successful VACUUM does not shrink the file."
+        }
+      ]
+    },
+    {
+      "q": "A 100-million-row table never seems to get vacuumed. What is the likeliest cause?",
+      "options": [
+        {
+          "text": "Autovacuum is disabled for the whole database.",
+          "why": "Possible, and worth checking (`SHOW autovacuum`), but rare — the default is on. There is a far commoner and quieter cause."
+        },
+        {
+          "text": "The trigger is `50 + 0.2 × rows`, so it waits for 20 MILLION dead rows.",
+          "correct": true,
+          "why": "The 0.2 `scale_factor` is proportional, and the default was chosen for small databases. On a huge table it becomes a huge trigger. The fix is per table: `ALTER TABLE ... SET (autovacuum_vacuum_scale_factor = 0.01)`."
+        },
+        {
+          "text": "The 3 autovacuum workers cannot keep up and the table never enters the queue.",
+          "why": "Worker contention delays things but does not block indefinitely. The reason the table is not even a CANDIDATE is the trigger formula."
+        }
+      ]
+    },
+    {
+      "q": "With `work_mem` at 4MB the sort spills 7248 kB to disk and takes ~187 ms; at 64MB it stays in memory and takes ~155 ms. What is the honest conclusion?",
+      "options": [
+        {
+          "text": "The gain is 17%, and the cost that matters is the 35 MB of temporary files the timing hides.",
+          "correct": true,
+          "why": "On this NVMe, with the temp file going to page cache, spilling costs little in latency. But `pg_stat_database.temp_files` accumulated 7 files and 35 MB of writing — which on a server with dozens of concurrent sorts competes with WAL and checkpoint. The signal to watch is the counter, not the duration."
+        },
+        {
+          "text": "work_mem does not matter on modern hardware.",
+          "why": "It matters, and the measurement shows where: not in one isolated query's latency, but in aggregate I/O. Concluding 'it does not matter' from a single-query test is the opposite error to promising 10×."
+        },
+        {
+          "text": "Raising work_mem globally to 64MB is the fix.",
+          "why": "It is the easiest route to an OOM: `work_mem` is per PLAN NODE, not per connection. A query with three sorts uses three times the value, and a hundred connections multiply it again."
+        }
+      ]
+    },
+    {
+      "q": "`CREATE EXTENSION pg_stat_statements` fails saying it must be loaded via `shared_preload_libraries`. What does that reveal?",
+      "options": [
+        {
+          "text": "There are two steps: the library loads into the SERVER (needing a restart) and the view is created in the DATABASE.",
+          "correct": true,
+          "why": "The extension collects data from inside the query executor, which requires being loaded before the server serves its first query. Hence `shared_preload_libraries` needs a restart, and hence a Docker init script alone is not enough on a volume that already exists."
+        },
+        {
+          "text": "The extension is not installed on the image's filesystem.",
+          "why": "It is — `pg_available_extensions` lists it at 1.11 in this image. The problem is loading, not availability."
+        },
+        {
+          "text": "Superuser permission is missing.",
+          "why": "The message would be different (`permission denied to create extension`). This message names exactly what is missing, and is one of Postgres's most useful."
+        }
+      ]
+    }
+  ]
+}

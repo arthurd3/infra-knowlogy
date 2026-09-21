@@ -1,0 +1,85 @@
+---
+/** ops-04 — o mesmo "não existe" custa 1 ms ou 8 s, conforme o número de rótulos. */
+import Figure from "../Figure.astro";
+import type { Lang } from "../../i18n/ui";
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+const C = {
+  pt: {
+    app: "a aplicação chama gethostbyname()",
+    dns: "127.0.0.11", dnss: "o resolvedor embutido do Docker",
+    conhece: "conhece o nome?",
+    sim: "SIM — é companheiro de rede", simr: "responde o IP",
+    nao: "NÃO",
+    r1: "1 rótulo (ex.: `edge`)", r1a: "encaminha adiante", r1b: "o de cima não responde consulta de rótulo único",
+    r1t: "~8 s de timeout",
+    r2: "2+ rótulos (ex.: `x.com`)", r2a: "encaminha adiante", r2b: "o de cima devolve NXDOMAIN",
+    r2t: "~1 ms",
+    medido: "medido nesta stack: db 15,0 ms ✓ · edge 7826 ms ✗ · naoexisteninguem 8000 ms ✗ · zq7x…com 1,0 ms ✗",
+    licao: "8000× de diferença entre dois jeitos de falhar — e o caro é o que parece “a rede está lenta”",
+    caption:
+      "Os dois caminhos da direita terminam em falha. Um custa um milissegundo e o outro oito segundos, e a única diferença é o <b>número de rótulos do nome</b>. Errar o nome de um serviço (um rótulo) é o caso caro; errar um domínio (dois rótulos) é o barato — o inverso do que a intuição sugere.",
+    alt: "Fluxo de resolução DNS mostrando os dois caminhos de falha, um de 1 ms e outro de 8 segundos.",
+  },
+  en: {
+    app: "the application calls gethostbyname()",
+    dns: "127.0.0.11", dnss: "Docker's embedded resolver",
+    conhece: "does it know the name?",
+    sim: "YES — it is a network peer", simr: "answers with the IP",
+    nao: "NO",
+    r1: "1 label (e.g. `edge`)", r1a: "forwards upstream", r1b: "upstream does not answer single-label queries",
+    r1t: "~8 s timeout",
+    r2: "2+ labels (e.g. `x.com`)", r2a: "forwards upstream", r2b: "upstream returns NXDOMAIN",
+    r2t: "~1 ms",
+    medido: "measured on this stack: db 15.0 ms ✓ · edge 7826 ms ✗ · naoexisteninguem 8000 ms ✗ · zq7x…com 1.0 ms ✗",
+    licao: "8000× between two ways of failing — and the expensive one is what looks like “the network is slow”",
+    caption:
+      "Both right-hand paths end in failure. One costs a millisecond and the other eight seconds, and the only difference is the <b>number of labels in the name</b>. Mistyping a service name (one label) is the expensive case; mistyping a domain (two labels) is the cheap one — the opposite of what intuition suggests.",
+    alt: "DNS resolution flow showing the two failure paths, one of 1 ms and one of 8 seconds.",
+  },
+}[lang];
+---
+<Figure caption={C.caption} alt={C.alt}>
+  <svg viewBox="0 0 720 286" xmlns="http://www.w3.org/2000/svg" font-size="11">
+    <rect x="200" y="10" width="320" height="28" rx="6" class="dg-box dg-box--accent" />
+    <text x="360" y="29" text-anchor="middle" class="dg-mono" font-size="10">{C.app}</text>
+    <path d="M360 42 L360 58" class="dg-line" marker-end="url(#dn-arrow)" />
+
+    <rect x="240" y="62" width="240" height="40" rx="6" class="dg-box" />
+    <text x="360" y="80" text-anchor="middle" class="dg-mono" font-size="11">{C.dns}</text>
+    <text x="360" y="94" text-anchor="middle" class="dg-faint" font-size="8.5">{C.dnss}</text>
+    <text x="360" y="118" text-anchor="middle" class="dg-muted" font-size="9">{C.conhece}</text>
+
+    <path d="M270 104 L120 132" class="dg-line" marker-end="url(#dn-arrow)" />
+    <path d="M450 104 L560 132" class="dg-line dg-line--warn" marker-end="url(#dn-arrow)" />
+    <text x="176" y="122" text-anchor="middle" class="dg-muted" font-size="9">{C.sim}</text>
+    <text x="520" y="122" text-anchor="middle" class="dg-fill-warn" font-size="9">{C.nao}</text>
+
+    <rect x="14" y="136" width="230" height="34" rx="6" class="dg-box" />
+    <text x="129" y="157" text-anchor="middle" class="dg-muted" font-size="10">{C.simr}</text>
+
+    <g>
+      <rect x="280" y="136" width="200" height="70" rx="6" class="dg-box dg-box--warn" />
+      <text x="296" y="154" class="dg-mono" font-size="9.5">{C.r1}</text>
+      <text x="296" y="168" class="dg-faint" font-size="8">{C.r1a}</text>
+      <text x="296" y="180" class="dg-faint" font-size="8">{C.r1b}</text>
+      <text x="380" y="199" text-anchor="middle" class="dg-fill-warn dg-mono" font-size="13">{C.r1t}</text>
+    </g>
+    <g>
+      <rect x="496" y="136" width="210" height="70" rx="6" class="dg-box dg-box--dashed" />
+      <text x="512" y="154" class="dg-mono" font-size="9.5">{C.r2}</text>
+      <text x="512" y="168" class="dg-faint" font-size="8">{C.r2a}</text>
+      <text x="512" y="180" class="dg-faint" font-size="8">{C.r2b}</text>
+      <text x="601" y="199" text-anchor="middle" class="dg-mono" font-size="13">{C.r2t}</text>
+    </g>
+
+    <line x1="14" y1="224" x2="706" y2="224" class="dg-line" stroke-dasharray="3 3" />
+    <text x="360" y="242" text-anchor="middle" class="dg-faint" font-size="8.5">{C.medido}</text>
+    <text x="360" y="264" text-anchor="middle" class="dg-fill-warn" font-size="10.5" font-weight="640">{C.licao}</text>
+    <defs>
+      <marker id="dn-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+        <path d="M0 0 L10 5 L0 10 z" fill="var(--border-strong)" />
+      </marker>
+    </defs>
+  </svg>
+</Figure>
