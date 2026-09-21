@@ -8,6 +8,10 @@ summary: "A stack já expõe tudo isto e quase ninguém lê. Os três sinais res
 minutes: 13
 tags: [observabilidade, prometheus, grafana, loki, sinais, slo]
 sources:
+  - label: "Datadog — Pricing (Infrastructure)"
+    url: "https://www.datadoghq.com/pricing/"
+    kind: docs
+    accessed: "2026-09-21"
   - label: "Prometheus — visão geral"
     url: "https://prometheus.io/docs/introduction/overview/"
     kind: docs
@@ -157,6 +161,56 @@ comum em produção e que esta stack não tem.
 
 </Fragment>
 </LabExercise>
+
+## Construir ou comprar
+
+Esta stack roda Prometheus, Loki, Grafana e Alloy — tudo hospedado por você. A
+alternativa é uma plataforma de terceiro: Datadog, New Relic, Dynatrace.
+
+A escolha costuma ser apresentada como "custo contra controle", e isso esconde a
+parte que decide. Consultado na página oficial em 21 de setembro de 2026, o
+**Datadog Infrastructure Pro** custa **US$ 15 por host por mês** no plano anual
+(US$ 18 avulso), com **100 métricas customizadas por host** incluídas, e a
+ingestão de log a **US$ 0,10 por GB**.
+
+Leia "100 métricas customizadas por host" ao lado da
+[lição de cardinalidade](/pt/lessons/cardinality): lá, uma métrica com um rótulo
+de `user_id` explode em milhões de séries e derruba a memória do Prometheus.
+Numa plataforma paga, a mesma explosão **não derruba nada** — ela chega como
+fatura, dois meses depois, para alguém que não escreveu a métrica.
+
+<Tradeoff
+  a="Hospedar você mesmo"
+  b="Plataforma de terceiro"
+  whenA="Quando o volume é previsível, a equipe tem quem opere, e os dados não podem sair da sua infraestrutura. O custo é de pessoa e de máquina, e ele aparece na hora."
+  whenB="Quando não há quem opere o armazenamento de séries temporais às três da manhã — que é a maior parte dos times. O custo é de fatura, e ele aparece depois."
+>
+  <Fragment slot="a">
+    Sem limite artificial de cardinalidade nem de retenção, e o dado não sai de
+    casa. Em troca: o Prometheus e o Loki passam a ser bancos de dados que
+    **você** opera, com tudo o que a trilha de Operação descreve.
+  </Fragment>
+  <Fragment slot="b">
+    Correlação entre sinais pronta, retenção longa e ninguém acordado para
+    manter o armazenamento. Em troca: a explosão de cardinalidade vira custo em
+    vez de incidente, e a correção chega tarde — além do aprisionamento, porque
+    consulta e painel não são portáveis.
+  </Fragment>
+</Tradeoff>
+
+<FieldNote
+  source="Datadog — Pricing (Infrastructure)"
+  url="https://www.datadoghq.com/pricing/"
+  accessed="2026-09-21"
+>
+US$ 15 por host por mês no anual, **100 métricas customizadas por host**
+incluídas, e ingestão de log a US$ 0,10 por GB. Os três números importam
+juntos: eles transformam decisões de instrumentação — quantos rótulos, que
+granularidade, quanto log — em itens de fatura. Nesta stack as mesmas decisões
+aparecem como memória do Prometheus e disco do Loki, e o portão as mede. Não
+medido aqui: não há conta em nenhuma dessas plataformas, e o modelo de preço é
+citado da página oficial na data acima.
+</FieldNote>
 
 ## O que fica
 

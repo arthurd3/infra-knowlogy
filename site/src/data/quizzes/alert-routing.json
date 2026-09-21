@@ -1,0 +1,152 @@
+{
+  "note_pt": "As perguntas saem do caminho de três saltos entre a regra e a pessoa — e dos dois defeitos que apareceram construindo isto.",
+  "note_en": "The questions come from the three-hop path between rule and person — and from the two defects that showed up building it.",
+  "pt": [
+    {
+      "q": "Um alerta está `firing` no Prometheus há vinte minutos e ninguém recebeu nada. Qual a falha MAIS silenciosa das três possíveis?",
+      "options": [
+        {
+          "text": "Falta o bloco `alerting:` no prometheus.yml — ele avalia, marca firing e não manda para lugar nenhum.",
+          "correct": true,
+          "why": "Não há erro, não há aviso, e a página de alertas fica vermelha normalmente. A única forma de conferir é `/api/v1/alertmanagers`: lista vazia significa que o alerta não sai. As outras duas causas ao menos deixam rastro — um estado `suppressed` ou um contador de falhas subindo."
+        },
+        {
+          "text": "O receptor está fora do ar.",
+          "why": "Deixa rastro claro: `alertmanager_notifications_failed_total` sobe, com o motivo no rótulo `reason`. É a falha mais fácil das três de diagnosticar."
+        },
+        {
+          "text": "Há um silêncio ativo.",
+          "why": "Confunde bastante, porque tudo o mais parece certo — mas deixa rastro: o alerta aparece em `/api/v2/alerts` com estado `suppressed`, e `/api/v2/silences` lista quem o criou."
+        }
+      ]
+    },
+    {
+      "q": "Qual a diferença entre `group_wait`, `group_interval` e `repeat_interval`?",
+      "options": [
+        {
+          "text": "São o mesmo tempo em escalas diferentes: segundos, minutos e horas.",
+          "why": "As escalas típicas de fato diferem, mas eles governam EVENTOS diferentes. Tratá-los como um só valor em três lugares é o erro que produz canal silenciado ou incidente esquecido."
+        },
+        {
+          "text": "`group_wait` espera os irmãos do PRIMEIRO aviso; `group_interval` é para alertas NOVOS num grupo que já avisou; `repeat_interval` é para repetir o MESMO aviso.",
+          "correct": true,
+          "why": "São três eventos distintos. Baixar o `repeat_interval` demais vira spam; subir demais faz um incidente longo sumir do canal. E o `group_wait` é o que faz trinta séries de um banco caído chegarem como um aviso só."
+        },
+        {
+          "text": "Só o `repeat_interval` é configurável; os outros dois são fixos no Alertmanager.",
+          "why": "Os três são configuráveis, e podem ser sobrescritos por rota — nesta stack a rota de `ticket` tem `group_wait` e `repeat_interval` próprios, justamente para não se parecer com uma página."
+        }
+      ]
+    },
+    {
+      "q": "Por que o portão prova a entrega pelo contador do Alertmanager E pelo log do receptor?",
+      "options": [
+        {
+          "text": "Redundância, caso um dos dois esteja indisponível.",
+          "why": "Não é redundância: cada um prova uma coisa diferente, e nenhum dos dois sozinho fecha a afirmação."
+        },
+        {
+          "text": "Porque o contador sozinho aceitaria um receptor que responde 200 e descarta a mensagem.",
+          "correct": true,
+          "why": "É exatamente o que um webhook mal configurado faz. E o log do receptor sozinho não distinguiria 'o Alertmanager não mandou' de 'mandou e eu não registrei'. Medir as duas pontas é o que fecha — e a primeira versão do receptor fazia justamente isso: respondia 200 sem registrar, porque o `log` do Caddy estava no bloco global em vez de dentro do site."
+        },
+        {
+          "text": "Porque o contador zera no restart do Alertmanager.",
+          "why": "Zera mesmo, e por isso o portão compara ANTES e DEPOIS na mesma execução em vez de olhar o valor absoluto. Mas não é a razão de haver dois lados."
+        }
+      ]
+    },
+    {
+      "q": "A checagem de entrega passava na primeira execução do portão e falhava nas seguintes. Por quê?",
+      "options": [
+        {
+          "text": "Porque o Alertmanager guarda o histórico de notificações em disco e recusa duplicatas.",
+          "why": "Ele guarda um log de notificações para não repetir, mas o mecanismo que causou isto tem nome e é configurável — não é uma recusa de duplicata genérica."
+        },
+        {
+          "text": "Porque o receptor acumulava requisições e o contador do log estourava.",
+          "why": "O contador do log só cresce, e a checagem exige `>= 1`. Acumular não quebraria nada."
+        },
+        {
+          "text": "Porque `group_by` agrupa por alertname e `repeat_interval` é de 4h — o mesmo alerta não gera notificação nova no mesmo dia.",
+          "correct": true,
+          "why": "Com nome fixo, o segundo run caía dentro da janela de repetição e a checagem reprovava por o Alertmanager estar funcionando CORRETAMENTE. O alerta sintético passou a ter nome único por execução, e o portão foi verificado rodando três vezes seguidas."
+        }
+      ]
+    }
+  ],
+  "en": [
+    {
+      "q": "An alert has been `firing` in Prometheus for twenty minutes and nobody received anything. Which of the three possible failures is the QUIETEST?",
+      "options": [
+        {
+          "text": "The `alerting:` block is missing from prometheus.yml — it evaluates, marks firing and sends nowhere.",
+          "correct": true,
+          "why": "There is no error, no warning, and the alerts page turns red as normal. The only way to check is `/api/v1/alertmanagers`: an empty list means the alert does not leave. The other two causes at least leave a trace — a `suppressed` state or a rising failure counter."
+        },
+        {
+          "text": "The receiver is down.",
+          "why": "It leaves a clear trace: `alertmanager_notifications_failed_total` rises, with the cause in the `reason` label. It is the easiest of the three to diagnose."
+        },
+        {
+          "text": "There is an active silence.",
+          "why": "It confuses people, because everything else looks right — but it leaves a trace: the alert appears in `/api/v2/alerts` with state `suppressed`, and `/api/v2/silences` lists who created it."
+        }
+      ]
+    },
+    {
+      "q": "What is the difference between `group_wait`, `group_interval` and `repeat_interval`?",
+      "options": [
+        {
+          "text": "They are the same delay at different scales: seconds, minutes and hours.",
+          "why": "The typical scales do differ, but they govern different EVENTS. Treating them as one value in three places is the mistake that produces either a muted channel or a forgotten incident."
+        },
+        {
+          "text": "`group_wait` waits for siblings of the FIRST message; `group_interval` is for NEW alerts in a group that already notified; `repeat_interval` is for repeating the SAME message.",
+          "correct": true,
+          "why": "Three distinct events. Dropping `repeat_interval` too low is spam; raising it too high makes a long incident vanish from the channel. And `group_wait` is what makes thirty series from a downed database arrive as one message."
+        },
+        {
+          "text": "Only `repeat_interval` is configurable; the other two are fixed in Alertmanager.",
+          "why": "All three are configurable, and can be overridden per route — in this stack the `ticket` route has its own `group_wait` and `repeat_interval`, precisely so it does not behave like a page."
+        }
+      ]
+    },
+    {
+      "q": "Why does the gate prove delivery with the Alertmanager's counter AND the receiver's log?",
+      "options": [
+        {
+          "text": "Redundancy, in case one of them is unavailable.",
+          "why": "It is not redundancy: each proves something different, and neither alone closes the claim."
+        },
+        {
+          "text": "Because the counter alone would accept a receiver that answers 200 and discards the message.",
+          "correct": true,
+          "why": "That is exactly what a misconfigured webhook does. And the receiver's log alone would not distinguish 'Alertmanager did not send' from 'it sent and I did not log it'. Measuring both ends is what closes it — and the receiver's first version did precisely that: answered 200 without logging, because Caddy's `log` was in the global block instead of inside the site."
+        },
+        {
+          "text": "Because the counter resets when Alertmanager restarts.",
+          "why": "It does reset, which is why the gate compares BEFORE and AFTER within one run rather than reading an absolute value. But that is not the reason for having two sides."
+        }
+      ]
+    },
+    {
+      "q": "The delivery check passed on the gate's first run and failed on later ones. Why?",
+      "options": [
+        {
+          "text": "Because Alertmanager persists a notification history to disk and refuses duplicates.",
+          "why": "It does keep a notification log to avoid repeating, but the mechanism that caused this has a name and is configurable — it is not a generic duplicate refusal."
+        },
+        {
+          "text": "Because the receiver accumulated requests and the log counter overflowed.",
+          "why": "The log counter only grows, and the check requires `>= 1`. Accumulating would break nothing."
+        },
+        {
+          "text": "Because `group_by` groups on alertname and `repeat_interval` is 4h — the same alert generates no new notification the same day.",
+          "correct": true,
+          "why": "With a fixed name, the second run fell inside the repeat window and the check failed because Alertmanager was working CORRECTLY. The synthetic alert now gets a unique name per run, and the gate was verified by running three times in a row."
+        }
+      ]
+    }
+  ]
+}

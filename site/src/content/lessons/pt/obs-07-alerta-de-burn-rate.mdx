@@ -122,17 +122,19 @@ incidente, por semanas — e nenhum alerta de página jamais dispara.
   adr="0003-socket-do-docker-na-observabilidade"
 />
 
-<Callout type="danger" label="O que este módulo NÃO tem">
-Não há **Alertmanager** aqui. O Prometheus avalia as regras e marca o alerta
-como `firing` — e para por aí. Ninguém é notificado.
+<Callout type="note" label="Esta lacuna foi fechada">
+Até setembro de 2026 esta caixa dizia, em vermelho, que **não havia
+Alertmanager** aqui: o Prometheus avaliava as regras, marcava `firing`, e
+ninguém era notificado.
 
-O que falta é justamente a parte que transforma alerta em operação: roteamento
-por severidade, agrupamento para não mandar quarenta mensagens do mesmo
-incidente, silenciamento durante manutenção, e escalonamento quando ninguém
-responde.
+Agora há. O profile `obs` sobe um Alertmanager e um receptor de webhook, e o
+portão prova roteamento por severidade, agrupamento, silenciamento **e
+entrega** — esta última por dois lados, o contador do Alertmanager e o log de
+acesso do receptor.
 
-Está declarado no roadmap. Uma trilha que ensinasse SLO e fingisse que `firing`
-é o fim da história estaria ensinando a metade fácil.
+O assunto ficou grande demais para uma caixa, e virou a
+[lição seguinte](/pt/lessons/alert-routing). O texto antigo fica registrado
+aqui porque a lacuna declarada em voz alta é o que fez ela ser fechada.
 </Callout>
 
 <RunIt>
@@ -198,6 +200,7 @@ três é o alerta que ninguém aguenta.
   conserto**, some quando a janela escoa.
 - Nem todo alerta acorda alguém: o de ritmo lento vira ticket, e é assim que a
   maior parte do orçamento vai embora.
-- Falta o Alertmanager. `firing` não é notificação — está declarado.
+- `firing` não é notificação. Quem avisa é o Alertmanager, e ele agora existe
+  — com roteamento, agrupamento e silenciamento provados pelo portão.
 
 <Quiz set="burn-rate-alerting" />

@@ -120,16 +120,18 @@ incident at all, over weeks — and no paging alert ever fires.
   adr="0003-socket-do-docker-na-observabilidade"
 />
 
-<Callout type="danger" label="What this module does NOT have">
-There is no **Alertmanager** here. Prometheus evaluates the rules and marks the
-alert as `firing` — and stops there. Nobody is notified.
+<Callout type="note" label="This gap has been closed">
+Until September 2026 this box said, in red, that there was **no Alertmanager**
+here: Prometheus evaluated the rules, marked `firing`, and nobody was notified.
 
-What is missing is precisely the part that turns an alert into operations:
-routing by severity, grouping so one incident does not send forty messages,
-silencing during maintenance, and escalation when nobody answers.
+Now there is one. The `obs` profile starts an Alertmanager and a webhook
+receiver, and the gate proves routing by severity, grouping, silencing **and
+delivery** — the last one from two sides, the Alertmanager's counter and the
+receiver's access log.
 
-It is declared in the roadmap. A track that taught SLOs while pretending
-`firing` is the end of the story would be teaching the easy half.
+The subject grew too large for a callout and became the
+[next lesson](/en/lessons/alert-routing). The old text is recorded here because
+a gap declared out loud is what got it closed.
 </Callout>
 
 <RunIt>
@@ -197,6 +199,7 @@ and removing all three is the alert nobody can live with.
   clear on the fix**, it clears when the window drains.
 - Not every alert wakes somebody: the slow-pace one becomes a ticket, and that
   is how most of the budget disappears.
-- Alertmanager is missing. `firing` is not a notification — that is declared.
+- `firing` is not a notification. The Alertmanager is what notifies, and it now
+  exists — with routing, grouping and silencing proven by the gate.
 
 <Quiz set="burn-rate-alerting" />

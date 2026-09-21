@@ -1,0 +1,238 @@
+---
+key: alert-routing
+lang: pt
+track: observabilidade
+order: 8
+title: "O alerta que sai"
+summary: "O Prometheus decide QUANDO há problema; o Alertmanager decide para quem, quando e se avisar. Esta lição fecha a lacuna que a anterior declarava — com a entrega provada por dois lados, porque um contador sozinho aceitaria um receptor que responde 200 e joga fora."
+minutes: 15
+tags: [alertmanager, alertas, roteamento, plantao, observabilidade]
+sources:
+  - label: "Prometheus Docs — Alerting: Alertmanager configuration"
+    url: "https://prometheus.io/docs/alerting/latest/configuration/"
+    kind: docs
+    accessed: "2026-09-21"
+  - label: "Prometheus Docs — Notification template reference"
+    url: "https://prometheus.io/docs/alerting/latest/notifications/"
+    kind: docs
+    accessed: "2026-09-21"
+  - label: "Alertmanager — HTTP API (v2)"
+    url: "https://github.com/prometheus/alertmanager/blob/main/api/v2/openapi.yaml"
+    kind: spec
+    accessed: "2026-09-21"
+  - label: "Google SRE Workbook — Alerting on SLOs"
+    url: "https://sre.google/workbook/alerting-on-slos/"
+    kind: book
+    accessed: "2026-09-21"
+---
+
+import AlertPipeline from "../../../components/diagrams/AlertPipeline.astro";
+
+A [lição anterior](/pt/lessons/burn-rate-alerting) terminava com uma caixa
+vermelha admitindo que não havia Alertmanager aqui: o Prometheus marcava
+`firing` e ninguém era notificado.
+
+Esta lição fecha isso. E a primeira coisa a desfazer é a confusão de papéis.
+
+## Quem faz o quê
+
+<AlertPipeline />
+
+| | decide |
+|---|---|
+| **Prometheus** | **QUANDO** há problema — avalia a regra, espera o `for:`, marca `firing` |
+| **Alertmanager** | **PARA QUEM, QUANDO e SE** avisar |
+
+O Prometheus não sabe o que é um turno de plantão, nem que dois alertas contam
+a mesma história. Ele avalia expressões. Tudo o que vem depois é outro
+programa — e é a metade que decide se a equipe lê o canal ou o silenciou.
+
+<Callout type="warn" title="O bloco que falta e não reclama">
+```yaml
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: [alertmanager:9093]
+```
+
+Sem isso no `prometheus.yml`, o Prometheus avalia, marca `firing` na própria
+interface, e **não manda para lugar nenhum**. Não há erro, não há aviso: a
+página de alertas fica vermelha e o resto do mundo não fica sabendo.
+
+Para conferir: `/api/v1/alertmanagers` devolve `activeAlertmanagers`. Lista
+vazia significa que o alerta não sai.
+</Callout>
+
+## As quatro operações
+
+<Term word="Agrupamento" alt="grouping">
+```yaml
+group_by: [alertname, severity]
+group_wait: 30s
+group_interval: 5m
+repeat_interval: 4h
+```
+
+Sem agrupar, um banco fora do ar gera **uma notificação por série** — e a
+pessoa de plantão recebe trinta mensagens dizendo a mesma coisa. É a forma mais
+rápida de treinar alguém a silenciar o canal.
+
+Os três tempos fazem coisas diferentes, e confundi-los é comum:
+
+- **`group_wait`** — espera antes do PRIMEIRO aviso de um grupo novo, para os
+  alertas irmãos chegarem juntos;
+- **`group_interval`** — espera antes de avisar sobre alertas NOVOS num grupo
+  que já notificou;
+- **`repeat_interval`** — antes de repetir o MESMO aviso. Baixo demais vira
+  spam; alto demais faz um incidente longo sumir do canal.
+</Term>
+
+**Roteamento.** As regras de SLO desta stack já emitiam `severity: page` e
+`severity: ticket`, e até agora a distinção não fazia nada:
+
+```yaml
+route:
+  receiver: plantao
+  routes:
+    - matchers: [severity="ticket"]
+      receiver: fila
+      group_wait: 5m
+      repeat_interval: 24h
+```
+
+É essa separação que torna possível a expectativa do SRE Book de **mediana zero
+de páginas por turno**. O burn rate de 1× — o orçamento vai acabar no fim do mês
+— é trabalho de terça-feira, não de madrugada.
+
+**Inibição.** Quando o burn rate rápido dispara, o médio também está disparando:
+eles medem a mesma queima em janelas diferentes.
+
+```yaml
+inhibit_rules:
+  - source_matchers: [alertname="OrcamentoDeErroQueimandoRapido"]
+    target_matchers: [alertname="OrcamentoDeErroQueimandoMedio"]
+    equal: [service]
+```
+
+O `equal:` é o que impede a inibição de vazar entre serviços — sem ele, um
+problema na api calaria o alerta médio do worker.
+
+**Silenciamento.** Quem está resolvendo um incidente precisa parar de ser
+avisado dele **sem perder o alerta para o próximo**. O silêncio não apaga a
+regra: o alerta continua ativo e passa ao estado `suppressed`.
+
+```console
+$ curl -s :9093/api/v2/alerts | jq '.[] | {alertname:.labels.alertname, estado:.status.state}'
+{"alertname": "PortaoEntregaPage…", "estado": "suppressed"}
+```
+
+## Provar que saiu, e por dois lados
+
+O portão mede a entrega de duas formas de propósito:
+
+```console
+alertmanager_notifications_total{integration="webhook"}         1 → 2
+alertmanager_notifications_failed_total{integration="webhook"}  0
+```
+
+```json
+{"request":{"method":"POST","uri":"/plantao"},"status":200}
+```
+
+O contador diz que o Alertmanager **tentou e conseguiu**. O log de acesso do
+receptor diz que **chegou**.
+
+<Callout type="note" title="Por que os dois, e não um">
+Só o contador aceitaria um receptor que responde `200` e descarta a mensagem —
+que é exatamente o que um webhook mal configurado faz.
+
+Só o log do receptor não distinguiria "o Alertmanager não mandou" de "mandou e
+eu não registrei". Medir as duas pontas é o que fecha a afirmação.
+</Callout>
+
+<Tradeoff
+  a="Webhook para um receptor próprio"
+  b="Integração direta (Slack, PagerDuty)"
+  whenA="Quando você precisa que o alerta seja PROCESSADO antes de virar mensagem — enriquecer com contexto, abrir ticket, correlacionar. E quando não quer credencial de terceiro no repositório, que é o caso aqui."
+  whenB="Quando o destino é uma pessoa e a mensagem é a mensagem. Um webhook próprio no meio é um componente a mais para manter, e ele fica entre o incidente e quem responde."
+>
+  <Fragment slot="a">
+    Nenhum segredo de terceiro, e o formato é seu. Em troca: mais um serviço
+    que pode cair — e ele cai justamente durante o incidente.
+  </Fragment>
+  <Fragment slot="b">
+    Menos peças, e o Alertmanager reenvia sozinho quando a entrega falha. Em
+    troca: uma credencial de longa duração no repositório, com tudo o que a
+    [lição de acesso](/pt/lessons/on-call-cost-and-access) diz sobre isso.
+  </Fragment>
+</Tradeoff>
+
+## Duas coisas quebraram antes de funcionar
+
+**O log de acesso do Caddy precisa do `log` DENTRO do bloco do site.** No bloco
+global ele configura só o logger do próprio Caddy — as mensagens de partida e de
+TLS. A primeira versão do receptor respondia `200` e não registrava nada: o
+contador do Alertmanager já dizia que a notificação saíra, e o receptor não
+tinha prova de ter recebido.
+
+**A checagem de entrega só passava uma vez.** Com `group_by` por `alertname` e
+`repeat_interval` de 4 horas, a segunda execução do portão no mesmo dia não
+gerava notificação nova — e a checagem reprovava por estar funcionando
+corretamente. O alerta sintético passou a ter nome único por execução.
+
+<FieldNote
+  source="Google SRE Workbook — Alerting on SLOs"
+  url="https://sre.google/workbook/alerting-on-slos/"
+  accessed="2026-09-21"
+>
+O capítulo argumenta que a maior parte do valor de um sistema de alertas está em
+**não** alertar: cada página que não exige ação treina quem a recebe a ignorar
+as que exigem, e esse treino não distingue uma da outra. A recomendação é
+manter apenas alertas com ação clara e imediata, empurrando o resto para ticket
+— que é a divisão que o `route:` desta stack implementa. Não medido aqui: a
+eficácia disso se mede numa equipe ao longo de meses, não num portão.
+</FieldNote>
+
+<LabExercise
+  question="Um alerta está firing no Prometheus há vinte minutos e ninguém recebeu nada. Quais são os três lugares a olhar, em ordem?"
+  check="o prometheus conhece o alertmanager"
+>
+  <Fragment slot="hint">
+    O caminho tem três saltos, e cada um tem um jeito próprio de falhar em
+    silêncio.
+  </Fragment>
+  <Fragment slot="answer">
+
+**1. O Prometheus sabe para onde mandar?**
+
+```bash
+curl -s :9090/api/v1/alertmanagers | jq '.data.activeAlertmanagers'
+```
+
+Lista vazia = falta o bloco `alerting:`. É a falha mais silenciosa das três:
+nada erra, e o alerta simplesmente não viaja.
+
+**2. O alerta CHEGOU ao Alertmanager?**
+
+```bash
+curl -s :9093/api/v2/alerts | jq '.[] | {a:.labels.alertname, s:.status.state}'
+```
+
+Se o estado for `suppressed`, há um silêncio ou uma regra de inibição ativa —
+e essa é a causa que mais confunde, porque tudo o mais parece certo. Confira
+com `curl -s :9093/api/v2/silences`.
+
+**3. Ele SAIU?**
+
+```bash
+curl -s :9093/metrics | grep -E '^alertmanager_notifications_(total|failed_total)\{integration="webhook"'
+```
+
+`failed_total` subindo aponta o destino (DNS, credencial, rede). Os dois
+parados com o alerta ativo apontam tempo: o `group_wait` ainda não venceu, ou
+o `repeat_interval` já notificou e está esperando para repetir.
+
+  </Fragment>
+</LabExercise>
+
+<Quiz set="alert-routing" />

@@ -8,6 +8,10 @@ summary: "The stack already exposes all of this and almost nobody reads it. The 
 minutes: 13
 tags: [observability, prometheus, grafana, loki, signals, slo]
 sources:
+  - label: "Datadog — Pricing (Infrastructure)"
+    url: "https://www.datadoghq.com/pricing/"
+    kind: docs
+    accessed: "2026-09-21"
   - label: "Prometheus — overview"
     url: "https://prometheus.io/docs/introduction/overview/"
     kind: docs
@@ -160,6 +164,56 @@ arrangement in production, and one this stack does not have.
 
 </Fragment>
 </LabExercise>
+
+## Build or buy
+
+This stack runs Prometheus, Loki, Grafana and Alloy — all self-hosted. The
+alternative is a third-party platform: Datadog, New Relic, Dynatrace.
+
+The choice is usually framed as "cost versus control", and that hides the part
+that decides. Consulted on the official page on 21 September 2026, **Datadog
+Infrastructure Pro** costs **US$ 15 per host per month** on the annual plan
+(US$ 18 on-demand), with **100 custom metrics per host** included, and log
+ingestion at **US$ 0.10 per GB**.
+
+Read "100 custom metrics per host" alongside the
+[cardinality lesson](/en/lessons/cardinality): there, a metric carrying a
+`user_id` label explodes into millions of series and takes Prometheus's memory
+down. On a paid platform the same explosion **takes nothing down** — it arrives
+as an invoice, two months later, for somebody who did not write the metric.
+
+<Tradeoff
+  a="Self-hosting"
+  b="A third-party platform"
+  whenA="When volume is predictable, the team has someone to operate it, and the data cannot leave your infrastructure. The cost is people and machines, and it shows up immediately."
+  whenB="When there is nobody to operate a time-series store at three in the morning — which is most teams. The cost is an invoice, and it shows up later."
+>
+  <Fragment slot="a">
+    No artificial cardinality or retention limit, and the data never leaves. In
+    exchange: Prometheus and Loki become databases **you** operate, with
+    everything the Operations track describes.
+  </Fragment>
+  <Fragment slot="b">
+    Cross-signal correlation out of the box, long retention, and nobody awake to
+    maintain storage. In exchange: a cardinality explosion becomes cost rather
+    than an incident, and the correction arrives late — plus lock-in, because
+    queries and dashboards are not portable.
+  </Fragment>
+</Tradeoff>
+
+<FieldNote
+  source="Datadog — Pricing (Infrastructure)"
+  url="https://www.datadoghq.com/pricing/"
+  accessed="2026-09-21"
+>
+US$ 15 per host per month on the annual plan, **100 custom metrics per host**
+included, and log ingestion at US$ 0.10 per GB. The three numbers matter
+together: they turn instrumentation decisions — how many labels, what
+granularity, how much log — into invoice line items. In this stack the same
+decisions show up as Prometheus memory and Loki disk, and the gate measures
+them. Not measured here: there is no account on any of these platforms, and the
+pricing model is cited from the official page on the date above.
+</FieldNote>
 
 ## What sticks
 

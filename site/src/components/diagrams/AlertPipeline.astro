@@ -1,0 +1,82 @@
+---
+/** obs-08 — de uma regra até uma pessoa, e quem faz o quê no meio. */
+import Figure from "../Figure.astro";
+import type { Lang } from "../../i18n/ui";
+
+const lang: Lang = Astro.url.pathname.startsWith("/en/") ? "en" : "pt";
+const C = {
+  pt: {
+    p: "PROMETHEUS", pq: "decide QUANDO",
+    p1: "avalia a regra a cada 15 s",
+    p2: "`for: 2m` — precisa persistir",
+    p3: "marca pending → firing",
+    p4: "reenvia ao Alertmanager a cada 1 min",
+    a: "ALERTMANAGER", aq: "decide PARA QUEM, QUANDO e SE",
+    a1: "AGRUPA por alertname+severity", a1n: "um banco caído vira 1 aviso, não 30",
+    a2: "ROTEIA por severidade", a2n: "page acorda · ticket vai para a fila",
+    a3: "INIBE o redundante", a3n: "burn rate rápido cala o médio",
+    a4: "SILENCIA sob pedido", a4n: "o alerta fica ativo e suppressed",
+    r: "RECEPTOR", rq: "webhook · Slack · PagerDuty",
+    medido: "medido no portão: notifications_total +1 · falhas 0 · POST /plantao no log do receptor",
+    licao: "sem a coluna do meio, `firing` é um estado numa página web que ninguém está olhando às 3h",
+    caption:
+      "A divisão confunde quase todo mundo no começo. O Prometheus decide <b>quando</b> há problema; o Alertmanager decide <b>para quem, quando e se</b> avisar. As quatro operações do meio são o que separa um canal que a equipe lê de um canal que a equipe silenciou.",
+    alt: "Três colunas: Prometheus avaliando a regra, Alertmanager com quatro operações, e o receptor.",
+  },
+  en: {
+    p: "PROMETHEUS", pq: "decides WHEN",
+    p1: "evaluates the rule every 15 s",
+    p2: "`for: 2m` — it must persist",
+    p3: "marks pending → firing",
+    p4: "resends to Alertmanager every 1 min",
+    a: "ALERTMANAGER", aq: "decides TO WHOM, WHEN and WHETHER",
+    a1: "GROUPS by alertname+severity", a1n: "a downed database becomes 1 message, not 30",
+    a2: "ROUTES by severity", a2n: "page wakes someone · ticket goes to a queue",
+    a3: "INHIBITS the redundant", a3n: "fast burn rate silences the medium one",
+    a4: "SILENCES on request", a4n: "the alert stays active and suppressed",
+    r: "RECEIVER", rq: "webhook · Slack · PagerDuty",
+    medido: "measured by the gate: notifications_total +1 · failures 0 · POST /plantao in the receiver's log",
+    licao: "without the middle column, `firing` is a state on a web page nobody is watching at 3 a.m.",
+    caption:
+      "The division confuses almost everyone at first. Prometheus decides <b>when</b> there is a problem; Alertmanager decides <b>to whom, when and whether</b> to tell. The four middle operations are what separates a channel the team reads from a channel the team muted.",
+    alt: "Three columns: Prometheus evaluating the rule, Alertmanager with four operations, and the receiver.",
+  },
+}[lang];
+---
+<Figure caption={C.caption} alt={C.alt}>
+  <svg viewBox="0 0 720 268" xmlns="http://www.w3.org/2000/svg" font-size="11">
+    <text x="14" y="15" class="dg-muted" font-weight="640" font-size="10.5">{C.p}</text>
+    <text x="14" y="27" class="dg-faint" font-size="8.5">{C.pq}</text>
+    <rect x="14" y="34" width="198" height="104" rx="6" class="dg-box" />
+    {[C.p1, C.p2, C.p3, C.p4].map((t, i) => (
+      <text x="28" y={54 + i * 22} class="dg-faint" font-size="8.6">{t}</text>
+    ))}
+
+    <path d="M216 86 L246 86" class="dg-line" marker-end="url(#ap-arrow)" />
+
+    <text x="252" y="15" class="dg-muted" font-weight="640" font-size="10.5">{C.a}</text>
+    <text x="252" y="27" class="dg-faint" font-size="8.5">{C.aq}</text>
+    {[[C.a1, C.a1n], [C.a2, C.a2n], [C.a3, C.a3n], [C.a4, C.a4n]].map(([t, n], i) => (
+      <g>
+        <rect x="252" y={34 + i * 26} width="298" height="22" rx="4" class="dg-box dg-box--accent" />
+        <text x="264" y={49 + i * 26} font-size="9">{t}</text>
+        <text x="418" y={49 + i * 26} class="dg-faint" font-size="7.4">{n}</text>
+      </g>
+    ))}
+
+    <path d="M554 86 L584 86" class="dg-line" marker-end="url(#ap-arrow)" />
+
+    <text x="590" y="15" class="dg-muted" font-weight="640" font-size="10.5">{C.r}</text>
+    <rect x="590" y="34" width="116" height="104" rx="6" class="dg-box dg-box--dashed" />
+    <text x="648" y="90" text-anchor="middle" class="dg-faint" font-size="8.4">{C.rq}</text>
+
+    <line x1="14" y1="166" x2="706" y2="166" class="dg-line" stroke-dasharray="3 3" />
+    <text x="360" y="186" text-anchor="middle" class="dg-muted" font-size="8.8">{C.medido}</text>
+    <text x="360" y="212" text-anchor="middle" class="dg-fill-warn" font-size="10" font-weight="620">{C.licao}</text>
+    <defs>
+      <marker id="ap-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+        <path d="M0 0 L10 5 L0 10 z" fill="var(--border-strong)" />
+      </marker>
+    </defs>
+  </svg>
+</Figure>

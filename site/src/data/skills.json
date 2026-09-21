@@ -112,29 +112,33 @@
       "status": "coberto",
       "pt": {
         "label": "Observabilidade (Prometheus, Grafana, Datadog)",
-        "gap": "A trilha existe: 7 lições bilíngues sobre pull, tipos de métrica, cardinalidade, Loki, SLI/SLO/orçamento de erro e alerta por burn rate — com regras de SLO que o Prometheus carrega e um alerta que o portão faz disparar parando o banco. Falta o que vem DEPOIS do `firing`: Alertmanager com roteamento, agrupamento, silenciamento e escalonamento. E falta trace: não há OpenTelemetry, e nenhuma das três aplicações propaga contexto."
+        "gap": "Oito lições, com as regras de SLO rodando de verdade e o alerta de burn rate disparando contra uma queda provocada. O Alertmanager fechou a lacuna que a lição 7 declarava: roteamento por severidade, agrupamento, inibição, silenciamento e ENTREGA — provada pelos dois lados, o contador do Alertmanager e o log do receptor. Falta tracing distribuído, que é o terceiro sinal e exige instrumentar as três aplicações."
       },
       "en": {
         "label": "Observability (Prometheus, Grafana, Datadog)",
-        "gap": "The track exists: 7 bilingual lessons on pull, metric types, cardinality, Loki, SLI/SLO/error budget and burn-rate alerting — with SLO rules Prometheus loads and an alert the gate makes fire by stopping the database. What is missing is what comes AFTER `firing`: an Alertmanager with routing, grouping, silencing and escalation. And tracing is missing: there is no OpenTelemetry, and none of the three applications propagates context."
+        "gap": "Eight lessons, with SLO rules genuinely running and the burn-rate alert firing against a provoked outage. Alertmanager closed the gap lesson 7 declared: routing by severity, grouping, inhibition, silencing and DELIVERY — proven from both sides, the Alertmanager's counter and the receiver's log. Distributed tracing is missing, the third signal, and it needs the three applications instrumented."
       },
       "evidence": {
         "lessons": [
-          "why-observe",
-          "pull-not-push",
-          "metric-types",
+          "alert-routing",
+          "burn-rate-alerting",
           "cardinality",
           "logs-without-indexing",
+          "metric-types",
+          "pull-not-push",
           "sli-slo-error-budget",
-          "burn-rate-alerting"
+          "why-observe"
         ],
         "checks": [
-          "todos os alvos do prometheus estão up",
-          "stack de observabilidade saudável",
-          "regras de SLO carregadas",
-          "toda regra de SLO avalia sem erro",
           "o SLI de disponibilidade tem valor",
-          "o relabel do cAdvisor descarta"
+          "o prometheus conhece o alertmanager",
+          "o relabel do cAdvisor descarta",
+          "regras de SLO carregadas",
+          "roteamento: severity=page vai para o receptor",
+          "silenciamento: o alerta continua ATIVO e fica suppressed",
+          "stack de observabilidade saudável",
+          "toda regra de SLO avalia sem erro",
+          "todos os alvos do prometheus estão up"
         ],
         "measurements": [
           "obs-measured.json"
@@ -379,15 +383,24 @@
         },
         {
           "name": "Datadog",
-          "status": "ausente"
+          "status": "citado",
+          "lesson": "why-observe",
+          "note_pt": "SaaS proprietário: exige conta e licença, e nenhuma checagem é possível aqui",
+          "note_en": "proprietary SaaS: needs an account and a licence, and no gate check is possible here"
         },
         {
           "name": "New Relic",
-          "status": "ausente"
+          "status": "citado",
+          "lesson": "why-observe",
+          "note_pt": "SaaS proprietário: exige conta e licença, e nenhuma checagem é possível aqui",
+          "note_en": "proprietary SaaS: needs an account and a licence, and no gate check is possible here"
         },
         {
           "name": "Dynatrace",
-          "status": "ausente"
+          "status": "citado",
+          "lesson": "why-observe",
+          "note_pt": "SaaS proprietário: exige conta e licença, e nenhuma checagem é possível aqui",
+          "note_en": "proprietary SaaS: needs an account and a licence, and no gate check is possible here"
         },
         {
           "name": "SLIs · SLOs",
