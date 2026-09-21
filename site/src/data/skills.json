@@ -203,7 +203,7 @@
           "o UID do container é o do host",
           "cgroup v2: o worker lê seu próprio limite",
           "OOM killer: OOMKilled=true e exit 137",
-          "DNS: rótulo único desconhecido custa",
+          "DNS: rótulo único desconhecido leva SEGUNDOS",
           "postgres: pg_stat_statements carregado"
         ],
         "measurements": [
@@ -257,7 +257,7 @@
           "o UID do container é o do host",
           "cgroup v2: o worker lê seu próprio limite",
           "OOM killer: OOMKilled=true e exit 137",
-          "DNS: rótulo único desconhecido custa",
+          "DNS: rótulo único desconhecido leva SEGUNDOS",
           "postgres: pg_stat_statements carregado"
         ],
         "measurements": [

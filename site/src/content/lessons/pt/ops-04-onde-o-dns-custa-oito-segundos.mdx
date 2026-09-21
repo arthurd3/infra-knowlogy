@@ -4,7 +4,7 @@ lang: pt
 track: operacao
 order: 4
 title: "Onde o DNS custa oito segundos"
-summary: "Um nome que não existe em lugar nenhum falha em 1 milissegundo. Um nome de serviço escrito errado falha em 8 segundos. A diferença é o número de rótulos, é de 8000×, e é a explicação de metade dos incidentes de “a rede está lenta”."
+summary: "Um nome que não existe em lugar nenhum falha em 1 milissegundo. Um nome de serviço escrito errado falha em 8 segundos. A diferença é o número de rótulos, é de três ordens de grandeza, e é a explicação de metade dos incidentes de “a rede está lenta”."
 minutes: 14
 tags: [dns, redes, resolucao, latencia, docker]
 sources:
@@ -40,6 +40,20 @@ Medido dentro do `worker` desta stack:
 Leia as duas linhas em negrito juntas. **O nome que não existe em lugar nenhum
 do universo falha em um milissegundo. O nome de um serviço da própria stack —
 escrito certo, existindo, só que noutra rede — falha em oito segundos.**
+
+<Callout type="note" title="A razão oscila; a ordem de grandeza não">
+A primeira medição deu 8000× entre os dois modos de falhar, e a checagem do
+portão nasceu exigindo 100×. Numa execução posterior ela reprovou com **7461,8
+ms contra 145,8 ms** — apenas 51×, porque o resolvedor de cima estava lento
+naquele instante.
+
+O número que não depende de uma latência que não é sua: **um rótulo
+desconhecido espera o timeout (segundos), dois rótulos voltam com NXDOMAIN
+(milissegundos)**. É essa a afirmação que a lição faz e que o portão checa.
+
+Ao citar número medido, prefira a grandeza estável — a que oscila envelhece a
+cada execução.
+</Callout>
 
 ## Por que
 
@@ -162,7 +176,7 @@ um cluster de um nó, e a saturação é um fenômeno de escala.
 
 <LabExercise
   question="Uma requisição está levando 8 segundos e os gráficos de rede estão limpos. Como confirmar que é DNS em um comando?"
-  check="DNS: rótulo único desconhecido custa"
+  check="DNS: rótulo único desconhecido leva SEGUNDOS"
 >
   <Fragment slot="hint">
     Você precisa medir a resolução SOZINHA, separada da conexão.

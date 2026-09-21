@@ -4,7 +4,7 @@ lang: en
 track: operacao
 order: 4
 title: "Where DNS costs eight seconds"
-summary: "A name that exists nowhere fails in 1 millisecond. A mistyped service name fails in 8 seconds. The difference is the number of labels, it is 8000×, and it explains half the incidents filed as “the network is slow”."
+summary: "A name that exists nowhere fails in 1 millisecond. A mistyped service name fails in 8 seconds. The difference is the number of labels, it is three orders of magnitude, and it explains half the incidents filed as “the network is slow”."
 minutes: 14
 tags: [dns, networking, resolution, latency, docker]
 sources:
@@ -40,6 +40,19 @@ Measured inside this stack's `worker`:
 Read the two bold lines together. **The name that exists nowhere in the universe
 fails in one millisecond. The name of a service in this very stack — spelled
 correctly, existing, just on another network — fails in eight seconds.**
+
+<Callout type="note" title="The ratio varies; the order of magnitude does not">
+The first measurement gave 8000× between the two ways of failing, and the gate's
+check was born demanding 100×. On a later run it failed with **7461.8 ms against
+145.8 ms** — only 51×, because the upstream resolver was slow at that instant.
+
+The number that does not depend on somebody else's latency: **an unknown single
+label waits out the timeout (seconds), two labels come back with NXDOMAIN
+(milliseconds)**. That is the claim the lesson makes and the gate checks.
+
+When citing a measured number, prefer the stable quantity — the one that varies
+ages with every run.
+</Callout>
 
 ## Why
 
@@ -162,7 +175,7 @@ of scale.
 
 <LabExercise
   question="A request is taking 8 seconds and the network graphs are clean. How do you confirm it is DNS in one command?"
-  check="DNS: rótulo único desconhecido custa"
+  check="DNS: rótulo único desconhecido leva SEGUNDOS"
 >
   <Fragment slot="hint">
     You need to time the resolution ON ITS OWN, separate from the connection.

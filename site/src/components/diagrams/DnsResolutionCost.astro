@@ -16,7 +16,7 @@ const C = {
     r2: "2+ rótulos (ex.: `x.com`)", r2a: "encaminha adiante", r2b: "o de cima devolve NXDOMAIN",
     r2t: "~1 ms",
     medido: "medido nesta stack: db 15,0 ms ✓ · edge 7826 ms ✗ · naoexisteninguem 8000 ms ✗ · zq7x…com 1,0 ms ✗",
-    licao: "8000× de diferença entre dois jeitos de falhar — e o caro é o que parece “a rede está lenta”",
+    licao: "segundos contra milissegundos entre dois jeitos de falhar — e o caro é o que parece “a rede está lenta”",
     caption:
       "Os dois caminhos da direita terminam em falha. Um custa um milissegundo e o outro oito segundos, e a única diferença é o <b>número de rótulos do nome</b>. Errar o nome de um serviço (um rótulo) é o caso caro; errar um domínio (dois rótulos) é o barato — o inverso do que a intuição sugere.",
     alt: "Fluxo de resolução DNS mostrando os dois caminhos de falha, um de 1 ms e outro de 8 segundos.",
@@ -32,7 +32,7 @@ const C = {
     r2: "2+ labels (e.g. `x.com`)", r2a: "forwards upstream", r2b: "upstream returns NXDOMAIN",
     r2t: "~1 ms",
     medido: "measured on this stack: db 15.0 ms ✓ · edge 7826 ms ✗ · naoexisteninguem 8000 ms ✗ · zq7x…com 1.0 ms ✗",
-    licao: "8000× between two ways of failing — and the expensive one is what looks like “the network is slow”",
+    licao: "seconds versus milliseconds between two ways of failing — and the expensive one is what looks like “the network is slow”",
     caption:
       "Both right-hand paths end in failure. One costs a millisecond and the other eight seconds, and the only difference is the <b>number of labels in the name</b>. Mistyping a service name (one label) is the expensive case; mistyping a domain (two labels) is the cheap one — the opposite of what intuition suggests.",
     alt: "DNS resolution flow showing the two failure paths, one of 1 ms and one of 8 seconds.",

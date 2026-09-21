@@ -486,10 +486,20 @@ print(json.dumps({"rotuloUnico":lento,"doisRotulos":rapido,"db":bom,"dbOk":okb})
     *'"dbOk": true'*) ok "DNS: o nome de um companheiro de rede resolve" ;;
     *) bad "DNS: o worker não resolve 'db' — a rede data quebrou" ;;
   esac
+  # ── A checagem afirma a GRANDEZA ESTÁVEL, não a razão.
+  #
+  # A primeira versão exigia `lento > 100 × rapido`, e reprovou numa execução
+  # com 7461,8 ms contra 145,8 ms — 51×, porque o resolvedor de cima estava
+  # lento naquele instante. A razão oscila com uma latência que não é nossa; o
+  # que NÃO oscila é a ordem de grandeza de cada lado: um rótulo desconhecido
+  # espera o timeout (segundos), dois rótulos voltam com NXDOMAIN (sub-segundo).
+  # É a armadilha 42 do CLAUDE.md — ao citar número medido, prefira o estável.
   if [ -n "$M_DNS_LENTO" ] && [ -n "$M_DNS_RAPIDO" ] &&
-     python3 -c "import sys;sys.exit(0 if float(sys.argv[1]) > 100*float(sys.argv[2]) else 1)" \
-       "$M_DNS_LENTO" "$M_DNS_RAPIDO"; then
-    ok "DNS: rótulo único desconhecido custa ${M_DNS_LENTO}ms contra ${M_DNS_RAPIDO}ms de dois rótulos"
+     python3 -c "
+import sys
+lento, rapido = float(sys.argv[1]), float(sys.argv[2])
+sys.exit(0 if lento > 1000 and rapido < 1000 else 1)" "$M_DNS_LENTO" "$M_DNS_RAPIDO"; then
+    ok "DNS: rótulo único desconhecido leva SEGUNDOS (${M_DNS_LENTO}ms) e dois rótulos, milissegundos (${M_DNS_RAPIDO}ms)"
   else
     bad "a assimetria do DNS não apareceu (${M_DNS_LENTO:-?}ms x ${M_DNS_RAPIDO:-?}ms)"
   fi
