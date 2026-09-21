@@ -1631,6 +1631,254 @@
           "why_en": "The 'Configuration Template' and 'Immutable Configuration' chapters cover both approaches without rooting for either, and tie the choice to an operational question: who will install this, and does that person know the structure of your manifests?"
         }
       ]
+    },
+    {
+      "id": "linux-under-the-container",
+      "lessons": [
+        "a-container-is-a-process",
+        "cgroups-and-the-oom-killer"
+      ],
+      "pt": {
+        "label": "O Linux por baixo do container",
+        "what": "As duas peças de kernel que fazem um container: NAMESPACES, que dão ao processo uma visão própria de PIDs, rede e montagens — e não traduzem identidade numérica, motivo de o UID de dentro ser o UID de fora; e CGROUPS, que limitam e contabilizam o que ele consome, com o limite legível em /sys/fs/cgroup e invisível no /proc."
+      },
+      "en": {
+        "label": "The Linux underneath the container",
+        "what": "The two kernel pieces that make a container: NAMESPACES, giving the process its own view of PIDs, network and mounts — and translating no numeric identity, which is why the UID inside is the UID outside; and CGROUPS, limiting and accounting for what it consumes, with the limit readable in /sys/fs/cgroup and invisible in /proc."
+      },
+      "refs": [
+        {
+          "kind": "docs",
+          "title": "Linux kernel — Control Group v2",
+          "author": "Linux kernel authors",
+          "where": "docs.kernel.org",
+          "year": 2026,
+          "lang": "en",
+          "url": "https://docs.kernel.org/admin-guide/cgroup-v2.html",
+          "free": true,
+          "accessed": "2026-09-21",
+          "why_pt": "A referência dos arquivos de interface, e a seção de memória explica a diferença entre `memory.max` (mata) e `memory.high` (estrangula) que o Docker não expõe. Leia o começo, que justifica por que a v2 impôs hierarquia única — é o que o Kubernetes passou a exigir.",
+          "why_en": "The reference for the interface files, and the memory section explains the difference between `memory.max` (kills) and `memory.high` (throttles) that Docker does not expose. Read the opening, which justifies why v2 imposed a single hierarchy — the thing Kubernetes came to require."
+        },
+        {
+          "kind": "article",
+          "title": "Namespaces in operation (série de 7 partes)",
+          "author": "Michael Kerrisk",
+          "where": "LWN.net",
+          "year": 2013,
+          "lang": "en",
+          "url": "https://lwn.net/Articles/531114/",
+          "free": true,
+          "accessed": "2026-09-21",
+          "why_pt": "Escrita pelo mantenedor das man pages do Linux, e a parte sobre namespace de USUÁRIO é a que explica por que o UID não é traduzido por padrão. A série deixa claro que containers foram COMPOSTOS de peças que já existiam, não projetados — o que explica por que a lista de namespaces parece arbitrária.",
+          "why_en": "Written by the Linux man-pages maintainer, and the part on the USER namespace is what explains why the UID is not translated by default. The series makes clear that containers were ASSEMBLED from pieces that already existed rather than designed — which explains why the namespace list looks arbitrary."
+        },
+        {
+          "kind": "talk",
+          "title": "LISA17 — Linux Container Performance Analysis",
+          "author": "Brendan Gregg",
+          "where": "YouTube — USENIX LISA",
+          "year": 2017,
+          "lang": "en",
+          "url": "https://www.youtube.com/watch?v=NYLXZ58EboM",
+          "free": true,
+          "accessed": "2026-09-21",
+          "why_pt": "Trata exatamente do problema desta lição: as ferramentas de sempre respondem sobre o HOST quando rodadas dentro de um container, e saber quais mentem é metade do trabalho. Mostra a leitura dos arquivos de cgroup como fonte de verdade.",
+          "why_en": "It addresses exactly this lesson's problem: the usual tools answer about the HOST when run inside a container, and knowing which ones lie is half the job. It shows reading the cgroup files as the source of truth."
+        }
+      ]
+    },
+    {
+      "id": "pressure-and-saturation",
+      "lessons": [
+        "pressure-is-not-utilisation"
+      ],
+      "pt": {
+        "label": "Saturação, pressão e o que alarmar",
+        "what": "A diferença entre USO (o recurso está ocupado?) e PRESSÃO (alguém está esperando?). Uso satura em 100% e para de informar; pressão mede tempo perdido em espera e não satura. É por isso que uma máquina a 100% de CPU pode estar saudável, e por isso que o load average — que atrasa e mistura CPU com espera de I/O — é um mau alarme."
+      },
+      "en": {
+        "label": "Saturation, pressure and what to alert on",
+        "what": "The difference between UTILISATION (is the resource busy?) and PRESSURE (is anything waiting?). Utilisation saturates at 100% and stops informing; pressure measures time lost waiting and does not saturate. That is why a machine at 100% CPU can be healthy, and why load average — which lags and mixes CPU with I/O wait — is a poor alarm."
+      },
+      "refs": [
+        {
+          "kind": "docs",
+          "title": "Linux kernel — PSI: Pressure Stall Information",
+          "author": "Linux kernel authors",
+          "where": "docs.kernel.org",
+          "year": 2026,
+          "lang": "en",
+          "url": "https://docs.kernel.org/accounting/psi.html",
+          "free": true,
+          "accessed": "2026-09-21",
+          "why_pt": "Curta, e a parte que vale é a distinção entre `some` (alguma tarefa travada — degradação) e `full` (todas travadas — colapso). Também documenta que o PSI existe por cgroup, que é o que permite apontar QUAL container está apertado numa máquina calma.",
+          "why_en": "Short, and the part that matters is the distinction between `some` (some task stalled — degradation) and `full` (all stalled — collapse). It also documents that PSI exists per cgroup, which is what lets you point at WHICH container is squeezed on a quiet machine."
+        },
+        {
+          "kind": "blog",
+          "title": "Linux Load Averages: Solving the Mystery",
+          "author": "Brendan Gregg",
+          "where": "brendangregg.com",
+          "year": 2017,
+          "lang": "en",
+          "url": "https://www.brendangregg.com/blog/2017-08-08/linux-load-averages.html",
+          "free": true,
+          "accessed": "2026-09-21",
+          "why_pt": "Ele foi atrás do patch de 1993 que fez o Linux contar tarefas em espera de I/O junto com as de CPU, e achou o e-mail original. É a investigação que explica por que 'load average' significa coisas diferentes no Linux e no BSD — e por que quase toda intuição sobre o número vem de uma das duas.",
+          "why_en": "He went after the 1993 patch that made Linux count I/O-waiting tasks alongside CPU ones, and found the original email. It is the investigation that explains why 'load average' means different things on Linux and BSD — and why almost every intuition about the number comes from one of the two."
+        },
+        {
+          "kind": "talk",
+          "title": "LISA19 — Linux Systems Performance",
+          "author": "Brendan Gregg",
+          "where": "YouTube — USENIX LISA",
+          "year": 2019,
+          "lang": "en",
+          "url": "https://www.youtube.com/watch?v=fhBHvsi0Ql0",
+          "free": true,
+          "accessed": "2026-09-21",
+          "why_pt": "Uma hora que organiza o assunto inteiro por método em vez de por ferramenta — qual pergunta fazer primeiro, e qual ferramenta responde aquela pergunta. É o antídoto para a lista de comandos decorados que não formam diagnóstico.",
+          "why_en": "An hour organising the whole subject by method rather than by tool — which question to ask first, and which tool answers that question. It is the antidote to a list of memorised commands that never adds up to a diagnosis."
+        },
+        {
+          "kind": "book",
+          "title": "Systems Performance: Enterprise and the Cloud (2nd edition)",
+          "author": "Brendan Gregg",
+          "where": "Addison-Wesley",
+          "year": 2020,
+          "lang": "en",
+          "isbn": "9780136820154",
+          "url": "https://www.informit.com/store/systems-performance-9780136820154",
+          "free": false,
+          "accessed": "2026-09-21",
+          "why_pt": "As 928 páginas são referência, não leitura linear — mas os capítulos de CPU e memória definem saturação com precisão e mostram o método USE (utilização, saturação, erros), que é o que dá ordem a uma investigação.",
+          "why_en": "Its 928 pages are a reference rather than linear reading — but the CPU and memory chapters define saturation precisely and show the USE method (utilisation, saturation, errors), which is what gives an investigation its order."
+        }
+      ]
+    },
+    {
+      "id": "postgres-operations",
+      "lessons": [
+        "the-postgres-you-operate"
+      ],
+      "pt": {
+        "label": "Operar PostgreSQL",
+        "what": "O que muda depois de o banco estar de pé: o MVCC que faz todo UPDATE e DELETE produzir lixo, o autovacuum que recolhe por uma FÓRMULA proporcional ao tamanho da tabela, a memória por operação de ordenação que o work_mem governa, e o pg_stat_statements — que precisa de duas etapas para existir e é o único jeito de saber QUAL consulta dói."
+      },
+      "en": {
+        "label": "Operating PostgreSQL",
+        "what": "What changes once the database is up: the MVCC that makes every UPDATE and DELETE produce garbage, the autovacuum collecting it by a FORMULA proportional to table size, the per-sort memory that work_mem governs, and pg_stat_statements — which takes two steps to exist and is the only way to know WHICH query hurts."
+      },
+      "refs": [
+        {
+          "kind": "docs",
+          "title": "PostgreSQL Documentation — Routine Vacuuming",
+          "author": "PostgreSQL Global Development Group",
+          "where": "postgresql.org",
+          "year": 2026,
+          "lang": "en",
+          "url": "https://www.postgresql.org/docs/17/routine-vacuuming.html",
+          "free": true,
+          "accessed": "2026-09-21",
+          "why_pt": "A seção sobre wraparound de ID de transação é a que ninguém lê e a que decide se o banco sobrevive: IDs são de 32 bits e dão a volta, e um banco sem vacuum entra em somente-leitura para se proteger. É o único caso em que pular manutenção não degrada — PARA.",
+          "why_en": "The transaction-ID wraparound section is the one nobody reads and the one that decides whether the database survives: IDs are 32-bit and wrap, and a database without vacuum goes read-only to protect itself. It is the one case where skipping maintenance does not degrade — it STOPS."
+        },
+        {
+          "kind": "docs",
+          "title": "PostgreSQL Documentation — pg_stat_statements",
+          "author": "PostgreSQL Global Development Group",
+          "where": "postgresql.org",
+          "year": 2026,
+          "lang": "en",
+          "url": "https://www.postgresql.org/docs/17/pgstatstatements.html",
+          "free": true,
+          "accessed": "2026-09-21",
+          "why_pt": "Explica a normalização de literais, que é o que torna a extensão útil: mil execuções com mil valores viram uma linha com `calls = 1000`. Sem isso seriam mil linhas e nenhum padrão. Também deixa claro por que ela exige `shared_preload_libraries` e reinício.",
+          "why_en": "It explains literal normalisation, which is what makes the extension useful: a thousand executions with a thousand values become one row with `calls = 1000`. Without it there would be a thousand rows and no pattern. It also makes clear why it needs `shared_preload_libraries` and a restart."
+        },
+        {
+          "kind": "talk",
+          "title": "Understanding and Fixing Autovacuum (PGConf.EU)",
+          "author": "Robert Haas",
+          "where": "YouTube — PGConf Europe",
+          "year": 2023,
+          "lang": "en",
+          "url": "https://www.youtube.com/watch?v=7a1otYLZxy4",
+          "free": true,
+          "accessed": "2026-09-21",
+          "why_pt": "Um dos principais committers do Postgres explicando COMO o autovacuum escolhe a próxima tabela, que é a parte que a documentação descreve e não justifica. Serve para entender por que a fórmula padrão é ruim em tabela grande — e o que mexer sem quebrar o resto.",
+          "why_en": "One of Postgres's principal committers explaining HOW autovacuum picks the next table, the part the documentation describes without justifying. It is what makes clear why the default formula is bad on a large table — and what to change without breaking the rest."
+        }
+      ]
+    },
+    {
+      "id": "dns-in-practice",
+      "lessons": [
+        "where-dns-costs-eight-seconds"
+      ],
+      "pt": {
+        "label": "DNS na prática, e onde ele custa caro",
+        "what": "O caminho que uma chamada de resolução percorre antes de virar um IP: o resolvedor local, a lista de `search`, o `ndots` que decide quando um nome é absoluto, e o encaminhamento para cima. É nesse encaminhamento que mora a diferença entre falhar em 1 ms e falhar em 8 segundos."
+      },
+      "en": {
+        "label": "DNS in practice, and where it gets expensive",
+        "what": "The path a resolution call travels before becoming an IP: the local resolver, the `search` list, the `ndots` deciding when a name is absolute, and forwarding upstream. That forwarding is where the difference between failing in 1 ms and failing in 8 seconds lives."
+      },
+      "refs": [
+        {
+          "kind": "docs",
+          "title": "Linux man-pages — resolv.conf(5)",
+          "author": "Linux man-pages project",
+          "where": "man7.org",
+          "year": 2026,
+          "lang": "en",
+          "url": "https://man7.org/linux/man-pages/man5/resolv.conf.5.html",
+          "free": true,
+          "accessed": "2026-09-21",
+          "why_pt": "Três páginas que explicam `search`, `ndots`, `timeout` e `attempts` — os quatro valores que decidem quanto custa uma resolução que falha. Ler isso uma vez evita a classe inteira de incidente registrada como 'a rede está lenta'.",
+          "why_en": "Three pages explaining `search`, `ndots`, `timeout` and `attempts` — the four values deciding what a failing resolution costs. Reading it once avoids the whole class of incident filed as 'the network is slow'."
+        },
+        {
+          "kind": "docs",
+          "title": "Kubernetes Docs — DNS for Services and Pods",
+          "author": "Kubernetes authors",
+          "where": "kubernetes.io",
+          "year": 2026,
+          "lang": "en",
+          "url": "https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/",
+          "free": true,
+          "accessed": "2026-09-21",
+          "why_pt": "Documenta o `ndots: 5` padrão e o `dnsConfig` para sobrescrevê-lo, citando o custo das consultas extras. É a página que explica por que tanta gente põe ponto final no fim dos nomes — e por que CoreDNS satura em cluster grande.",
+          "why_en": "It documents the default `ndots: 5` and the `dnsConfig` to override it, citing the cost of the extra queries. It is the page explaining why so many people add a trailing dot to names — and why CoreDNS saturates in large clusters."
+        },
+        {
+          "kind": "zine",
+          "title": "Life of a DNS query (prévia gratuita do zine How DNS Works)",
+          "author": "Julia Evans",
+          "where": "wizardzines.com",
+          "year": 2021,
+          "lang": "en",
+          "url": "https://wizardzines.com/comics/life-of-a-dns-query/",
+          "free": true,
+          "accessed": "2026-09-21",
+          "why_pt": "Uma página ilustrada que segue uma consulta do navegador até o servidor autoritativo, passando por resolvedor, raiz e TLD. É o modelo mental que falta antes de encarar a man page — e é grátis, ao contrário do zine completo.",
+          "why_en": "A single illustrated page following one query from the browser to the authoritative server, through resolver, root and TLD. It is the mental model missing before you face the man page — and it is free, unlike the complete zine."
+        },
+        {
+          "kind": "talk",
+          "title": "LISA19 — Linux Systems Performance (seção de rede)",
+          "author": "Brendan Gregg",
+          "where": "YouTube — USENIX LISA",
+          "year": 2019,
+          "lang": "en",
+          "url": "https://www.youtube.com/watch?v=fhBHvsi0Ql0",
+          "free": true,
+          "accessed": "2026-09-21",
+          "why_pt": "A parte de rede mostra como separar latência de resolução de latência de conexão, que é exatamente o passo que transforma 'a requisição está lenta' num diagnóstico. Útil aqui pelo método, não pela ferramenta.",
+          "why_en": "The networking part shows how to separate resolution latency from connection latency, which is exactly the step that turns 'the request is slow' into a diagnosis. Useful here for the method rather than the tool."
+        }
+      ]
     }
   ]
 }
