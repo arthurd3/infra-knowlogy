@@ -94,7 +94,7 @@ def oom():
     subprocess.run(["docker", "rm", "-f", nome], capture_output=True)
     t0 = time.monotonic()
     subprocess.run(["docker", "run", "--name", nome, "--memory=64m",
-                    "--memory-swap=64m", "python:3.13-alpine",
+                    "--memory-swap=64m", "python:3.13-alpine@sha256:1a63a53928ce53d2b0baf08092a703f4840ac5dfbd61fd48802dbf48e08c801e",
                     "python", "-c", script], capture_output=True, timeout=180)
     dur = time.monotonic() - t0
     estado = sh("docker", "inspect", nome, "--format",

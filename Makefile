@@ -80,7 +80,7 @@ verify: ## Roda a verificação completa end-to-end (o portão de qualidade)
 lint: ## Roda o hadolint em todos os Dockerfiles e valida os compose files
 	@for f in $(DOCKERFILES); do \
 		echo "── hadolint $$f"; \
-		docker run --rm -i hadolint/hadolint:latest hadolint --no-color - < "$$f" || exit 1; \
+		docker run --rm -i hadolint/hadolint:latest@sha256:32dac94127fd60b7b7e3fbfc65e1383b9b5e25c9bfd7b8536de7a539fe68a12d hadolint --no-color - < "$$f" || exit 1; \
 	done
 	@echo "── docker compose config"
 	@$(COMPOSE_OBS) config -q && echo "compose OK"

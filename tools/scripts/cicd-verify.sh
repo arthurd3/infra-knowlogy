@@ -40,7 +40,7 @@ if "${COMPOSE[@]}" config -q 2>/dev/null; then ok "compose config"; else bad "co
 
 for f in $(find "$CICD" -name Dockerfile -not -path '*/fixtures/bad/*' | sort); do
   rel="${f#"$ROOT"/}"
-  if docker run --rm -i hadolint/hadolint:latest hadolint --no-color - < "$f" >/tmp/cicd-hl.txt 2>&1; then
+  if docker run --rm -i hadolint/hadolint:latest@sha256:32dac94127fd60b7b7e3fbfc65e1383b9b5e25c9bfd7b8536de7a539fe68a12d hadolint --no-color - < "$f" >/tmp/cicd-hl.txt 2>&1; then
     ok "hadolint $rel"
   else
     bad "hadolint $rel"; sed 's/^/       /' /tmp/cicd-hl.txt | head -6

@@ -31,7 +31,12 @@ skip()  { printf '   \033[33m⊘\033[0m %s\n' "$1"; SKIP=$((SKIP+1)); RESULTS+=(
 step "1/10 Lint de Dockerfile e validação dos compose files"
 
 for f in $(find stack site -name Dockerfile -not -path '*/node_modules/*'); do
-  if docker run --rm -i hadolint/hadolint:latest hadolint --no-color - < "$f" >/tmp/hl.txt 2>&1; then
+  # O hadolint era a única imagem de ferramenta do repositório ainda em
+  # `:latest` — o que significa que o portão podia mudar de comportamento sem
+  # nenhum commit, reprovando um Dockerfile que passava ontem. É exatamente o
+  # que o ADR 0004 existe para impedir, e passou despercebido porque `:latest`
+  # numa ferramenta parece inofensivo.
+  if docker run --rm -i hadolint/hadolint:latest@sha256:32dac94127fd60b7b7e3fbfc65e1383b9b5e25c9bfd7b8536de7a539fe68a12d hadolint --no-color - < "$f" >/tmp/hl.txt 2>&1; then
     ok "hadolint $f"
   else
     bad "hadolint $f"; sed 's/^/       /' /tmp/hl.txt | head -12
@@ -325,7 +330,7 @@ else
   # ── O OOM killer, provocado. O que importa não é morrer: é SIGKILL não ser
   # capturável, então nenhum `defer`, `finally` ou handler roda.
   docker rm -f ops-oom-gate >/dev/null 2>&1
-  docker run --name ops-oom-gate --memory=64m --memory-swap=64m python:3.13-alpine \
+  docker run --name ops-oom-gate --memory=64m --memory-swap=64m python:3.13-alpine@sha256:1a63a53928ce53d2b0baf08092a703f4840ac5dfbd61fd48802dbf48e08c801e \
     python -c 'b=[]
 while True: b.append(bytearray(8*1024*1024))' >/dev/null 2>&1
   OOM_ESTADO=$(docker inspect ops-oom-gate --format '{{.State.OOMKilled}}|{{.State.ExitCode}}' 2>/dev/null)

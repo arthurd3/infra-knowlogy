@@ -14,7 +14,7 @@ Uso:  python3 tools/scripts/k8s-helm-vs-kustomize.py [--json]
 import json, os, subprocess, sys
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-HELM_IMG = "alpine/helm:3.19.0"
+HELM_IMG = "alpine/helm:3.19.0@sha256:aef9b56f64e866207d9591d0abd8f6d767b36aadd12edf68f8a719716d9d29c9"
 INTERESSA = {("apps/v1", "Deployment", "web"), ("v1", "Service", "web")}
 
 
